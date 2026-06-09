@@ -12,6 +12,12 @@ import { OrderManagementPage } from "./pages/OrderManagementPage.jsx";
 import { RegisterPage } from "./pages/RegisterPage.jsx";
 import "./styles/global.css";
 
+/** Redirects unauthenticated users to /login before they can reach a protected page. */
+function RequireAuth({ children }) {
+  const token = window.localStorage.getItem("thean_pharmacy_access_token");
+  return token ? children : <Navigate to="/login" replace />;
+}
+
 /** Sticky bottom banner shown when the device loses network connectivity. */
 function OfflineBanner() {
   const [offline, setOffline] = useState(!navigator.onLine);
@@ -41,11 +47,11 @@ function App() {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/home" element={<HomePage />} />
-        <Route path="/orders" element={<OrderManagementPage />} />
-        <Route path="/orders/:orderId/bill" element={<BillGenerationPage />} />
-        <Route path="/products/add" element={<AddProductPage />} />
-        <Route path="/products" element={<ListedProductsPage />} />
+        <Route path="/home" element={<RequireAuth><HomePage /></RequireAuth>} />
+        <Route path="/orders" element={<RequireAuth><OrderManagementPage /></RequireAuth>} />
+        <Route path="/orders/:orderId/bill" element={<RequireAuth><BillGenerationPage /></RequireAuth>} />
+        <Route path="/products/add" element={<RequireAuth><AddProductPage /></RequireAuth>} />
+        <Route path="/products" element={<RequireAuth><ListedProductsPage /></RequireAuth>} />
       </Routes>
     </ErrorBoundary>
   );
