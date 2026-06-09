@@ -30,12 +30,16 @@ export function OrdersListPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
+  function load() {
+    setIsLoading(true);
+    setError("");
     getDeliveryOrders()
       .then(setOrders)
       .catch((e) => setError(e.message))
       .finally(() => setIsLoading(false));
-  }, []);
+  }
+
+  useEffect(() => { load(); }, []);
 
   return (
     <div className="dl-page dl-orders-page">
@@ -43,11 +47,16 @@ export function OrdersListPage() {
         <h1>My Orders</h1>
       </header>
 
-      {error ? <div className="dl-error">{error}</div> : null}
-
       {isLoading ? (
         <div className="dl-loading"><RefreshCw size={24} className="dl-spin" /><p>Loading…</p></div>
-      ) : error ? null /* error already shown above */ : orders.length === 0 ? (
+      ) : error ? (
+        <div className="dl-loading" style={{ flexDirection: "column", gap: "0.75rem" }}>
+          <div className="dl-error">{error}</div>
+          <button type="button" className="dl-btn" onClick={load}>
+            <RefreshCw size={16} /> Retry
+          </button>
+        </div>
+      ) : orders.length === 0 ? (
         <div className="dl-no-order-card">
           <Package size={36} />
           <p>No delivery orders yet.</p>
