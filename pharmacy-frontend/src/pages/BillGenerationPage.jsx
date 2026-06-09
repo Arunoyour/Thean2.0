@@ -48,6 +48,8 @@ export function BillGenerationPage() {
   const [pickupCode, setPickupCode] = useState("");
   const [mediaUrls, setMediaUrls] = useState({ prescriptions: [], voice: null });
   const [mediaError, setMediaError] = useState("");
+  const [pendingDeleteRowId, setPendingDeleteRowId] = useState(null);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const objectUrlsRef = useRef([]);
 
   useEffect(() => {
@@ -107,21 +109,34 @@ export function BillGenerationPage() {
   }
 
   function removeRow(id) {
+    setPendingDeleteRowId(null);
     setRows((rs) => rs.length > 1 ? rs.filter((r) => r._id !== id) : rs);
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setError("");
-    // Validate
+  /** Returns an error string if validation fails, null if OK. */
+  function validateRows() {
     for (const row of rows) {
-      if (!row.name.trim()) { setError("Every row must have a medicine name."); return; }
-      if (!row.qty || Number(row.qty) <= 0) { setError(`Row "${row.name}": quantity must be > 0.`); return; }
-      if (!row.amount || Number(row.amount) <= 0) { setError(`Row "${row.name}": amount must be > 0.`); return; }
+      if (!row.name.trim()) return "Every row must have a medicine name.";
+      if (!row.qty || Number(row.qty) <= 0) return `Row "${row.name}": quantity must be > 0.`;
+      if (!row.amount || Number(row.amount) <= 0) return `Row "${row.name}": amount must be > 0.`;
       if (row.unavailable && !row.substitute_name.trim()) {
-        setError(`Row "${row.name}": enter substitute medicine name.`); return;
+        return `Row "${row.name}": enter substitute medicine name.`;
       }
     }
+    return null;
+  }
+
+  /** Step 1 — validate, then show confirmation panel. */
+  function requestSubmit(e) {
+    e.preventDefault();
+    setError("");
+    const validationError = validateRows();
+    if (validationError) { setError(validationError); return; }
+    setShowSubmitConfirm(true);
+  }
+
+  /** Step 2 — user confirmed, do the API call. */
+  async function confirmSubmit() {
     const items = rows.map((r) => ({
       name: r.name.trim(),
       qty: String(r.qty),
@@ -136,10 +151,13 @@ export function BillGenerationPage() {
       setOrder(updated);
     } catch (err) {
       setError(err.message);
+      setShowSubmitConfirm(false);
     } finally {
       setIsSubmitting(false);
     }
   }
+
+  const billTotal = rows.reduce((sum, r) => sum + (parseFloat(r.amount) || 0) * (parseFloat(r.qty) || 0), 0);
 
   const hasMedia = Boolean(
     (order?.prescription_files || []).length || order?.voice_note_file,
@@ -159,12 +177,15 @@ export function BillGenerationPage() {
       <PharmacyPageShell>
         <div className="bill-success-screen">
           <PackageCheck size={56} className="bill-success-icon" />
-          <h1>Order Ready for Pickup!</h1>
-          <p>Share this code with the customer to confirm pickup.</p>
+          <h1>Bill Submitted — Order Ready for Pickup!</h1>
+          <p>Share this code with the customer when they arrive to collect their order.</p>
           <div className="pickup-code-big">
             <QrCode size={28} />
             <span>{pickupCode}</span>
           </div>
+          <p style={{ fontSize: "0.875rem", color: "#6b7280", marginTop: "0.5rem" }}>
+            The pickup code remains valid until the customer collects the order. Keep this screen open or note it down.
+          </p>
           <button className="button" type="button" onClick={() => navigate("/orders")}>
             Back to Order Management
           </button>
@@ -229,7 +250,7 @@ export function BillGenerationPage() {
       ) : null}
 
       {/* Bill grid */}
-      <form onSubmit={handleSubmit} className="bill-form">
+      <form onSubmit={requestSubmit} className="bill-form">
         <div className="bill-grid-wrapper">
           <table className="bill-grid">
             <thead>
@@ -297,7 +318,7 @@ export function BillGenerationPage() {
                       {row.unavailable ? (
                         <input
                           type="text"
-                          placeholder="Substitute name"
+                          placeholder="Substitute name (required)"
                           className="sub-name-input"
                           value={row.substitute_name}
                           onChange={(e) => updateRow(row._id, "substitute_name", e.target.value)}
@@ -306,15 +327,41 @@ export function BillGenerationPage() {
                     </td>
                   ) : null}
                   <td>
-                    <button
-                      className="icon-button danger"
-                      type="button"
-                      aria-label="Remove row"
-                      onClick={() => removeRow(row._id)}
-                      disabled={rows.length === 1}
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    {pendingDeleteRowId === row._id ? (
+                      <span style={{ display: "flex", gap: "0.25rem", alignItems: "center", fontSize: "0.8rem" }}>
+                        <span style={{ color: "#b45309", whiteSpace: "nowrap" }}>Remove?</span>
+                        <button
+                          type="button"
+                          className="danger-button"
+                          style={{ padding: "0.15rem 0.4rem", fontSize: "0.8rem" }}
+                          onClick={() => removeRow(row._id)}
+                        >
+                          Yes
+                        </button>
+                        <button
+                          type="button"
+                          className="outline-button"
+                          style={{ padding: "0.15rem 0.4rem", fontSize: "0.8rem" }}
+                          onClick={() => setPendingDeleteRowId(null)}
+                        >
+                          No
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        className="icon-button danger"
+                        type="button"
+                        aria-label="Remove row"
+                        onClick={() =>
+                          row.name.trim()
+                            ? setPendingDeleteRowId(row._id)
+                            : removeRow(row._id)
+                        }
+                        disabled={rows.length === 1}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -327,16 +374,55 @@ export function BillGenerationPage() {
             <PlusCircle size={16} /> Add Row
           </button>
           <div className="bill-total">
-            Total: ₹
-            {rows
-              .reduce((sum, r) => sum + (parseFloat(r.amount) || 0) * (parseFloat(r.qty) || 0), 0)
-              .toFixed(2)}
+            Total: ₹{billTotal.toFixed(2)}
           </div>
-          <button className="button" type="submit" disabled={isSubmitting}>
+          <button
+            className="button"
+            type="submit"
+            disabled={isSubmitting || showSubmitConfirm}
+          >
             <Send size={16} />
-            {isSubmitting ? "Submitting…" : "Submit Bill & Mark Ready for Pickup"}
+            Submit Bill &amp; Mark Ready for Pickup
           </button>
         </div>
+
+        {/* Confirmation panel — appears after first submit click */}
+        {showSubmitConfirm ? (
+          <div
+            className="bill-submit-confirm"
+            style={{
+              marginTop: "1rem",
+              padding: "1rem",
+              border: "1px solid var(--color-border, #e5e7eb)",
+              borderRadius: "8px",
+              background: "var(--color-surface-2, #f9fafb)",
+            }}
+          >
+            <p style={{ marginBottom: "0.75rem" }}>
+              <strong>Confirm submission</strong> — {rows.length} item{rows.length !== 1 ? "s" : ""}, total ₹{billTotal.toFixed(2)}.
+              This cannot be undone.
+            </p>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <button
+                className="button"
+                type="button"
+                disabled={isSubmitting}
+                onClick={confirmSubmit}
+              >
+                <Send size={16} />
+                {isSubmitting ? "Submitting…" : "Confirm & Submit"}
+              </button>
+              <button
+                className="outline-button"
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => setShowSubmitConfirm(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
       </form>
     </PharmacyPageShell>
   );

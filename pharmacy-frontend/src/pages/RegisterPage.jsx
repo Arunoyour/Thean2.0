@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Building2, LocateFixed, ShieldAlert } from "lucide-react";
+import { Building2, CheckCircle2, LocateFixed, ShieldAlert } from "lucide-react";
 
 import { registerPharmacy } from "../lib/api.js";
 import { validatePhone, validateEmail, validatePincode, validateRequired, inputClass, touch } from "../lib/validation.js";
@@ -9,6 +9,17 @@ const reqOwner   = validateRequired("Owner name");
 const reqStore   = validateRequired("Pharmacy name");
 const reqLicense = validateRequired("License number");
 const reqAddr    = validateRequired("Address");
+
+const LOCATION_ACCURACY_THRESHOLD_M = 100;
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Could not read the selected file."));
+    reader.readAsDataURL(file);
+  });
+}
 
 export function RegisterPage() {
   const [form, setForm] = useState({
@@ -23,6 +34,7 @@ export function RegisterPage() {
     pincode: "",
   });
   const [location, setLocation] = useState(null);
+  const [licenseFile, setLicenseFile] = useState(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -62,11 +74,13 @@ export function RegisterPage() {
       },
       (geoError) => {
         setIsLocating(false);
-        setError(
-          geoError.code === geoError.PERMISSION_DENIED
-            ? "Location permission is required to register a pharmacy."
-            : "Could not capture location. Please try again.",
-        );
+        if (geoError.code === geoError.PERMISSION_DENIED) {
+          setError("Location permission denied. Please allow location access in your browser settings and try again.");
+        } else if (geoError.code === geoError.TIMEOUT) {
+          setError("Location capture timed out. Move to an area with better GPS signal and try again.");
+        } else {
+          setError("Could not capture location. Please try again.");
+        }
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     );
@@ -98,6 +112,11 @@ export function RegisterPage() {
 
     setIsSubmitting(true);
     try {
+      let licenseDocumentDataUrl = null;
+      if (licenseFile) {
+        licenseDocumentDataUrl = await readFileAsDataUrl(licenseFile);
+      }
+
       const response = await registerPharmacy({
         ...form,
         email: form.email || null,
@@ -106,6 +125,7 @@ export function RegisterPage() {
         pincode: form.pincode || null,
         latitude: location.latitude,
         longitude: location.longitude,
+        ...(licenseDocumentDataUrl ? { license_document_data_url: licenseDocumentDataUrl } : {}),
       });
       setMessage(`${response.profile.store_name} registered. Status: pending super admin approval.`);
     } catch (requestError) {
@@ -113,6 +133,38 @@ export function RegisterPage() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  const locationAccuracyWarning =
+    location?.accuracy && location.accuracy > LOCATION_ACCURACY_THRESHOLD_M
+      ? `Location accuracy is ${Math.round(location.accuracy)} m — above the ${LOCATION_ACCURACY_THRESHOLD_M} m threshold. Move to a location with better GPS signal for a more precise pin.`
+      : null;
+
+  // ── Success screen ──────────────────────────────────────────────────────────
+  if (message) {
+    return (
+      <main className="page two-column">
+        <section className="intro">
+          <p className="eyebrow">Pharmacy onboarding</p>
+          <h1>Register your pharmacy</h1>
+          <p>
+            New pharmacies are created inactive by default. Thean super admin approval is required
+            before a pharmacy is listed for customers.
+          </p>
+        </section>
+        <div className="panel register-success-panel" style={{ textAlign: "center", padding: "2.5rem 2rem" }}>
+          <CheckCircle2 size={48} style={{ color: "var(--color-success, #16a34a)", marginBottom: "1rem" }} />
+          <h2>Registration submitted!</h2>
+          <p style={{ marginBottom: "1.5rem" }}>{message}</p>
+          <p style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "1.5rem" }}>
+            A Thean super admin will review your application. You can log in once your pharmacy is activated.
+          </p>
+          <Link className="button" to="/login">
+            Go to Login
+          </Link>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -152,6 +204,7 @@ export function RegisterPage() {
             onBlur={touch(setTouched, "phone_number")}
             className={inputClass(touched.phone_number, errors.phone_number)}
             inputMode="tel"
+            placeholder="e.g. 9876543210"
             required
           />
           {errors.phone_number && <span className="field-error-msg">{errors.phone_number}</span>}
@@ -191,6 +244,17 @@ export function RegisterPage() {
             required
           />
           {errors.license_number && <span className="field-error-msg">{errors.license_number}</span>}
+        </label>
+        <label>
+          License document <span style={{ fontWeight: 400, fontSize: "0.8em", color: "#6b7280" }}>(optional — PDF, JPG, or PNG)</span>
+          <input
+            type="file"
+            accept=".pdf,image/jpeg,image/png,image/webp"
+            onChange={(e) => setLicenseFile(e.target.files?.[0] ?? null)}
+          />
+          {licenseFile && (
+            <span style={{ fontSize: "0.8em", color: "#6b7280" }}>Selected: {licenseFile.name}</span>
+          )}
         </label>
         <label>
           Address
@@ -235,7 +299,18 @@ export function RegisterPage() {
                 ? `Captured: ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`
                 : "Mandatory. Capture current pharmacy location before submitting."}
             </p>
-            {location?.accuracy && <p>Accuracy: {Math.round(location.accuracy)} meters</p>}
+            {location?.accuracy && (
+              <p style={{ fontSize: "0.85em", color: location.accuracy > LOCATION_ACCURACY_THRESHOLD_M ? "#b45309" : "#6b7280" }}>
+                Accuracy: {Math.round(location.accuracy)} m
+                {location.accuracy > LOCATION_ACCURACY_THRESHOLD_M ? " — low accuracy, consider recapturing" : ""}
+              </p>
+            )}
+            {locationAccuracyWarning && (
+              <div className="notice" style={{ marginTop: "0.5rem" }}>
+                <ShieldAlert size={16} aria-hidden="true" />
+                <span>{locationAccuracyWarning}</span>
+              </div>
+            )}
           </div>
           <button className="outline-button location-button" type="button" onClick={captureLocation}>
             <LocateFixed size={18} aria-hidden="true" />
@@ -243,7 +318,6 @@ export function RegisterPage() {
           </button>
         </div>
 
-        {message && <div className="success">{message}</div>}
         {error && <div className="error">{error}</div>}
 
         <button className="button" type="submit" disabled={isSubmitting}>

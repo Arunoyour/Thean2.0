@@ -26,9 +26,11 @@ export function LoginPage() {
     try {
       const response = await requestPharmacyOtp(phoneNumber);
       const suffix = response.development_otp ? ` Development OTP: ${response.development_otp}` : "";
+      // Clear state before entering verify phase so nothing stale persists
+      setOtp("");
+      setTouched({});
       setMessage(`${response.message}${suffix}`);
       setPhase("verify");
-      setTouched({});
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -68,6 +70,7 @@ export function LoginPage() {
             onBlur={touch(setTouched, "phone")}
             className={inputClass(touched.phone, phoneErr)}
             inputMode="tel"
+            placeholder="e.g. 9876543210"
             disabled={phase === "verify"}
             required
           />
@@ -117,6 +120,22 @@ export function LoginPage() {
           {phase === "request" ? <Send size={18} /> : <KeyRound size={18} />}
           {isSubmitting ? "Working" : phase === "request" ? "Send OTP" : "Verify OTP"}
         </button>
+
+        {phase === "verify" && (
+          <button
+            className="text-button"
+            type="button"
+            onClick={() => {
+              setPhase("request");
+              setOtp("");
+              setMessage("");
+              setError("");
+              setTouched({});
+            }}
+          >
+            Change phone number
+          </button>
+        )}
 
         <p className="footnote">
           New pharmacy? <Link to="/register">Register now</Link>

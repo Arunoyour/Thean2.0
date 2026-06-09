@@ -11,6 +11,9 @@ import {
   RefreshCw,
   RotateCw,
   Send,
+  Volume2,
+  VolumeX,
+  X,
   XCircle,
   ZoomIn,
   ZoomOut,
@@ -29,6 +32,7 @@ import {
 
 const PAGE_SIZE = 20;
 const ANNOUNCE_AT_SECONDS = [360, 180, 60]; // 6min, 3min, 1min
+const AUDIO_PREF_KEY = "thean_pharmacy_audio_on";
 
 const statusOptions = [
   { label: "All statuses", value: "all" },
@@ -113,7 +117,12 @@ function EstimateModal({ order, onClose, onSubmitted }) {
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
       <div className="modal-box estimate-modal-box">
-        <h2>Submit Price Estimate</h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+          <h2 style={{ margin: 0 }}>Submit Price Estimate</h2>
+          <button className="icon-button" type="button" onClick={onClose} aria-label="Close estimate modal">
+            <X size={20} />
+          </button>
+        </div>
         <p className="estimate-modal-hint">
           Enter the total cost of medicines/products. Delivery charge, platform fee, and GST
           will be <strong>calculated automatically</strong> by the system and shown to the customer.
@@ -273,7 +282,21 @@ export function OrderManagementPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [estimateModalOrder, setEstimateModalOrder] = useState(null);
+  const [pendingRejectOrderId, setPendingRejectOrderId] = useState(null);
   const announcedRef = useRef({}); // {orderId: Set of announced seconds}
+
+  // Audio announcement preference — persistent, default ON
+  const [audioEnabled, setAudioEnabled] = useState(() => {
+    const stored = window.localStorage.getItem(AUDIO_PREF_KEY);
+    return stored === null ? true : stored === "true";
+  });
+
+  function toggleAudio() {
+    const next = !audioEnabled;
+    setAudioEnabled(next);
+    window.localStorage.setItem(AUDIO_PREF_KEY, String(next));
+    if (!next) window.speechSynthesis?.cancel();
+  }
 
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
@@ -320,7 +343,7 @@ export function OrderManagementPage() {
     return () => window.clearInterval(timer);
   }, []);
 
-  // Audio announcements for ASSIGNED orders
+  // Audio announcements for ASSIGNED orders — only when audioEnabled
   useEffect(() => {
     orders.forEach((order) => {
       if (order.status !== "ASSIGNED_TO_PHARMACY" || !order.pharmacy_action_deadline_at) return;
@@ -332,12 +355,14 @@ export function OrderManagementPage() {
       for (const threshold of ANNOUNCE_AT_SECONDS) {
         if (secs <= threshold && secs > threshold - 5 && !announced.has(threshold)) {
           announced.add(threshold);
-          const mins = Math.floor(secs / 60);
-          speak(`An order is awaiting your approval. ${mins} ${mins === 1 ? "minute" : "minutes"} remaining.`);
+          if (audioEnabled) {
+            const mins = Math.floor(secs / 60);
+            speak(`An order is awaiting your approval. ${mins} ${mins === 1 ? "minute" : "minutes"} remaining.`);
+          }
         }
       }
     });
-  }, [now, orders]);
+  }, [now, orders, audioEnabled]);
 
   // WebSocket
   useEffect(() => {
@@ -358,7 +383,10 @@ export function OrderManagementPage() {
         loadOrders({ showLoading: false });
       }
     };
-    return () => socket.close();
+    return () => {
+      window.speechSynthesis?.cancel();
+      socket.close();
+    };
   }, []);
 
   async function submitAction(orderId, action) {
@@ -381,6 +409,7 @@ export function OrderManagementPage() {
         }
       } else {
         await rejectAssignedOrder(orderId);
+        setPendingRejectOrderId(null);
         setMessage("Order rejected.");
         await loadOrders({ showLoading: false });
       }
@@ -447,10 +476,22 @@ export function OrderManagementPage() {
           <h1>Order Management</h1>
           <p>Review assigned orders and track accepted or completed pharmacy work sorted by latest order.</p>
         </div>
-        <button className="outline-button" type="button" onClick={() => loadOrders()}>
-          <RefreshCw size={18} aria-hidden="true" />
-          Refresh
-        </button>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <button
+            className="outline-button"
+            type="button"
+            title={audioEnabled ? "Audio announcements ON — click to mute" : "Audio announcements OFF — click to enable"}
+            onClick={toggleAudio}
+            aria-pressed={audioEnabled}
+          >
+            {audioEnabled ? <Volume2 size={18} aria-hidden="true" /> : <VolumeX size={18} aria-hidden="true" />}
+            {audioEnabled ? "Audio on" : "Audio off"}
+          </button>
+          <button className="outline-button" type="button" onClick={() => loadOrders()}>
+            <RefreshCw size={18} aria-hidden="true" />
+            Refresh
+          </button>
+        </div>
       </header>
 
       <section className="order-management-metrics">
@@ -553,9 +594,38 @@ export function OrderManagementPage() {
                           <CheckCircle2 size={16} />
                           Accept {slaSeconds > 0 ? `(${formatCountdown(slaSeconds)})` : ""}
                         </button>
-                        <button className="danger-button button-small" type="button" disabled={isSubmitting} onClick={() => submitAction(order.order_id, "reject")}>
-                          <XCircle size={16} /> Reject
-                        </button>
+                        {/* Reject — inline confirm before acting */}
+                        {pendingRejectOrderId === order.order_id ? (
+                          <>
+                            <span style={{ fontSize: "0.8rem", color: "#b45309", alignSelf: "center" }}>
+                              Reject this order?
+                            </span>
+                            <button
+                              className="danger-button button-small"
+                              type="button"
+                              disabled={isSubmitting}
+                              onClick={() => submitAction(order.order_id, "reject")}
+                            >
+                              <XCircle size={16} /> Confirm reject
+                            </button>
+                            <button
+                              className="outline-button button-small"
+                              type="button"
+                              onClick={() => setPendingRejectOrderId(null)}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className="danger-button button-small"
+                            type="button"
+                            disabled={isSubmitting}
+                            onClick={() => setPendingRejectOrderId(order.order_id)}
+                          >
+                            <XCircle size={16} /> Reject
+                          </button>
+                        )}
                       </>
                     ) : null}
                     {order.status === "PRICE_APPROVED" ? (

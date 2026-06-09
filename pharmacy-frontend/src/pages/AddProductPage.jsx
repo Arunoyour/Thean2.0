@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ImagePlus, PackagePlus, ShieldAlert } from "lucide-react";
+import { ImagePlus, PackagePlus, RefreshCw, ShieldAlert } from "lucide-react";
 
 import { PharmacyPageShell } from "../components/PharmacyPageShell.jsx";
 import { addProduct, getCurrentPharmacy } from "../lib/api.js";
@@ -36,11 +36,15 @@ export function AddProductPage() {
   const [photoFiles, setPhotoFiles] = useState([]);
   const [photoPreviews, setPhotoPreviews] = useState([]);
   const [touched, setTouched] = useState({});
+  // Incrementing this triggers a re-load after a failed pharmacy fetch
+  const [loadKey, setLoadKey] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadPharmacy() {
+      setIsLoading(true);
+      setError("");
       try {
         const profile = await getCurrentPharmacy();
         if (isMounted) {
@@ -61,7 +65,7 @@ export function AddProductPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [loadKey]);
 
   function updateProductField(event) {
     setProductForm((current) => ({ ...current, [event.target.name]: event.target.value }));
@@ -135,6 +139,7 @@ export function AddProductPage() {
       });
       setPhotoFiles([]);
       setPhotoPreviews([]);
+      setTouched({});
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -144,6 +149,32 @@ export function AddProductPage() {
 
   if (isLoading) {
     return <PharmacyPageShell><section className="panel">Loading product controls</section></PharmacyPageShell>;
+  }
+
+  // If pharmacy failed to load, show error + retry — do not fall through to locked panel
+  if (error && !pharmacy) {
+    return (
+      <PharmacyPageShell>
+        <header className="portal-header">
+          <div>
+            <p className="eyebrow">Products</p>
+            <h1>Add Product</h1>
+          </div>
+        </header>
+        <article className="panel" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div className="error">{error}</div>
+          <button
+            className="outline-button"
+            type="button"
+            style={{ alignSelf: "flex-start" }}
+            onClick={() => setLoadKey((k) => k + 1)}
+          >
+            <RefreshCw size={16} aria-hidden="true" />
+            Retry
+          </button>
+        </article>
+      </PharmacyPageShell>
+    );
   }
 
   return (
@@ -192,7 +223,8 @@ export function AddProductPage() {
               required
             />
           </label>
-          <div className="photo-preview-grid">
+          {/* overflow-x: auto so grid scrolls horizontally when 6 images are added */}
+          <div className="photo-preview-grid" style={{ overflowX: "auto" }}>
             {photoPreviews.length ? (
               photoPreviews.map((previewUrl) => (
                 <img src={previewUrl} alt="Selected product preview" key={previewUrl} />
@@ -279,6 +311,11 @@ export function AddProductPage() {
                 required
               />
               {fieldErrors.stock_quantity && <span className="field-error-msg">{fieldErrors.stock_quantity}</span>}
+              {productForm.stock_quantity === "0" && (
+                <span className="field-help" style={{ color: "#b45309" }}>
+                  Stock is 0 — product will show as out of stock immediately after approval.
+                </span>
+              )}
             </label>
           </div>
 

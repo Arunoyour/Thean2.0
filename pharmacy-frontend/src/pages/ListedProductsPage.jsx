@@ -21,7 +21,7 @@ function createEditForm(product) {
 
 export function ListedProductsPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -65,28 +65,50 @@ export function ListedProductsPage() {
     };
   }, []);
 
+  // WebSocket with auto-reconnect every 5 s indefinitely
   useEffect(() => {
     const token = getPharmacyToken();
-    if (!token) {
-      return undefined;
+    if (!token) return undefined;
+
+    let closed = false;
+    let reconnectTimer = null;
+    let activeSocket = null;
+
+    function connect() {
+      const apiOrigin = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/v1").replace(
+        /\/api\/v1$/,
+        "",
+      );
+      const wsOrigin = apiOrigin.replace(/^http/, "ws");
+      const socket = new WebSocket(`${wsOrigin}/api/v1/ws/pharmacy?token=${encodeURIComponent(token)}`);
+      activeSocket = socket;
+      socket.onopen = () => { if (!closed) setWsStatus("live"); };
+      socket.onmessage = (event) => {
+        if (!closed) {
+          const payload = JSON.parse(event.data);
+          setNotification(payload);
+        }
+      };
+      // onerror is a no-op — onclose handles reconnect
+      socket.onerror = () => {};
+      socket.onclose = () => {
+        if (closed) return;
+        setWsStatus("reconnecting");
+        reconnectTimer = window.setTimeout(connect, 5000);
+      };
     }
 
-    const apiOrigin = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/v1").replace(
-      /\/api\/v1$/,
-      "",
-    );
-    const wsOrigin = apiOrigin.replace(/^http/, "ws");
-    const socket = new WebSocket(`${wsOrigin}/api/v1/ws/pharmacy?token=${encodeURIComponent(token)}`);
-    socket.onopen = () => setWsStatus("live");
-    socket.onmessage = (event) => {
-      const payload = JSON.parse(event.data);
-      setNotification(payload);
+    setWsStatus("connecting");
+    connect();
+
+    return () => {
+      closed = true;
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
+      if (activeSocket) activeSocket.close();
     };
-    socket.onerror = () => setWsStatus("reconnecting");
-    socket.onclose = () => setWsStatus("offline");
-    return () => socket.close();
   }, []);
 
+  // Open edit panel from URL ?product_id=…&edit=1
   useEffect(() => {
     const productId = searchParams.get("product_id");
     const shouldEdit = searchParams.get("edit") === "1";
@@ -97,7 +119,14 @@ export function ListedProductsPage() {
     if (product && shouldEdit) {
       startEdit(product);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products, searchParams]);
+
+  // Date filter validation
+  const dateFilterError =
+    filters.dateFrom && filters.dateTo && filters.dateFrom > filters.dateTo
+      ? '"Added from" cannot be later than "Added to".'
+      : "";
 
   const filteredProducts = products.filter((product) => {
     const nameMatch = `${product.product_name} ${product.brand || ""}`
@@ -107,9 +136,10 @@ export function ListedProductsPage() {
       filters.stock === "all" ||
       (filters.stock === "out" && product.stock_quantity === 0) ||
       (filters.stock === "in" && product.stock_quantity > 0);
+    // Skip date filters if the range is invalid to avoid hiding all results
     const createdDate = new Date(product.created_at);
-    const fromMatch = filters.dateFrom ? createdDate >= new Date(`${filters.dateFrom}T00:00:00`) : true;
-    const toMatch = filters.dateTo ? createdDate <= new Date(`${filters.dateTo}T23:59:59`) : true;
+    const fromMatch = (filters.dateFrom && !dateFilterError) ? createdDate >= new Date(`${filters.dateFrom}T00:00:00`) : true;
+    const toMatch = (filters.dateTo && !dateFilterError) ? createdDate <= new Date(`${filters.dateTo}T23:59:59`) : true;
     return nameMatch && stockMatch && fromMatch && toMatch;
   });
 
@@ -122,6 +152,17 @@ export function ListedProductsPage() {
     setSuccess("");
     setEditingProduct(product);
     setEditForm(createEditForm(product));
+    setRevisionComment(""); // always start fresh — no stale comment from another product
+  }
+
+  function closeEdit() {
+    setEditingProduct(null);
+    setEditForm(null);
+    setRevisionComment("");
+    // Remove URL params so navigating back won't re-open the panel
+    if (searchParams.has("product_id") || searchParams.has("edit")) {
+      setSearchParams({});
+    }
   }
 
   function updateEditField(event) {
@@ -149,8 +190,7 @@ export function ListedProductsPage() {
       setProducts((current) =>
         current.map((product) => (product.product_id === updated.product_id ? updated : product)),
       );
-      setEditingProduct(null);
-      setEditForm(null);
+      closeEdit();
       setSuccess(`${updated.product_name} updated.`);
     } catch (requestError) {
       setError(requestError.message);
@@ -228,7 +268,7 @@ export function ListedProductsPage() {
       {error && <div className="error">{error}</div>}
       {success && <div className="success">{success}</div>}
       <div className={`connection-state connection-${wsStatus}`}>
-        Realtime notifications: {wsStatus}
+        Realtime notifications: {wsStatus === "reconnecting" ? "reconnecting…" : wsStatus}
       </div>
       {notification ? (
         <button className="notification-banner" type="button" onClick={openNotification}>
@@ -269,6 +309,9 @@ export function ListedProductsPage() {
               <input name="dateTo" value={filters.dateTo} onChange={updateFilter} type="date" />
             </label>
           </div>
+          {dateFilterError && (
+            <div className="error" style={{ marginBottom: "0.5rem" }}>{dateFilterError}</div>
+          )}
 
           {editingProduct && editForm ? (
             <form className="product-edit-form" onSubmit={saveProduct}>
@@ -277,10 +320,7 @@ export function ListedProductsPage() {
                 <button
                   className="icon-button"
                   type="button"
-                  onClick={() => {
-                    setEditingProduct(null);
-                    setEditForm(null);
-                  }}
+                  onClick={closeEdit}
                   aria-label="Close edit product"
                 >
                   <X size={18} aria-hidden="true" />
