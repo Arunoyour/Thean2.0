@@ -2947,3 +2947,69 @@ select.input-valid {
   color: #ffffff;
   background: #a83220;
 }
+
+/* ── AddressPage: GPS + map feedback ────────────────────────────── */
+.address-gps-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fde8e4;
+  color: #8a1f11;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.45;
+  margin-top: 10px;
+}
+
+.address-gps-error svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.address-accuracy-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.45;
+  margin-top: 10px;
+}
+
+.address-accuracy-warn svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Map tile failure fallback */
+.address-map-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 260px;
+  border: 2px dashed #d1d5db;
+  border-radius: 8px;
+  background: #f9fafb;
+  text-align: center;
+  padding: 24px;
+}
+
+.address-map-fallback-icon {
+  color: #9ca3af;
+}
+
+.address-map-fallback-msg {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.9rem;
+  max-width: 280px;
+}
