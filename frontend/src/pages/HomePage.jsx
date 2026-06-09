@@ -10,10 +10,11 @@ import {
   Plus,
   RefreshCw,
   WalletCards,
+  WifiOff,
 } from "lucide-react";
 
 import { FormMessage } from "../components/FormMessage.jsx";
-import { getCurrentUser, listCustomerAddresses, logoutCustomer } from "../lib/api.js";
+import { getCurrentUser, listCustomerAddresses, getActiveOrderCount, logoutCustomer } from "../lib/api.js";
 
 const sectors = [
   {
@@ -37,18 +38,34 @@ const sectors = [
   },
 ];
 
+// Classify API errors so we can show a specific message
+function classifyError(err) {
+  const msg = err?.message || "";
+  // JWT expired / forbidden
+  if (
+    msg.toLowerCase().includes("401") ||
+    msg.toLowerCase().includes("403") ||
+    msg.toLowerCase().includes("unauthorized") ||
+    msg.toLowerCase().includes("forbidden") ||
+    msg.toLowerCase().includes("login")
+  ) {
+    return "session";
+  }
+  return "network";
+}
+
 export function HomePage() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [error, setError] = useState("");
+  const [errorKind, setErrorKind] = useState("network"); // "session" | "network"
   const [isLoading, setIsLoading] = useState(true);
-  const [isMenuOpen, setIsMenuOpen] = useState(true);
+  const [isMenuOpen, setIsMenuOpen] = useState(false); // always closed by default
   const [addresses, setAddresses] = useState([]);
+  const [activeOrders, setActiveOrders] = useState(null); // null = still loading
 
   const firstName = useMemo(() => {
-    if (!user?.full_name) {
-      return "Customer";
-    }
+    if (!user?.full_name) return "Customer";
     return user.full_name.split(" ")[0];
   }, [user]);
 
@@ -57,29 +74,29 @@ export function HomePage() {
 
     async function loadUser() {
       try {
-        const profile = await getCurrentUser();
-        const savedAddresses = await listCustomerAddresses();
+        const [profile, savedAddresses, countData] = await Promise.all([
+          getCurrentUser(),
+          listCustomerAddresses(),
+          getActiveOrderCount(),
+        ]);
         if (isMounted) {
           setUser(profile);
           setAddresses(savedAddresses);
+          setActiveOrders(countData.count);
           setError("");
         }
       } catch (requestError) {
         if (isMounted) {
           setError(requestError.message);
+          setErrorKind(classifyError(requestError));
         }
       } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        if (isMounted) setIsLoading(false);
       }
     }
 
     loadUser();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, []);
 
   function logout() {
@@ -87,7 +104,7 @@ export function HomePage() {
     navigate("/login");
   }
 
-  const defaultAddress = addresses.find((address) => address.is_default) || addresses[0];
+  const defaultAddress = addresses.find((a) => a.is_default) || addresses[0];
 
   if (isLoading) {
     return (
@@ -101,13 +118,37 @@ export function HomePage() {
   }
 
   if (error) {
+    const isSession = errorKind === "session";
     return (
       <section className="home-layout">
         <div className="home-empty">
-          <FormMessage kind="error">{error}</FormMessage>
-          <Link className="button" to="/login">
-            Login again
-          </Link>
+          {isSession ? (
+            <>
+              <FormMessage kind="error">
+                Your session has expired. Please log in again.
+              </FormMessage>
+              <Link className="button" to="/login">
+                Log in again
+              </Link>
+            </>
+          ) : (
+            <>
+              <span className="home-error-icon" aria-hidden="true">
+                <WifiOff size={32} />
+              </span>
+              <FormMessage kind="error">
+                Could not connect to Thean. Check your internet connection and try again.
+              </FormMessage>
+              <button
+                className="button"
+                type="button"
+                onClick={() => { setIsLoading(true); setError(""); window.location.reload(); }}
+              >
+                <RefreshCw size={16} aria-hidden="true" />
+                Retry
+              </button>
+            </>
+          )}
         </div>
       </section>
     );
@@ -122,7 +163,7 @@ export function HomePage() {
             type="button"
             onClick={() => setIsMenuOpen((current) => !current)}
             aria-expanded={isMenuOpen}
-            aria-label="Toggle account menu"
+            aria-label={isMenuOpen ? "Close account menu" : "Open account menu"}
           >
             <Menu size={20} aria-hidden="true" />
           </button>
@@ -154,7 +195,7 @@ export function HomePage() {
               </span>
               <div>
                 <p>Active orders</p>
-                <strong>0</strong>
+                <strong>{activeOrders === null ? "…" : activeOrders}</strong>
               </div>
             </div>
 
@@ -192,7 +233,6 @@ export function HomePage() {
           <div className="sector-grid">
             {sectors.map((sector) => {
               const Icon = sector.icon;
-
               return (
                 <article className="sector-card" key={sector.title}>
                   <span className="service-icon">

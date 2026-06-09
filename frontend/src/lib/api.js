@@ -99,6 +99,14 @@ export function listCustomerAddresses() {
   });
 }
 
+export function getActiveOrderCount() {
+  const token = getToken();
+  if (!token) return Promise.reject(new Error("Please login to continue."));
+  return request("/customer/active-order-count", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export function createCustomerAddress(data) {
   const token = getToken();
 

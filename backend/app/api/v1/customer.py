@@ -126,6 +126,25 @@ async def my_pharmacy_orders(
     return await list_customer_pharmacy_orders(session, current_user)
 
 
+@router.get("/active-order-count")
+async def active_order_count(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_pharmacy_session),
+):
+    """Returns the number of in-progress pharmacy orders for the logged-in customer."""
+    from app.services.customer_order_service import COMPLETED, CANCELLED, REJECTED
+    from app.models.pharmacy_merchant import CustomerPharmacyOrder
+    from sqlalchemy import select, func
+    terminal = {COMPLETED, CANCELLED, REJECTED}
+    result = await session.execute(
+        select(func.count()).select_from(CustomerPharmacyOrder).where(
+            CustomerPharmacyOrder.user_id == current_user.user_id,
+            CustomerPharmacyOrder.status.notin_(terminal),
+        )
+    )
+    return {"count": result.scalar_one()}
+
+
 @router.get("/pharmacy-orders/{order_id}", response_model=CustomerPharmacyOrderResponse)
 async def my_pharmacy_order(
     order_id: UUID,
