@@ -4,6 +4,7 @@ import { KeyRound, Send } from "lucide-react";
 
 import { FormMessage } from "../components/FormMessage.jsx";
 import { requestOtp, verifyOtp } from "../lib/api.js";
+import { validateOtp, validatePhone, inputClass, touch } from "../lib/validation.js";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -13,9 +14,16 @@ export function LoginPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [touched, setTouched] = useState({});
+
+  const phoneErr = touched.phone ? validatePhone(phoneNumber) : null;
+  const otpErr   = touched.otp   ? validateOtp(otp)           : null;
 
   async function requestLoginOtp(event) {
     event.preventDefault();
+    // Mark all visible fields touched so errors appear on submit
+    setTouched((t) => ({ ...t, phone: true }));
+    if (validatePhone(phoneNumber)) return;
     setError("");
     setMessage("");
     setIsSubmitting(true);
@@ -25,6 +33,7 @@ export function LoginPage() {
       const suffix = response.development_otp ? ` Development OTP: ${response.development_otp}` : "";
       setMessage(`${response.message}${suffix}`);
       setPhase("verify");
+      setTouched({});
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -34,6 +43,8 @@ export function LoginPage() {
 
   async function verifyLoginOtp(event) {
     event.preventDefault();
+    setTouched((t) => ({ ...t, otp: true }));
+    if (validateOtp(otp)) return;
     setError("");
     setMessage("");
     setIsSubmitting(true);
@@ -64,16 +75,23 @@ export function LoginPage() {
       <form className="auth-form" onSubmit={phase === "request" ? requestLoginOtp : verifyLoginOtp}>
         <label>
           Phone number
-          <input
-            value={phoneNumber}
-            onChange={(event) => setPhoneNumber(event.target.value)}
-            inputMode="tel"
-            minLength={8}
-            maxLength={15}
-            autoComplete="tel"
-            disabled={phase === "verify"}
-            required
-          />
+          <div className="input-with-indicator">
+            <input
+              value={phoneNumber}
+              onChange={(event) => setPhoneNumber(event.target.value)}
+              onBlur={touch(setTouched, "phone")}
+              className={inputClass(touched.phone, phoneErr)}
+              inputMode="tel"
+              maxLength={15}
+              autoComplete="tel"
+              disabled={phase === "verify"}
+              required
+            />
+            {touched.phone && !phoneErr && (
+              <span className="input-valid-tick" aria-label="Valid">✓</span>
+            )}
+          </div>
+          {phoneErr && <span className="field-error-msg">{phoneErr}</span>}
         </label>
 
         {phase === "verify" && (
@@ -82,17 +100,45 @@ export function LoginPage() {
             <input
               value={otp}
               onChange={(event) => setOtp(event.target.value)}
+              onBlur={touch(setTouched, "otp")}
+              className={inputClass(touched.otp, otpErr)}
               inputMode="numeric"
-              minLength={6}
               maxLength={6}
               autoComplete="one-time-code"
               required
             />
+            {otpErr && <span className="field-error-msg">{otpErr}</span>}
           </label>
         )}
 
         <FormMessage kind="success">{message}</FormMessage>
         <FormMessage kind="error">{error}</FormMessage>
+
+        {phase === "verify" && error && (
+          <button
+            className="text-button login-retry-btn"
+            type="button"
+            onClick={async () => {
+              setError("");
+              setMessage("");
+              setOtp("");
+              setTouched({});
+              setIsSubmitting(true);
+              try {
+                const response = await requestOtp(phoneNumber);
+                const suffix = response.development_otp ? ` Development OTP: ${response.development_otp}` : "";
+                setMessage(`OTP resent.${suffix}`);
+              } catch (retryError) {
+                setError(retryError.message);
+              } finally {
+                setIsSubmitting(false);
+              }
+            }}
+            disabled={isSubmitting}
+          >
+            Resend OTP
+          </button>
+        )}
 
         <button className="button button-full" type="submit" disabled={isSubmitting}>
           {phase === "request" ? (
@@ -117,6 +163,7 @@ export function LoginPage() {
               setOtp("");
               setMessage("");
               setError("");
+              setTouched({});
             }}
           >
             Change phone number

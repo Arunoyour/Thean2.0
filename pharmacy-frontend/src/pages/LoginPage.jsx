@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { KeyRound, Send } from "lucide-react";
 
 import { requestPharmacyOtp, verifyPharmacyOtp } from "../lib/api.js";
+import { validatePhone, validateOtp, inputClass, touch } from "../lib/validation.js";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -12,18 +13,22 @@ export function LoginPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [touched, setTouched] = useState({});
+
+  const phoneErr = touched.phone ? validatePhone(phoneNumber) : null;
+  const otpErr   = touched.otp   ? validateOtp(otp)           : null;
 
   async function requestOtp(event) {
     event.preventDefault();
-    setError("");
-    setMessage("");
-    setIsSubmitting(true);
-
+    setTouched((t) => ({ ...t, phone: true }));
+    if (validatePhone(phoneNumber)) return;
+    setError(""); setMessage(""); setIsSubmitting(true);
     try {
       const response = await requestPharmacyOtp(phoneNumber);
       const suffix = response.development_otp ? ` Development OTP: ${response.development_otp}` : "";
       setMessage(`${response.message}${suffix}`);
       setPhase("verify");
+      setTouched({});
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -33,10 +38,9 @@ export function LoginPage() {
 
   async function verifyOtp(event) {
     event.preventDefault();
-    setError("");
-    setMessage("");
-    setIsSubmitting(true);
-
+    setTouched((t) => ({ ...t, otp: true }));
+    if (validateOtp(otp)) return;
+    setError(""); setMessage(""); setIsSubmitting(true);
     try {
       await verifyPharmacyOtp(phoneNumber, otp);
       navigate("/home");
@@ -61,10 +65,13 @@ export function LoginPage() {
           <input
             value={phoneNumber}
             onChange={(event) => setPhoneNumber(event.target.value)}
+            onBlur={touch(setTouched, "phone")}
+            className={inputClass(touched.phone, phoneErr)}
             inputMode="tel"
             disabled={phase === "verify"}
             required
           />
+          {phoneErr && <span className="field-error-msg">{phoneErr}</span>}
         </label>
 
         {phase === "verify" && (
@@ -73,15 +80,38 @@ export function LoginPage() {
             <input
               value={otp}
               onChange={(event) => setOtp(event.target.value)}
+              onBlur={touch(setTouched, "otp")}
+              className={inputClass(touched.otp, otpErr)}
               inputMode="numeric"
               maxLength={6}
               required
             />
+            {otpErr && <span className="field-error-msg">{otpErr}</span>}
           </label>
         )}
 
         {message && <div className="success">{message}</div>}
         {error && <div className="error">{error}</div>}
+
+        {phase === "verify" && error && (
+          <button
+            className="text-button"
+            type="button"
+            style={{ fontSize: "0.875rem" }}
+            disabled={isSubmitting}
+            onClick={async () => {
+              setError(""); setMessage(""); setOtp(""); setTouched({});
+              setIsSubmitting(true);
+              try {
+                const r = await requestPharmacyOtp(phoneNumber);
+                const s = r.development_otp ? ` Development OTP: ${r.development_otp}` : "";
+                setMessage(`OTP resent.${s}`);
+              } catch (e) { setError(e.message); } finally { setIsSubmitting(false); }
+            }}
+          >
+            Resend OTP
+          </button>
+        )}
 
         <button className="button" type="submit" disabled={isSubmitting}>
           {phase === "request" ? <Send size={18} /> : <KeyRound size={18} />}
@@ -95,4 +125,3 @@ export function LoginPage() {
     </main>
   );
 }
-

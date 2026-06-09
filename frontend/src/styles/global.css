@@ -1982,6 +1982,37 @@ h1 {
   font-weight: 800;
 }
 
+/* Phone input with valid indicator */
+.input-with-indicator {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-with-indicator input {
+  width: 100%;
+  padding-right: 2.4rem;
+}
+
+.input-valid-tick {
+  position: absolute;
+  right: 0.75rem;
+  color: #16a34a;
+  font-size: 1rem;
+  font-weight: 700;
+  pointer-events: none;
+  line-height: 1;
+}
+
+/* Resend OTP retry button */
+.login-retry-btn {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 4px 0;
+  font-size: 0.875rem;
+}
+
 .text-button {
   min-height: 44px;
   border: 0;
@@ -2774,3 +2805,27 @@ h1 {
   font-style: italic;
   margin-top: 2px;
 }
+
+/* ── Field-level validation (on-blur) ───────────────────────────────────── */
+input.input-error,
+textarea.input-error,
+select.input-error {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 2px rgba(239,68,68,.15);
+}
+
+input.input-valid,
+textarea.input-valid,
+select.input-valid {
+  border-color: #16a34a !important;
+  box-shadow: 0 0 0 2px rgba(22,163,74,.12);
+}
+
+.field-error-msg {
+  display: block;
+  color: #dc2626;
+  font-size: 0.73rem;
+  margin-top: 3px;
+  line-height: 1.3;
+}
+

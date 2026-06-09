@@ -3,6 +3,12 @@ import { Link } from "react-router-dom";
 import { Building2, LocateFixed, ShieldAlert } from "lucide-react";
 
 import { registerPharmacy } from "../lib/api.js";
+import { validatePhone, validateEmail, validatePincode, validateRequired, inputClass, touch } from "../lib/validation.js";
+
+const reqOwner   = validateRequired("Owner name");
+const reqStore   = validateRequired("Pharmacy name");
+const reqLicense = validateRequired("License number");
+const reqAddr    = validateRequired("Address");
 
 export function RegisterPage() {
   const [form, setForm] = useState({
@@ -21,21 +27,30 @@ export function RegisterPage() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  const [touched, setTouched] = useState({});
 
   function updateField(event) {
     setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
   }
 
+  const errors = {
+    owner_name:     touched.owner_name     ? reqOwner(form.owner_name)            : null,
+    phone_number:   touched.phone_number   ? validatePhone(form.phone_number)     : null,
+    email:          touched.email          ? validateEmail(form.email)            : null,
+    store_name:     touched.store_name     ? reqStore(form.store_name)            : null,
+    license_number: touched.license_number ? reqLicense(form.license_number)     : null,
+    address_line_1: touched.address_line_1 ? reqAddr(form.address_line_1)        : null,
+    pincode:        touched.pincode        ? (form.pincode ? validatePincode(form.pincode) : null) : null,
+  };
+
   function captureLocation() {
     setError("");
     setIsLocating(true);
-
     if (!navigator.geolocation) {
       setIsLocating(false);
       setError("Location capture is not available in this browser.");
       return;
     }
-
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setLocation({
@@ -53,16 +68,26 @@ export function RegisterPage() {
             : "Could not capture location. Please try again.",
         );
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0,
-      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
     );
   }
 
   async function submit(event) {
     event.preventDefault();
+    setTouched({
+      owner_name: true, phone_number: true, email: true,
+      store_name: true, license_number: true, address_line_1: true, pincode: true,
+    });
+    if (
+      reqOwner(form.owner_name) ||
+      validatePhone(form.phone_number) ||
+      validateEmail(form.email) ||
+      reqStore(form.store_name) ||
+      reqLicense(form.license_number) ||
+      reqAddr(form.address_line_1) ||
+      (form.pincode ? validatePincode(form.pincode) : null)
+    ) return;
+
     setError("");
     setMessage("");
 
@@ -72,7 +97,6 @@ export function RegisterPage() {
     }
 
     setIsSubmitting(true);
-
     try {
       const response = await registerPharmacy({
         ...form,
@@ -109,7 +133,15 @@ export function RegisterPage() {
       <form className="panel form-grid" onSubmit={submit}>
         <label>
           Owner name
-          <input name="owner_name" value={form.owner_name} onChange={updateField} required />
+          <input
+            name="owner_name"
+            value={form.owner_name}
+            onChange={updateField}
+            onBlur={touch(setTouched, "owner_name")}
+            className={inputClass(touched.owner_name, errors.owner_name)}
+            required
+          />
+          {errors.owner_name && <span className="field-error-msg">{errors.owner_name}</span>}
         </label>
         <label>
           Phone number
@@ -117,25 +149,60 @@ export function RegisterPage() {
             name="phone_number"
             value={form.phone_number}
             onChange={updateField}
+            onBlur={touch(setTouched, "phone_number")}
+            className={inputClass(touched.phone_number, errors.phone_number)}
             inputMode="tel"
             required
           />
+          {errors.phone_number && <span className="field-error-msg">{errors.phone_number}</span>}
         </label>
         <label>
-          Email
-          <input name="email" value={form.email} onChange={updateField} type="email" />
+          Email <span style={{ fontWeight: 400, fontSize: "0.8em", color: "#6b7280" }}>(optional)</span>
+          <input
+            name="email"
+            value={form.email}
+            onChange={updateField}
+            onBlur={touch(setTouched, "email")}
+            className={inputClass(touched.email, errors.email)}
+            type="email"
+          />
+          {errors.email && <span className="field-error-msg">{errors.email}</span>}
         </label>
         <label>
           Pharmacy name
-          <input name="store_name" value={form.store_name} onChange={updateField} required />
+          <input
+            name="store_name"
+            value={form.store_name}
+            onChange={updateField}
+            onBlur={touch(setTouched, "store_name")}
+            className={inputClass(touched.store_name, errors.store_name)}
+            required
+          />
+          {errors.store_name && <span className="field-error-msg">{errors.store_name}</span>}
         </label>
         <label>
           License number
-          <input name="license_number" value={form.license_number} onChange={updateField} required />
+          <input
+            name="license_number"
+            value={form.license_number}
+            onChange={updateField}
+            onBlur={touch(setTouched, "license_number")}
+            className={inputClass(touched.license_number, errors.license_number)}
+            required
+          />
+          {errors.license_number && <span className="field-error-msg">{errors.license_number}</span>}
         </label>
         <label>
           Address
-          <textarea name="address_line_1" value={form.address_line_1} onChange={updateField} required />
+          <textarea
+            name="address_line_1"
+            value={form.address_line_1}
+            onChange={updateField}
+            onBlur={touch(setTouched, "address_line_1")}
+            className={inputClass(touched.address_line_1, errors.address_line_1)}
+            required
+          />
+          {errors.address_line_1 && <span className="field-error-msg">{errors.address_line_1}</span>}
         </label>
         <div className="inline-fields">
           <label>
@@ -148,7 +215,15 @@ export function RegisterPage() {
           </label>
           <label>
             Pincode
-            <input name="pincode" value={form.pincode} onChange={updateField} />
+            <input
+              name="pincode"
+              value={form.pincode}
+              onChange={updateField}
+              onBlur={touch(setTouched, "pincode")}
+              className={inputClass(touched.pincode, errors.pincode)}
+              inputMode="numeric"
+            />
+            {errors.pincode && <span className="field-error-msg">{errors.pincode}</span>}
           </label>
         </div>
 

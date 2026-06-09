@@ -3,6 +3,9 @@ import { ImagePlus, PackagePlus, ShieldAlert } from "lucide-react";
 
 import { PharmacyPageShell } from "../components/PharmacyPageShell.jsx";
 import { addProduct, getCurrentPharmacy } from "../lib/api.js";
+import { validatePositiveNumber, validateNonNegativeNumber, validateOfferPrice, validateRequired, inputClass, touch } from "../lib/validation.js";
+
+const reqProductName = validateRequired("Product name");
 
 const sampleProducts = ["Boost", "NAN", "Horlicks", "Pediasure"];
 
@@ -32,6 +35,7 @@ export function AddProductPage() {
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [photoFiles, setPhotoFiles] = useState([]);
   const [photoPreviews, setPhotoPreviews] = useState([]);
+  const [touched, setTouched] = useState({});
 
   useEffect(() => {
     let isMounted = true;
@@ -78,8 +82,26 @@ export function AddProductPage() {
     setPhotoPreviews(files.map((file) => URL.createObjectURL(file)));
   }
 
+  const priceValidator   = validatePositiveNumber("Price");
+  const stockValidator   = validateNonNegativeNumber("Stock");
+  const offerValidator   = validateOfferPrice(() => productForm.price);
+
+  const fieldErrors = {
+    product_name:  touched.product_name  ? reqProductName(productForm.product_name) : null,
+    price:         touched.price         ? priceValidator(productForm.price)         : null,
+    offer_price:   touched.offer_price   ? offerValidator(productForm.offer_price)   : null,
+    stock_quantity: touched.stock_quantity ? stockValidator(productForm.stock_quantity) : null,
+  };
+
   async function submitProduct(event) {
     event.preventDefault();
+    setTouched({ product_name: true, price: true, offer_price: true, stock_quantity: true });
+    if (
+      reqProductName(productForm.product_name) ||
+      priceValidator(productForm.price) ||
+      offerValidator(productForm.offer_price) ||
+      stockValidator(productForm.stock_quantity)
+    ) return;
     setError("");
     setProductMessage("");
     setIsAddingProduct(true);
@@ -188,8 +210,11 @@ export function AddProductPage() {
               name="product_name"
               value={productForm.product_name}
               onChange={updateProductField}
+              onBlur={touch(setTouched, "product_name")}
+              className={inputClass(touched.product_name, fieldErrors.product_name)}
               required
             />
+            {fieldErrors.product_name && <span className="field-error-msg">{fieldErrors.product_name}</span>}
           </label>
           <label>
             Brand
@@ -217,11 +242,14 @@ export function AddProductPage() {
                 name="price"
                 value={productForm.price}
                 onChange={updateProductField}
+                onBlur={touch(setTouched, "price")}
+                className={inputClass(touched.price, fieldErrors.price)}
                 type="number"
                 min="1"
                 step="0.01"
                 required
               />
+              {fieldErrors.price && <span className="field-error-msg">{fieldErrors.price}</span>}
             </label>
             <label>
               Offer price
@@ -229,11 +257,14 @@ export function AddProductPage() {
                 name="offer_price"
                 value={productForm.offer_price}
                 onChange={updateProductField}
+                onBlur={touch(setTouched, "offer_price")}
+                className={inputClass(touched.offer_price, fieldErrors.offer_price)}
                 type="number"
-                min="1"
+                min="0.01"
                 step="0.01"
-                placeholder="Optional"
+                placeholder="Optional, must be less than price"
               />
+              {fieldErrors.offer_price && <span className="field-error-msg">{fieldErrors.offer_price}</span>}
             </label>
             <label>
               Stock
@@ -241,10 +272,13 @@ export function AddProductPage() {
                 name="stock_quantity"
                 value={productForm.stock_quantity}
                 onChange={updateProductField}
+                onBlur={touch(setTouched, "stock_quantity")}
+                className={inputClass(touched.stock_quantity, fieldErrors.stock_quantity)}
                 type="number"
                 min="0"
                 required
               />
+              {fieldErrors.stock_quantity && <span className="field-error-msg">{fieldErrors.stock_quantity}</span>}
             </label>
           </div>
 

@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { DeliveryLayout } from "./DeliveryLayout";
 import { getDeliveryRate, getDeliveryRateHistory, setDeliveryRate } from "../lib/api";
+import { validatePositiveNumber, validateRequired, inputClass, touch } from "../lib/validation.js";
+
+const reqName   = validateRequired("Your name");
+const reqReason = (v) => (!v || v.trim().length < 5 ? "Reason must be at least 5 characters" : null);
+const reqRate   = validatePositiveNumber("Rate");
 
 function fmt(dt) {
   return new Date(dt).toLocaleString("en-IN", {
@@ -18,6 +23,13 @@ export default function DeliveryRateConfigPage() {
   const [success, setSuccess] = useState("");
 
   const [form, setForm] = useState({ rate_per_km: "", changed_by: "", reason: "" });
+  const [touched, setTouched] = useState({});
+
+  const fieldErrors = {
+    rate_per_km: touched.rate_per_km ? reqRate(form.rate_per_km)        : null,
+    changed_by:  touched.changed_by  ? reqName(form.changed_by)         : null,
+    reason:      touched.reason      ? reqReason(form.reason)           : null,
+  };
 
   async function load() {
     setLoading(true);
@@ -38,12 +50,10 @@ export default function DeliveryRateConfigPage() {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    setTouched({ rate_per_km: true, changed_by: true, reason: true });
+    if (reqRate(form.rate_per_km) || reqName(form.changed_by) || reqReason(form.reason)) return;
     setError("");
     setSuccess("");
-    const rate = parseFloat(form.rate_per_km);
-    if (isNaN(rate) || rate <= 0) { setError("Rate must be a positive number."); return; }
-    if (!form.changed_by.trim()) { setError("Please enter your name."); return; }
-    if (form.reason.trim().length < 5) { setError("Reason must be at least 5 characters."); return; }
     setSaving(true);
     try {
       const updated = await setDeliveryRate({
@@ -101,9 +111,12 @@ export default function DeliveryRateConfigPage() {
                   min="0.5"
                   value={form.rate_per_km}
                   onChange={e => setForm(f => ({ ...f, rate_per_km: e.target.value }))}
+                  onBlur={touch(setTouched, "rate_per_km")}
+                  className={inputClass(touched.rate_per_km, fieldErrors.rate_per_km)}
                   placeholder="e.g. 8.50"
                   required
                 />
+                {fieldErrors.rate_per_km && <span className="field-error-msg">{fieldErrors.rate_per_km}</span>}
               </label>
               <label>
                 Your Name / Admin ID
@@ -111,9 +124,12 @@ export default function DeliveryRateConfigPage() {
                   type="text"
                   value={form.changed_by}
                   onChange={e => setForm(f => ({ ...f, changed_by: e.target.value }))}
+                  onBlur={touch(setTouched, "changed_by")}
+                  className={inputClass(touched.changed_by, fieldErrors.changed_by)}
                   placeholder="e.g. Aruna Aravind"
                   required
                 />
+                {fieldErrors.changed_by && <span className="field-error-msg">{fieldErrors.changed_by}</span>}
               </label>
             </div>
             <label className="dl-form-full">
@@ -121,10 +137,13 @@ export default function DeliveryRateConfigPage() {
               <textarea
                 value={form.reason}
                 onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}
+                onBlur={touch(setTouched, "reason")}
+                className={inputClass(touched.reason, fieldErrors.reason)}
                 placeholder="e.g. Fuel price increase — revised to reflect operational costs."
                 rows={3}
                 required
               />
+              {fieldErrors.reason && <span className="field-error-msg">{fieldErrors.reason}</span>}
             </label>
             <button type="submit" className="dl-btn dl-btn-primary" disabled={saving}>
               {saving ? "Saving…" : "Update Rate"}

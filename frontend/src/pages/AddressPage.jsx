@@ -7,6 +7,11 @@ import L from "leaflet";
 
 import { FormMessage } from "../components/FormMessage.jsx";
 import { createCustomerAddress, getCustomerAddress, updateCustomerAddress } from "../lib/api.js";
+import { validatePhone, validatePincode, validateRequired, inputClass, touch } from "../lib/validation.js";
+
+const reqLabel    = validateRequired("Nick name");
+const reqAddr     = validateRequired("House / building / street");
+const reqLandmark = validateRequired("Nearby landmark");
 
 const DEFAULT_POSITION = [10.8505, 76.2711];
 
@@ -51,6 +56,7 @@ export function AddressPage() {
   const [isLoading, setIsLoading] = useState(isEditMode);
   const [isSaving, setIsSaving] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  const [touched, setTouched] = useState({});
   const [form, setForm] = useState({
     label: "",
     address_line_1: "",
@@ -152,10 +158,29 @@ export function AddressPage() {
     setError("");
   }
 
+  const fieldErrors = {
+    label:    touched.label    ? reqLabel(form.label)                              : null,
+    pincode:  touched.pincode  ? validatePincode(form.pincode)                     : null,
+    address:  touched.address  ? reqAddr(form.address_line_1)                      : null,
+    landmark: touched.landmark ? reqLandmark(form.landmark)                        : null,
+    sec_phone: touched.sec_phone
+      ? (form.secondary_phone_number ? validatePhone(form.secondary_phone_number) : null)
+      : null,
+  };
+
   async function submitAddress(event) {
     event.preventDefault();
     setError("");
     setStatusMessage("");
+
+    setTouched({ label: true, pincode: true, address: true, landmark: true, sec_phone: true });
+    if (
+      reqLabel(form.label) ||
+      validatePincode(form.pincode) ||
+      reqAddr(form.address_line_1) ||
+      reqLandmark(form.landmark) ||
+      (form.secondary_phone_number ? validatePhone(form.secondary_phone_number) : null)
+    ) return;
 
     if (!mode) {
       setError("Tell us whether you are at the location now or choose it on the map.");
@@ -257,19 +282,24 @@ export function AddressPage() {
                 required
                 value={form.label}
                 onChange={(event) => updateField("label", event.target.value)}
+                onBlur={touch(setTouched, "label")}
+                className={inputClass(touched.label, fieldErrors.label)}
                 placeholder="Home, Work, Parents"
               />
+              {fieldErrors.label && <span className="field-error-msg">{fieldErrors.label}</span>}
             </label>
             <label>
               Pincode
               <input
                 required
                 inputMode="numeric"
-                pattern="[1-9][0-9]{5}"
                 value={form.pincode}
                 onChange={(event) => updateField("pincode", event.target.value)}
+                onBlur={touch(setTouched, "pincode")}
+                className={inputClass(touched.pincode, fieldErrors.pincode)}
                 placeholder="682001"
               />
+              {fieldErrors.pincode && <span className="field-error-msg">{fieldErrors.pincode}</span>}
             </label>
             <label className="address-field-wide">
               House / building / street
@@ -278,8 +308,11 @@ export function AddressPage() {
                 rows="3"
                 value={form.address_line_1}
                 onChange={(event) => updateField("address_line_1", event.target.value)}
+                onBlur={touch(setTouched, "address")}
+                className={inputClass(touched.address, fieldErrors.address)}
                 placeholder="Building name, road, area"
               />
+              {fieldErrors.address && <span className="field-error-msg">{fieldErrors.address}</span>}
             </label>
             <label>
               Apartment / floor / gate
@@ -295,8 +328,11 @@ export function AddressPage() {
                 required
                 value={form.landmark}
                 onChange={(event) => updateField("landmark", event.target.value)}
+                onBlur={touch(setTouched, "landmark")}
+                className={inputClass(touched.landmark, fieldErrors.landmark)}
                 placeholder="Near metro station"
               />
+              {fieldErrors.landmark && <span className="field-error-msg">{fieldErrors.landmark}</span>}
             </label>
             <label>
               City
@@ -320,8 +356,11 @@ export function AddressPage() {
                 inputMode="tel"
                 value={form.secondary_phone_number}
                 onChange={(event) => updateField("secondary_phone_number", event.target.value)}
+                onBlur={touch(setTouched, "sec_phone")}
+                className={inputClass(touched.sec_phone, fieldErrors.sec_phone)}
                 placeholder="Optional, cannot be your registered number"
               />
+              {fieldErrors.sec_phone && <span className="field-error-msg">{fieldErrors.sec_phone}</span>}
             </label>
           </div>
 

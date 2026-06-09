@@ -2,6 +2,11 @@ import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Bike, Car, CheckCircle2, ChevronRight, FileText, Upload, AlertTriangle } from "lucide-react";
 import { registerDelivery } from "../lib/api.js";
+import { validatePhone, validateEmail, validateRequired, inputClass, touch } from "../lib/validation.js";
+
+const reqName    = validateRequired("Full name");
+const reqLicense = validateRequired("Driving license number");
+const reqIdNum   = validateRequired("ID document number");
 
 const VEHICLES = [
   { value: "bike", label: "Bike", icon: Bike },
@@ -26,13 +31,30 @@ export function RegisterPage() {
   const [idFile, setIdFile] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState([]);
+  const [touched, setTouched] = useState({});
 
   function setErr(msg) {
     setErrors(Array.isArray(msg) ? msg : [msg]);
   }
 
+  const fieldErrors = {
+    full_name:      touched.full_name      ? reqName(form.full_name)              : null,
+    phone_number:   touched.phone_number   ? validatePhone(form.phone_number)     : null,
+    email:          touched.email          ? validateEmail(form.email)            : null,
+    license_number: touched.license_number ? reqLicense(form.license_number)     : null,
+    id_number:      touched.id_number      ? reqIdNum(form.id_number)             : null,
+  };
+
   async function handleRegister(e) {
     e.preventDefault();
+    setTouched({ full_name: true, phone_number: true, email: true, license_number: true, id_number: true });
+    if (
+      reqName(form.full_name) ||
+      validatePhone(form.phone_number) ||
+      validateEmail(form.email) ||
+      reqLicense(form.license_number) ||
+      reqIdNum(form.id_number)
+    ) return;
     setErrors([]); setIsLoading(true);
     try {
       const acc = await registerDelivery(form);
@@ -90,17 +112,26 @@ export function RegisterPage() {
             <label>Full Name *
               <input required value={form.full_name}
                 onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))}
+                onBlur={touch(setTouched, "full_name")}
+                className={inputClass(touched.full_name, fieldErrors.full_name)}
                 placeholder="Ravi Kumar" />
+              {fieldErrors.full_name && <span className="field-error-msg">{fieldErrors.full_name}</span>}
             </label>
             <label>Phone Number *
               <input required type="tel" value={form.phone_number}
                 onChange={(e) => setForm((f) => ({ ...f, phone_number: e.target.value }))}
+                onBlur={touch(setTouched, "phone_number")}
+                className={inputClass(touched.phone_number, fieldErrors.phone_number)}
                 placeholder="+91 98765 43210" />
+              {fieldErrors.phone_number && <span className="field-error-msg">{fieldErrors.phone_number}</span>}
             </label>
-            <label>Email
+            <label>Email <span style={{ fontWeight: 400, fontSize: "0.8em" }}>(optional)</span>
               <input type="email" value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                onBlur={touch(setTouched, "email")}
+                className={inputClass(touched.email, fieldErrors.email)}
                 placeholder="ravi@email.com" />
+              {fieldErrors.email && <span className="field-error-msg">{fieldErrors.email}</span>}
             </label>
 
             <div className="dl-two-col">
@@ -112,14 +143,20 @@ export function RegisterPage() {
               <label>Driving License No. *
                 <input required value={form.license_number}
                   onChange={(e) => setForm((f) => ({ ...f, license_number: e.target.value }))}
+                  onBlur={touch(setTouched, "license_number")}
+                  className={inputClass(touched.license_number, fieldErrors.license_number)}
                   placeholder="TN0120230012345" />
+                {fieldErrors.license_number && <span className="field-error-msg">{fieldErrors.license_number}</span>}
               </label>
             </div>
 
             <label>ID Document Number (Aadhar / PAN) *
               <input required value={form.id_number}
                 onChange={(e) => setForm((f) => ({ ...f, id_number: e.target.value }))}
+                onBlur={touch(setTouched, "id_number")}
+                className={inputClass(touched.id_number, fieldErrors.id_number)}
                 placeholder="1234 5678 9012" />
+              {fieldErrors.id_number && <span className="field-error-msg">{fieldErrors.id_number}</span>}
             </label>
 
             <div className="dl-field-label">Vehicle Type *</div>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Bike, ChevronRight } from "lucide-react";
 import { requestDeliveryOtp, verifyDeliveryOtp } from "../lib/api.js";
+import { validatePhone, validateOtp, inputClass, touch } from "../lib/validation.js";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -11,19 +12,28 @@ export function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [otpHint, setOtpHint] = useState("");
+  const [touched, setTouched] = useState({});
+
+  const phoneErr = touched.phone ? validatePhone(phone) : null;
+  const otpErr   = touched.otp   ? validateOtp(otp)     : null;
 
   async function requestOtp(e) {
     e.preventDefault();
+    setTouched((t) => ({ ...t, phone: true }));
+    if (validatePhone(phone)) return;
     setError(""); setIsLoading(true);
     try {
       const resp = await requestDeliveryOtp(phone);
       if (resp.otp) setOtpHint(`Dev OTP: ${resp.otp}`);
       setStep(2);
+      setTouched({});
     } catch (err) { setError(err.message); } finally { setIsLoading(false); }
   }
 
   async function verifyOtp(e) {
     e.preventDefault();
+    setTouched((t) => ({ ...t, otp: true }));
+    if (validateOtp(otp)) return;
     setError(""); setIsLoading(true);
     try {
       await verifyDeliveryOtp(phone, otp);
@@ -47,7 +57,17 @@ export function LoginPage() {
             <h2>Login to your account</h2>
             <label>
               Phone Number
-              <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98765 43210" autoFocus />
+              <input
+                type="tel"
+                required
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                onBlur={touch(setTouched, "phone")}
+                className={inputClass(touched.phone, phoneErr)}
+                placeholder="+91 98765 43210"
+                autoFocus
+              />
+              {phoneErr && <span className="field-error-msg">{phoneErr}</span>}
             </label>
             <button className="dl-btn" type="submit" disabled={isLoading}>
               {isLoading ? "Sending OTP…" : "Send OTP"} <ChevronRight size={16} />
@@ -56,11 +76,40 @@ export function LoginPage() {
         ) : (
           <form onSubmit={verifyOtp} className="dl-form">
             <h2>Enter OTP</h2>
-            <p className="dl-hint">Sent to <strong>{phone}</strong>. <button type="button" className="dl-text-btn" onClick={() => setStep(1)}>Change</button></p>
+            <p className="dl-hint">Sent to <strong>{phone}</strong>. <button type="button" className="dl-text-btn" onClick={() => { setStep(1); setTouched({}); }}>Change</button></p>
             <label>
               6-digit OTP
-              <input type="text" required maxLength={6} value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="123456" autoFocus />
+              <input
+                type="text"
+                required
+                maxLength={6}
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                onBlur={touch(setTouched, "otp")}
+                className={inputClass(touched.otp, otpErr)}
+                placeholder="123456"
+                autoFocus
+              />
+              {otpErr && <span className="field-error-msg">{otpErr}</span>}
             </label>
+            {error && (
+              <button
+                type="button"
+                className="dl-text-btn"
+                style={{ fontSize: "0.85rem" }}
+                disabled={isLoading}
+                onClick={async () => {
+                  setError(""); setOtp(""); setTouched({});
+                  setIsLoading(true);
+                  try {
+                    const r = await requestDeliveryOtp(phone);
+                    if (r.otp) setOtpHint(`Dev OTP: ${r.otp}`);
+                  } catch (err) { setError(err.message); } finally { setIsLoading(false); }
+                }}
+              >
+                Resend OTP
+              </button>
+            )}
             <button className="dl-btn" type="submit" disabled={isLoading}>
               {isLoading ? "Verifying…" : "Login"} <ChevronRight size={16} />
             </button>

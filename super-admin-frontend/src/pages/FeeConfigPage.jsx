@@ -2,6 +2,17 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, History, Save } from "lucide-react";
 import { getSectorFeeHistory, getSectorFees, setSectorFee } from "../lib/api";
+import { validateNonNegativeNumber, validateRequired, inputClass, touch } from "../lib/validation.js";
+
+const reqName   = validateRequired("Your name");
+const reqReason = (v) => (!v || v.trim().length < 5 ? "Reason must be at least 5 characters" : null);
+const reqFee    = validateNonNegativeNumber("Platform fee");
+const reqGst    = (v) => {
+  if (v === "" || v === null || v === undefined) return "GST % is required";
+  const n = parseFloat(v);
+  if (isNaN(n) || n < 0 || n > 100) return "GST % must be between 0 and 100";
+  return null;
+};
 
 const SECTORS = [
   { key: "pharmacy", label: "Pharmacy", emoji: "💊" },
@@ -29,6 +40,14 @@ function SectorTab({ config, onSave }) {
   const [history, setHistory]         = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [histLoading, setHistLoading] = useState(false);
+  const [touched, setTouched]         = useState({});
+
+  const fieldErrors = {
+    platformFee: touched.platformFee ? reqFee(platformFee)      : null,
+    gstPercent:  touched.gstPercent  ? reqGst(gstPercent)       : null,
+    changedBy:   touched.changedBy   ? reqName(changedBy)       : null,
+    reason:      touched.reason      ? reqReason(reason)        : null,
+  };
 
   // reset form fields when config prop changes (tab switch)
   useEffect(() => {
@@ -51,13 +70,9 @@ function SectorTab({ config, onSave }) {
 
   async function handleSave(e) {
     e.preventDefault();
+    setTouched({ platformFee: true, gstPercent: true, changedBy: true, reason: true });
+    if (reqFee(platformFee) || reqGst(gstPercent) || reqName(changedBy) || reqReason(reason)) return;
     setError(""); setSuccess("");
-    const fee = parseFloat(platformFee);
-    const gst = parseFloat(gstPercent);
-    if (isNaN(fee) || fee < 0) { setError("Platform fee must be ≥ 0."); return; }
-    if (isNaN(gst) || gst < 0 || gst > 100) { setError("GST % must be between 0 and 100."); return; }
-    if (!changedBy.trim()) { setError("Enter your name."); return; }
-    if (reason.trim().length < 5) { setError("Reason must be at least 5 characters."); return; }
     setSaving(true);
     try {
       const updated = await setSectorFee(config.sector, {
@@ -114,26 +129,42 @@ function SectorTab({ config, onSave }) {
             <label>
               Platform Fee (₹) <em>*</em>
               <input type="number" min="0" step="0.50" value={platformFee}
-                     onChange={e => setPlatformFee(e.target.value)} placeholder="e.g. 5.00" required />
+                     onChange={e => setPlatformFee(e.target.value)}
+                     onBlur={touch(setTouched, "platformFee")}
+                     className={inputClass(touched.platformFee, fieldErrors.platformFee)}
+                     placeholder="e.g. 5.00" required />
               <span className="fee-form-hint">Flat ₹ amount added to every order in this sector.</span>
+              {fieldErrors.platformFee && <span className="field-error-msg">{fieldErrors.platformFee}</span>}
             </label>
             <label>
               GST (%) <em>*</em>
               <input type="number" min="0" max="100" step="0.5" value={gstPercent}
-                     onChange={e => setGstPercent(e.target.value)} placeholder="e.g. 5.0" required />
+                     onChange={e => setGstPercent(e.target.value)}
+                     onBlur={touch(setTouched, "gstPercent")}
+                     className={inputClass(touched.gstPercent, fieldErrors.gstPercent)}
+                     placeholder="e.g. 5.0" required />
               <span className="fee-form-hint">Applied on (medicine cost + delivery + platform fee).</span>
+              {fieldErrors.gstPercent && <span className="field-error-msg">{fieldErrors.gstPercent}</span>}
             </label>
           </div>
           <div className="fee-form-row">
             <label>
               Your Name / Admin ID <em>*</em>
               <input type="text" value={changedBy}
-                     onChange={e => setChangedBy(e.target.value)} placeholder="e.g. Aruna Aravind" required />
+                     onChange={e => setChangedBy(e.target.value)}
+                     onBlur={touch(setTouched, "changedBy")}
+                     className={inputClass(touched.changedBy, fieldErrors.changedBy)}
+                     placeholder="e.g. Aruna Aravind" required />
+              {fieldErrors.changedBy && <span className="field-error-msg">{fieldErrors.changedBy}</span>}
             </label>
             <label>
               Reason for Change <em>*</em>
               <input type="text" value={reason}
-                     onChange={e => setReason(e.target.value)} placeholder="e.g. GST rate revised by government" required />
+                     onChange={e => setReason(e.target.value)}
+                     onBlur={touch(setTouched, "reason")}
+                     className={inputClass(touched.reason, fieldErrors.reason)}
+                     placeholder="e.g. GST rate revised by government" required />
+              {fieldErrors.reason && <span className="field-error-msg">{fieldErrors.reason}</span>}
             </label>
           </div>
           <button type="submit" className="fee-save-btn" disabled={saving}>

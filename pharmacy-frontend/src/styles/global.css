@@ -1835,3 +1835,27 @@ li {
   color: #1d4ed8;
   margin-bottom: 14px;
 }
+
+/* ── Field-level validation (on-blur) ───────────────────────────────────── */
+input.input-error,
+textarea.input-error,
+select.input-error {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 2px rgba(239,68,68,.15);
+}
+
+input.input-valid,
+textarea.input-valid,
+select.input-valid {
+  border-color: #16a34a !important;
+  box-shadow: 0 0 0 2px rgba(22,163,74,.12);
+}
+
+.field-error-msg {
+  display: block;
+  color: #dc2626;
+  font-size: 0.73rem;
+  margin-top: 3px;
+  line-height: 1.3;
+}
+
