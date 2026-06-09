@@ -25,7 +25,10 @@ export function LoginPage() {
     setError(""); setMessage(""); setIsSubmitting(true);
     try {
       const response = await requestOtp(phoneNumber);
-      const suffix = response.development_otp ? ` Development OTP: ${response.development_otp}` : "";
+      // Dev OTP hint only shown in local development builds — never in production
+      const suffix = (import.meta.env.DEV && response.development_otp)
+        ? ` Development OTP: ${response.development_otp}`
+        : "";
       setMessage(`${response.message}${suffix}`);
       setPhase("verify");
       setTouched({});
@@ -73,6 +76,7 @@ export function LoginPage() {
             onBlur={touch(setTouched, "phone")}
             className={inputClass(touched.phone, phoneErr)}
             inputMode="tel"
+            placeholder="e.g. 9876543210"
             disabled={phase === "verify"}
             required
           />
@@ -109,7 +113,9 @@ export function LoginPage() {
               setIsSubmitting(true);
               try {
                 const r = await requestOtp(phoneNumber);
-                const s = r.development_otp ? ` Development OTP: ${r.development_otp}` : "";
+                const s = (import.meta.env.DEV && r.development_otp)
+                  ? ` Development OTP: ${r.development_otp}`
+                  : "";
                 setMessage(`OTP resent.${s}`);
               } catch (e) { setError(e.message); } finally { setIsSubmitting(false); }
             }}
@@ -122,6 +128,22 @@ export function LoginPage() {
           <KeyRound size={18} aria-hidden="true" />
           {isSubmitting ? "Working" : phase === "request" ? "Send OTP" : "Verify OTP"}
         </button>
+
+        {phase === "verify" && (
+          <button
+            className="text-button"
+            type="button"
+            onClick={() => {
+              setPhase("request");
+              setOtp("");
+              setMessage("");
+              setError("");
+              setTouched({});
+            }}
+          >
+            Change phone number
+          </button>
+        )}
       </form>
     </main>
   );
