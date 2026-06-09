@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { UserPlus } from "lucide-react";
+import { CheckCircle2, UserPlus } from "lucide-react";
 
 import { FormMessage } from "../components/FormMessage.jsx";
 import { registerCustomer } from "../lib/api.js";
@@ -10,7 +10,7 @@ const reqName = validateRequired("Full name");
 
 export function RegisterPage() {
   const [form, setForm] = useState({ full_name: "", phone_number: "", email: "" });
-  const [message, setMessage] = useState("");
+  const [registeredPhone, setRegisteredPhone] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [touched, setTouched] = useState({});
@@ -31,19 +31,15 @@ export function RegisterPage() {
     if (reqName(form.full_name) || validatePhone(form.phone_number) || validateEmail(form.email)) return;
 
     setError("");
-    setMessage("");
     setIsSubmitting(true);
 
     try {
-      const payload = {
+      const user = await registerCustomer({
         full_name: form.full_name,
         phone_number: form.phone_number,
         email: form.email || null,
-      };
-      const user = await registerCustomer(payload);
-      setMessage(`Registration created for ${user.phone_number}. You can login now.`);
-      setForm({ full_name: "", phone_number: "", email: "" });
-      setTouched({});
+      });
+      setRegisteredPhone(user.phone_number);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -51,6 +47,46 @@ export function RegisterPage() {
     }
   }
 
+  // ── Success state — hide the form entirely ──────────────────────
+  if (registeredPhone) {
+    return (
+      <section className="auth-layout">
+        <div className="auth-intro">
+          <p className="eyebrow">Customer onboarding</p>
+          <h1>Create your Thean account</h1>
+          <p>
+            Register once and use the same identity for every future web, Android, and iOS flow.
+          </p>
+        </div>
+
+        <div className="auth-form register-success-card">
+          <CheckCircle2 size={48} className="register-success-icon" aria-hidden="true" />
+          <h2 className="register-success-title">Account created!</h2>
+          <p className="register-success-body">
+            Your Thean account for <strong>{registeredPhone}</strong> is ready.
+            Use your phone number and OTP to log in.
+          </p>
+          <Link className="button button-full" to="/login">
+            Go to Login
+          </Link>
+          <button
+            className="text-button"
+            type="button"
+            style={{ marginTop: 4, textAlign: "center" }}
+            onClick={() => {
+              setRegisteredPhone("");
+              setForm({ full_name: "", phone_number: "", email: "" });
+              setTouched({});
+            }}
+          >
+            Register another account
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  // ── Form state ──────────────────────────────────────────────────
   return (
     <section className="auth-layout">
       <div className="auth-intro">
@@ -104,10 +140,12 @@ export function RegisterPage() {
             maxLength={100}
             autoComplete="email"
           />
-          {errors.email && <span className="field-error-msg">{errors.email}</span>}
+          {errors.email
+            ? <span className="field-error-msg">{errors.email}</span>
+            : <span className="field-hint-msg">e.g. name@example.com</span>
+          }
         </label>
 
-        <FormMessage kind="success">{message}</FormMessage>
         <FormMessage kind="error">{error}</FormMessage>
 
         <button className="button button-full" type="submit" disabled={isSubmitting}>

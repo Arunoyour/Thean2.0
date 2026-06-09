@@ -2829,3 +2829,38 @@ select.input-valid {
   line-height: 1.3;
 }
 
+
+/* ── Registration success card ───────────────────────────────────── */
+.register-success-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 32px;
+  text-align: center;
+}
+
+.register-success-icon {
+  color: #16a34a;
+}
+
+.register-success-title {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #13201e;
+}
+
+.register-success-body {
+  margin: 0;
+  color: #52625f;
+  line-height: 1.55;
+}
+
+/* ── Field hint text (static helper below input) ─────────────────── */
+.field-hint-msg {
+  display: block;
+  color: #6b7280;
+  font-size: 0.73rem;
+  margin-top: 3px;
+  line-height: 1.3;
+}
