@@ -18,6 +18,7 @@ from app.schemas.customer_order import (
 )
 from app.services.customer_service import (
     create_customer_address,
+    delete_customer_address,
     get_customer_address,
     list_customer_addresses,
     update_customer_address,
@@ -124,6 +125,15 @@ async def my_pharmacy_orders(
     session: AsyncSession = Depends(get_pharmacy_session),
 ):
     return await list_customer_pharmacy_orders(session, current_user)
+
+
+@router.delete("/addresses/{address_id}", status_code=204)
+async def remove_address(
+    address_id: UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    await delete_customer_address(session, current_user, address_id)
 
 
 @router.get("/active-order-count")

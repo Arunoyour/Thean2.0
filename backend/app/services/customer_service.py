@@ -154,6 +154,21 @@ async def update_customer_address(
     return serialize_address(address)
 
 
+async def delete_customer_address(
+    session: AsyncSession,
+    user: User,
+    address_id: UUID,
+) -> None:
+    address = await _get_user_address(session, user, address_id)
+    if address.is_default:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete the default address. Set another address as default first.",
+        )
+    await session.delete(address)
+    await session.commit()
+
+
 async def _get_user_address(session: AsyncSession, user: User, address_id: UUID) -> UserAddress:
     result = await session.execute(
         select(UserAddress)

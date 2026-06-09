@@ -2872,3 +2872,78 @@ select.input-valid {
   color: #9ca3af;
   margin-bottom: 4px;
 }
+
+/* ── Address list page ───────────────────────────────────────── */
+.address-empty {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 40px 24px;
+}
+
+.address-empty-icon {
+  color: #9ca3af;
+}
+
+.address-empty-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #172522;
+}
+
+.address-empty-reason {
+  margin: 0;
+  color: #52625f;
+  font-size: 0.9rem;
+}
+
+.address-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  align-items: center;
+}
+
+.address-card-action-sm {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 0.85rem;
+}
+
+.address-delete-blocked {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  min-height: 44px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  color: #9ca3af;
+  font-size: 0.9rem;
+  cursor: not-allowed;
+  user-select: none;
+}
+
+.address-delete-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: #374151;
+  font-weight: 600;
+}
+
+.button-danger-outline {
+  color: #a83220;
+  background: #ffffff;
+  border-color: #a83220;
+}
+
+.button-danger-outline:hover {
+  color: #ffffff;
+  background: #a83220;
+}

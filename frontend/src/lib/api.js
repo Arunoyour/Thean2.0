@@ -99,6 +99,15 @@ export function listCustomerAddresses() {
   });
 }
 
+export function deleteCustomerAddress(addressId) {
+  const token = getToken();
+  if (!token) return Promise.reject(new Error("Please login to continue."));
+  return request(`/customer/addresses/${addressId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export function getActiveOrderCount() {
   const token = getToken();
   if (!token) return Promise.reject(new Error("Please login to continue."));
