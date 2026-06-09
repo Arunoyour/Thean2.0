@@ -41,6 +41,18 @@ const DELIVERY_IN_TRANSIT_STATUSES = new Set([
   "ARRIVED_AT_CUSTOMER",
 ]);
 
+// PIN is only meaningful once the driver has physically picked up the order
+const DELIVERY_PIN_VISIBLE_STATUSES = new Set([
+  "ORDER_PICKED_UP",
+  "ARRIVED_AT_CUSTOMER",
+]);
+
+// Substitution can only be changed while the order is with the pharmacy
+const SUBSTITUTION_ACTIVE_STATUSES = new Set([
+  "ASSIGNED_TO_PHARMACY",
+  "PHARMACY_ACCEPTED",
+]);
+
 // Haversine distance in metres between two lat/lng points
 function haversineMetres(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -74,9 +86,15 @@ function getReviewState(order, nowMs) {
   const billingMode = order.notes?.billing_mode === "manual" ? "manual" : "auto";
   const windowSeconds = billingMode === "manual" ? MANUAL_REVIEW_SECONDS : AUTO_APPROVAL_SECONDS;
   const placedAtMs = new Date(order.created_at).getTime();
-  const deadlineMs = placedAtMs + windowSeconds * 1000;
-  const elapsedSeconds = Math.floor((nowMs - placedAtMs) / 1000);
-  const remainingSeconds = Math.max(0, windowSeconds - elapsedSeconds);
+
+  // Prefer the server-authoritative deadline; fall back to client estimate so both
+  // the action banner and the price-review invoice use the same source of truth.
+  const serverDeadlineMs = order.customer_review_deadline_at
+    ? new Date(order.customer_review_deadline_at).getTime()
+    : null;
+  const deadlineMs = serverDeadlineMs ?? (placedAtMs + windowSeconds * 1000);
+
+  const remainingSeconds = Math.max(0, Math.ceil((deadlineMs - nowMs) / 1000));
   return { billingMode, deadlineMs, remainingSeconds };
 }
 
@@ -284,6 +302,9 @@ export function PharmacyOrdersPage() {
   // Delivery rating: { [order_id]: { star: number, comment: string, submitting: bool, submitted: bool, error: string } }
   const [ratingState, setRatingState] = useState({});
 
+  // Inline cancel confirmation — stores the order_id waiting for user to confirm
+  const [pendingCancelOrderId, setPendingCancelOrderId] = useState("");
+
   async function loadOrders({ showLoading = true } = {}) {
     if (showLoading) {
       setIsLoading(true);
@@ -376,6 +397,15 @@ export function PharmacyOrdersPage() {
     try {
       await submitDeliveryRating(deliveryOrderId, rs.star, rs.comment || null);
       setRatingState((prev) => ({ ...prev, [orderId]: { ...rs, submitting: false, submitted: true } }));
+      // Show "thank you" for 2 s then remove entry so the banner disappears cleanly
+      setTimeout(() => {
+        setRatingState((prev) => {
+          const entry = prev[orderId];
+          if (!entry?.submitted) return prev;
+          const { [orderId]: _removed, ...rest } = prev;
+          return rest;
+        });
+      }, 2000);
       // Refresh orders so delivery_rated flips to true
       await loadOrders({ showLoading: false });
     } catch (e) {
@@ -434,9 +464,17 @@ export function PharmacyOrdersPage() {
   }
 
   async function respondSubstitution(orderId, allowed) {
+    // Guard against race condition: order status may have advanced since the page rendered
+    const order = orders.find((o) => o.order_id === orderId);
+    if (order && !SUBSTITUTION_ACTIVE_STATUSES.has(order.status)) {
+      setError(
+        "This order's status has changed — substitution can no longer be updated. Refresh the page to see the latest state.",
+      );
+      return;
+    }
     try {
       const updatedOrder = await setSubstitutionPermission(orderId, allowed);
-      setOrders((current) => current.map((order) => (order.order_id === orderId ? updatedOrder : order)));
+      setOrders((current) => current.map((o) => (o.order_id === orderId ? updatedOrder : o)));
       setMessage(allowed ? "Alternative medicine approved." : "No substitution preference saved.");
       setError("");
     } catch (requestError) {
@@ -545,12 +583,42 @@ export function PharmacyOrdersPage() {
                   <Eye size={18} />
                   {isExpanded ? "Hide details" : "View details"}
                 </button>
+
+                {/* Cancel with inline confirm — prevents accidental irreversible cancellation */}
                 {isAutoCancelOpen ? (
-                  <button className="button button-danger" type="button" onClick={() => actOnOrder(order.order_id, "cancel")}>
-                    <XCircle size={18} />
-                    Cancel ({formatCountdown(remainingSeconds)})
-                  </button>
+                  pendingCancelOrderId === order.order_id ? (
+                    <div className="cancel-confirm-row">
+                      <span>Cancel order? ({formatCountdown(remainingSeconds)} left)</span>
+                      <button
+                        className="button button-danger address-card-action-sm"
+                        type="button"
+                        onClick={() => {
+                          setPendingCancelOrderId("");
+                          actOnOrder(order.order_id, "cancel");
+                        }}
+                      >
+                        Yes, cancel
+                      </button>
+                      <button
+                        className="button button-secondary address-card-action-sm"
+                        type="button"
+                        onClick={() => setPendingCancelOrderId("")}
+                      >
+                        Keep order
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="button button-danger"
+                      type="button"
+                      onClick={() => setPendingCancelOrderId(order.order_id)}
+                    >
+                      <XCircle size={18} />
+                      Cancel ({formatCountdown(remainingSeconds)})
+                    </button>
+                  )
                 ) : null}
+
                 {isManualActionOpen ? (
                   <>
                     <button className="button" type="button" onClick={() => actOnOrder(order.order_id, "approve")}>
@@ -571,10 +639,31 @@ export function PharmacyOrdersPage() {
                 ) : null}
               </div>
 
-              {/* ── Delivery rating banner (COMPLETED, not yet rated) ── */}
-              {order.status === "COMPLETED" && order.delivery_order_id && !order.delivery_rated ? (() => {
+              {/* ── Delivery rating banner (COMPLETED) ── */}
+              {order.status === "COMPLETED" && order.delivery_order_id ? (() => {
                 const rs = ratingState[order.order_id] || {};
-                if (rs.submitted) return null;
+
+                // Briefly show success message after submit, then entry is cleared by setTimeout
+                if (rs.submitted) {
+                  return (
+                    <div className="delivery-rating-success" role="status">
+                      <CheckCircle2 size={18} aria-hidden="true" />
+                      Rating submitted — thank you!
+                    </div>
+                  );
+                }
+
+                // Already rated in a previous session — show compact confirmation
+                if (order.delivery_rated) {
+                  return (
+                    <div className="delivery-rated-note">
+                      <CheckCircle2 size={14} aria-hidden="true" />
+                      Delivery rated
+                    </div>
+                  );
+                }
+
+                // Not yet rated — show the rating form
                 return (
                   <div className="delivery-rating-banner">
                     <div className="delivery-rating-title">⭐ Rate your delivery</div>
@@ -835,8 +924,8 @@ export function PharmacyOrdersPage() {
                 );
               })()}
 
-              {/* Delivery PIN — shown once driver has picked up (status OUT_FOR_DELIVERY or beyond) */}
-              {(() => {
+              {/* Delivery PIN — visible only after order is picked up by the driver */}
+              {DELIVERY_PIN_VISIBLE_STATUSES.has(order.status) ? (() => {
                 const tracking = trackingMap[order.order_id];
                 if (!tracking?.delivery_pin) return null;
                 return (
@@ -844,11 +933,12 @@ export function PharmacyOrdersPage() {
                     <div className="delivery-pin-label">🔐 Delivery PIN</div>
                     <div className="delivery-pin-chip">{tracking.delivery_pin}</div>
                     <p className="delivery-pin-hint">
-                      Share this PIN with your delivery partner when they hand over the order.
+                      Your delivery partner will ask for this PIN before handing over your order.
+                      Only share it when you are ready to receive the package at your door.
                     </p>
                   </div>
                 );
-              })()}
+              })() : null}
 
               {isExpanded ? (
                 <div className="order-detail-panel">
