@@ -1,5 +1,19 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/v1";
 const TOKEN_KEY = "thean_super_admin_access_token";
+const DEFAULT_TIMEOUT_MS = 15_000; // 15 s — prevents requests hanging forever
+
+/**
+ * Super-admin delivery token — MUST be set via VITE_SUPER_ADMIN_TOKEN in .env.local.
+ * The token is intentionally not bundled as a fallback string; if the env var is
+ * missing the delivery admin API calls will return 401 from the server.
+ */
+const SUPER_ADMIN_TOKEN = import.meta.env.VITE_SUPER_ADMIN_TOKEN || "";
+if (!SUPER_ADMIN_TOKEN && import.meta.env.DEV) {
+  console.warn(
+    "[super-admin] VITE_SUPER_ADMIN_TOKEN is not set. " +
+    "Delivery admin API calls will fail. Add it to .env.local.",
+  );
+}
 
 /** Returns true when an error was caused by an AbortController signal — callers
  *  should silently ignore these (component unmounted before the request finished). */
@@ -8,18 +22,26 @@ export function isAbortError(e) {
 }
 
 async function request(path, options = {}) {
+  const controller = new AbortController();
+  const timerId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+
   let response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...options,
+      signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
         ...(options.headers || {}),
       },
     });
   } catch (fetchError) {
-    if (fetchError.name === "AbortError") throw fetchError;
+    if (fetchError.name === "AbortError") {
+      throw new Error("Request timed out. Check your connection and try again.");
+    }
     throw new Error("Network error. Check your connection and try again.");
+  } finally {
+    clearTimeout(timerId);
   }
 
   if (response.status === 401) {
@@ -280,10 +302,10 @@ export function logoutAdmin() {
 
 function deliveryAdminHeaders() {
   const token = getToken();
-  const SUPER_TOKEN = import.meta.env.VITE_SUPER_ADMIN_TOKEN || "d2decea281512bbf9bd8fe1297946f50e0ea8bf88b709ef20c6c8e1fc94ca4ab-admin";
+
   return {
     Authorization: `Bearer ${token}`,
-    "x-super-admin-token": SUPER_TOKEN,
+    "x-super-admin-token": SUPER_ADMIN_TOKEN,
   };
 }
 
@@ -293,12 +315,12 @@ function deliveryRequest(path, options = {}) {
 
 export function listDeliveryAccounts() {
   return deliveryRequest("/delivery/admin/accounts?x_super_admin_token=" + encodeURIComponent(
-    import.meta.env.VITE_SUPER_ADMIN_TOKEN || "d2decea281512bbf9bd8fe1297946f50e0ea8bf88b709ef20c6c8e1fc94ca4ab-admin"
+    SUPER_ADMIN_TOKEN
   ));
 }
 
 export function setDeliveryAccountStatus(accountId, newStatus) {
-  const tok = import.meta.env.VITE_SUPER_ADMIN_TOKEN || "d2decea281512bbf9bd8fe1297946f50e0ea8bf88b709ef20c6c8e1fc94ca4ab-admin";
+  const tok = SUPER_ADMIN_TOKEN;
   return deliveryRequest(
     `/delivery/admin/accounts/${accountId}/status?new_status=${encodeURIComponent(newStatus)}&x_super_admin_token=${encodeURIComponent(tok)}`,
     { method: "POST" }
@@ -306,12 +328,12 @@ export function setDeliveryAccountStatus(accountId, newStatus) {
 }
 
 export function listDeliveryOrders() {
-  const tok = import.meta.env.VITE_SUPER_ADMIN_TOKEN || "d2decea281512bbf9bd8fe1297946f50e0ea8bf88b709ef20c6c8e1fc94ca4ab-admin";
+  const tok = SUPER_ADMIN_TOKEN;
   return deliveryRequest(`/delivery/admin/orders?x_super_admin_token=${encodeURIComponent(tok)}`);
 }
 
 export function clearDeliveryCod(accountId, payload) {
-  const tok = import.meta.env.VITE_SUPER_ADMIN_TOKEN || "d2decea281512bbf9bd8fe1297946f50e0ea8bf88b709ef20c6c8e1fc94ca4ab-admin";
+  const tok = SUPER_ADMIN_TOKEN;
   return deliveryRequest(
     `/delivery/admin/cod-clear/${accountId}?x_super_admin_token=${encodeURIComponent(tok)}`,
     { method: "POST", body: JSON.stringify(payload) }
@@ -323,12 +345,12 @@ export function getDeliveryRate() {
 }
 
 export function getDeliveryRateHistory() {
-  const tok = import.meta.env.VITE_SUPER_ADMIN_TOKEN || "d2decea281512bbf9bd8fe1297946f50e0ea8bf88b709ef20c6c8e1fc94ca4ab-admin";
+  const tok = SUPER_ADMIN_TOKEN;
   return deliveryRequest(`/delivery/config/rate/history?x_super_admin_token=${encodeURIComponent(tok)}`);
 }
 
 export function setDeliveryRate(payload) {
-  const tok = import.meta.env.VITE_SUPER_ADMIN_TOKEN || "d2decea281512bbf9bd8fe1297946f50e0ea8bf88b709ef20c6c8e1fc94ca4ab-admin";
+  const tok = SUPER_ADMIN_TOKEN;
   return deliveryRequest(
     `/delivery/admin/config/rate?x_super_admin_token=${encodeURIComponent(tok)}`,
     { method: "POST", body: JSON.stringify(payload) }
@@ -361,7 +383,8 @@ export function setSectorFee(sector, payload) {
 
 // ── Auto-assign ────────────────────────────────────────────────────────────
 
-const _ST = () => import.meta.env.VITE_SUPER_ADMIN_TOKEN || "d2decea281512bbf9bd8fe1297946f50e0ea8bf88b709ef20c6c8e1fc94ca4ab-admin";
+// Alias kept for readability in the auto-assign functions below
+const _ST = () => SUPER_ADMIN_TOKEN;
 
 export function listUnassignedOrders() {
   return deliveryRequest(`/delivery/admin/unassigned-orders?x_super_admin_token=${encodeURIComponent(_ST())}`);

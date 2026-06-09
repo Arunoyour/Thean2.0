@@ -108,8 +108,12 @@ export function RegisterPage() {
     );
   }
 
-  async function submit(event) {
-    event.preventDefault();
+  // When accuracy is poor, first submit attempt surfaces a warning + override button.
+  // User can recapture GPS or explicitly confirm they want to proceed anyway.
+  const [showAccuracyOverride, setShowAccuracyOverride] = useState(false);
+
+  async function submit(event, { overrideAccuracy = false } = {}) {
+    if (event) event.preventDefault();
     setTouched({
       owner_name: true, phone_number: true, email: true,
       store_name: true, license_number: true, address_line_1: true, pincode: true,
@@ -131,6 +135,13 @@ export function RegisterPage() {
       setError("Please capture pharmacy location before registering.");
       return;
     }
+
+    // Soft-block on poor GPS accuracy — surface the override prompt
+    if (location.accuracy > LOCATION_ACCURACY_THRESHOLD_M && !overrideAccuracy) {
+      setShowAccuracyOverride(true);
+      return;
+    }
+    setShowAccuracyOverride(false);
 
     setIsSubmitting(true);
     try {
@@ -351,6 +362,35 @@ export function RegisterPage() {
         </div>
 
         {error && <div className="error">{error}</div>}
+
+        {/* Accuracy override prompt — shown when GPS accuracy is too low on first submit */}
+        {showAccuracyOverride && (
+          <div className="notice" style={{ background: "#fef9c3", borderColor: "#eab308" }}>
+            <ShieldAlert size={18} aria-hidden="true" style={{ color: "#b45309", flexShrink: 0 }} />
+            <div>
+              <strong>GPS accuracy is {Math.round(location?.accuracy ?? 0)} m</strong> — above the {LOCATION_ACCURACY_THRESHOLD_M} m threshold.
+              An imprecise pin may place your pharmacy in the wrong location on the map.
+              <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.6rem", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="outline-button"
+                  onClick={() => { setShowAccuracyOverride(false); captureLocation(); }}
+                >
+                  <LocateFixed size={15} aria-hidden="true" /> Recapture GPS
+                </button>
+                <button
+                  type="button"
+                  className="button"
+                  style={{ background: "#b45309" }}
+                  disabled={isSubmitting}
+                  onClick={() => submit(null, { overrideAccuracy: true })}
+                >
+                  Submit anyway
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <button className="button" type="submit" disabled={isSubmitting}>
           <Building2 size={18} aria-hidden="true" />

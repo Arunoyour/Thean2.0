@@ -1,5 +1,6 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/v1";
 const TOKEN_KEY = "thean_delivery_access_token";
+const DEFAULT_TIMEOUT_MS = 15_000; // 15 s — prevents requests hanging forever
 
 /** Returns true when an error was caused by an AbortController signal — callers
  *  should silently ignore these (component unmounted before the request finished). */
@@ -8,15 +9,23 @@ export function isAbortError(e) {
 }
 
 async function request(path, options = {}) {
+  const controller = new AbortController();
+  const timerId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+
   let response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...options,
+      signal: controller.signal,
       headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     });
   } catch (fetchError) {
-    if (fetchError.name === "AbortError") throw fetchError;
+    if (fetchError.name === "AbortError") {
+      throw new Error("Request timed out. Check your connection and try again.");
+    }
     throw new Error("Network error. Check your connection and try again.");
+  } finally {
+    clearTimeout(timerId);
   }
 
   if (response.status === 401) {
