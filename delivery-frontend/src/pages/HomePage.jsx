@@ -5,16 +5,21 @@ import {
   AlertTriangle,
   Bike,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clock3,
+  FileText,
   IndianRupee,
   LogOut,
   MapPin,
   Navigation,
   Package,
+  Phone,
   RefreshCw,
   ToggleLeft,
   ToggleRight,
   Truck,
+  Upload,
   XCircle,
 } from "lucide-react";
 import {
@@ -26,6 +31,7 @@ import {
   rejectDeliveryOrder,
   setDeliveryAvailability,
   updateDeliveryLocation,
+  uploadDeliveryDocument,
 } from "../lib/api.js";
 
 const STATUS_LABELS = {
@@ -40,9 +46,31 @@ const STATUS_LABELS = {
 const COD_WARN = 1000;
 const COD_BLOCK = 1200;
 
+// Accepted MIME types for document uploads
+const ALLOWED_DOC_MIME = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+
 function formatCountdown(secs) {
   const s = Math.max(0, secs);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+// ── Account Disabled Screen ───────────────────────────────────────────────
+function AccountDisabledScreen() {
+  return (
+    <div className="dl-page dl-blocked-page">
+      <div className="dl-blocked-card">
+        <AlertOctagon size={56} className="dl-blocked-icon" />
+        <h1>Account Disabled</h1>
+        <p className="dl-blocked-msg" style={{ textAlign: "center" }}>
+          Your delivery account has been disabled by an administrator.
+          Please contact support to resolve this.
+        </p>
+        <p style={{ fontSize: "0.875rem", color: "#9ca3af", marginTop: "0.5rem" }}>
+          You will be redirected to the login screen…
+        </p>
+      </div>
+    </div>
+  );
 }
 
 // ── COD Blocked Screen ────────────────────────────────────────────────────
@@ -64,6 +92,11 @@ function CodBlockedScreen({ balance, onLogout }) {
             unblock your account and resume deliveries.
           </p>
           <p>Contact your supervisor or visit the nearest hub to clear the payment.</p>
+          <p style={{ marginTop: "0.5rem" }}>
+            <Phone size={14} style={{ verticalAlign: "middle", marginRight: "0.25rem" }} />
+            Support: <a href="tel:1800XXXXXXXX" style={{ color: "inherit", textDecoration: "underline" }}>1800-XXX-XXXX</a>
+            {" "}(replace with real number)
+          </p>
         </div>
         <button className="dl-btn dl-btn-reject" type="button" onClick={onLogout}>
           <LogOut size={16} /> Logout
@@ -96,11 +129,14 @@ function NewOrderPopup({ order, onAccept, onReject }) {
     return () => window.clearInterval(t);
   }, []);
 
-  const secsLeft = order.accept_deadline_at
+  // When no accept_deadline_at, secsLeft is null → no countdown shown
+  const hasDeadline = Boolean(order.accept_deadline_at);
+  const secsLeft = hasDeadline
     ? Math.max(0, Math.ceil((new Date(order.accept_deadline_at).getTime() - now) / 1000))
-    : 90;
-  const progress = Math.min(100, (secsLeft / 90) * 100);
-  const urgent = secsLeft < 30;
+    : null;
+  // Full progress bar when no deadline; countdown-driven when deadline exists
+  const progress = secsLeft !== null ? Math.min(100, (secsLeft / 90) * 100) : 100;
+  const urgent = secsLeft !== null && secsLeft < 30;
 
   return (
     <div className="dl-popup-overlay">
@@ -110,7 +146,9 @@ function NewOrderPopup({ order, onAccept, onReject }) {
           <h2>New Delivery Request</h2>
         </div>
         <div className="dl-countdown-ring" style={{ "--progress": `${progress}%` }}>
-          <span className={urgent ? "dl-countdown-urgent" : ""}>{formatCountdown(secsLeft)}</span>
+          <span className={urgent ? "dl-countdown-urgent" : ""}>
+            {secsLeft !== null ? formatCountdown(secsLeft) : "—"}
+          </span>
         </div>
         <div className="dl-popup-details">
           <div className="dl-popup-row">
@@ -166,6 +204,80 @@ function NewOrderPopup({ order, onAccept, onReject }) {
   );
 }
 
+// ── Document upload card ──────────────────────────────────────────────────
+function DocUploadCard() {
+  const [open, setOpen] = useState(false);
+  const [uploading, setUploading] = useState(null); // "license" | "id_proof" | null
+  const [messages, setMessages] = useState({});
+  const [uploadError, setUploadError] = useState("");
+  const licenseRef = useRef(null);
+  const idRef = useRef(null);
+
+  async function handleUpload(docType, file) {
+    if (!file) return;
+    // Client-side MIME type check
+    if (!ALLOWED_DOC_MIME.includes(file.type)) {
+      setUploadError(`${file.name} is not allowed. Please upload a JPG, PNG, WebP, or PDF.`);
+      return;
+    }
+    setUploadError("");
+    setUploading(docType);
+    try {
+      await uploadDeliveryDocument(docType, file);
+      setMessages((m) => ({ ...m, [docType]: `${file.name} uploaded ✓` }));
+    } catch (e) {
+      setUploadError(e.message);
+    } finally {
+      setUploading(null);
+    }
+  }
+
+  return (
+    <div className="dl-doc-upload-card" style={{ marginTop: "0.75rem" }}>
+      <button
+        type="button"
+        className="dl-doc-toggle-btn"
+        onClick={() => setOpen((o) => !o)}
+        style={{ display: "flex", alignItems: "center", gap: "0.5rem", background: "none", border: "none", cursor: "pointer", padding: "0.5rem 0", fontWeight: 600, fontSize: "0.9rem" }}
+      >
+        <FileText size={16} />
+        Documents
+        {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+      </button>
+      {open && (
+        <div style={{ paddingTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <p className="dl-hint">Upload or re-upload your verification documents (JPG, PNG, or PDF).</p>
+          {uploadError && <div className="dl-error">{uploadError}</div>}
+          {[
+            { docType: "license", label: "Driving License", ref: licenseRef },
+            { docType: "id_proof", label: "ID Proof (Aadhar / PAN)", ref: idRef },
+          ].map(({ docType, label, ref }) => (
+            <div key={docType} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <button
+                type="button"
+                className="dl-btn"
+                style={{ flex: 1 }}
+                disabled={uploading === docType}
+                onClick={() => ref.current?.click()}
+              >
+                <Upload size={14} />
+                {uploading === docType ? "Uploading…" : messages[docType] ? messages[docType] : `Upload ${label}`}
+              </button>
+              <input
+                ref={ref}
+                type="file"
+                accept=".pdf,image/jpeg,image/png,image/webp"
+                hidden
+                onChange={(e) => handleUpload(docType, e.target.files?.[0] ?? null)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────
 export function HomePage() {
   const navigate = useNavigate();
@@ -176,19 +288,40 @@ export function HomePage() {
   const [isToggling, setIsToggling] = useState(false);
   const [error, setError] = useState("");
   const [codWarning, setCodWarning] = useState(null); // WS-pushed warning message
+  // account_disabled: show explanation screen for 3 s then logout
+  const [accountDisabled, setAccountDisabled] = useState(false);
   const watchIdRef = useRef(null);
+
+  // Auto-logout 3 s after account_disabled message
+  useEffect(() => {
+    if (!accountDisabled) return;
+    const timer = setTimeout(() => {
+      logoutDelivery();
+      navigate("/login");
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [accountDisabled, navigate]);
 
   useEffect(() => { loadData(); }, []);
 
-  // Geolocation watch
+  // Geolocation watch — cleanup ref prevents duplicate watches on remount
   useEffect(() => {
     if (!navigator.geolocation) return;
+    // Clear any stale watch from a previous mount cycle
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+    }
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => { updateDeliveryLocation(pos.coords.latitude, pos.coords.longitude).catch(() => {}); },
       () => {},
       { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 },
     );
-    return () => { if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current); };
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    };
   }, []);
 
   // WebSocket
@@ -217,10 +350,9 @@ export function HomePage() {
           status: "ASSIGNED_TO_DELIVERY",
         });
       } else if (msg.type === "account_disabled") {
-        logoutDelivery();
-        navigate("/login");
+        // Show explanation screen; effect above will logout after 3 s
+        setAccountDisabled(true);
       } else if (msg.type === "cod_blocked") {
-        // Reload account so cod_blocked flag is reflected
         setAccount((prev) => prev ? { ...prev, cod_balance: msg.cod_balance, cod_blocked: true, is_online: false } : prev);
       } else if (msg.type === "cod_unblocked") {
         setAccount((prev) => prev ? { ...prev, cod_balance: msg.cod_balance, cod_blocked: false } : prev);
@@ -286,6 +418,11 @@ export function HomePage() {
     );
   }
 
+  // Account disabled — 3-second explanation screen (auto-logout via effect)
+  if (accountDisabled) {
+    return <AccountDisabledScreen />;
+  }
+
   // COD blocked — show full-screen blocker
   if (account?.cod_blocked) {
     return <CodBlockedScreen balance={account.cod_balance} onLogout={handleLogout} />;
@@ -319,10 +456,10 @@ export function HomePage() {
         </div>
       </header>
 
-      {/* COD warning banner */}
+      {/* COD warning banner (persistent, based on account balance) */}
       {showCodWarn && <CodWarningBanner balance={codBal} />}
 
-      {/* WS pushed warning (periodic reminders) */}
+      {/* WS pushed warning (periodic reminders — dismissable) */}
       {codWarning && !showCodWarn && (
         <div className="dl-cod-warning">
           <AlertTriangle size={18} />
@@ -349,6 +486,9 @@ export function HomePage() {
           {isOnline ? <ToggleRight size={44} /> : <ToggleLeft size={44} />}
         </button>
       </div>
+
+      {/* Document upload section — always accessible for uploading / re-uploading */}
+      <DocUploadCard />
 
       {/* Active order */}
       {activeOrder && activeOrder.status !== "DELIVERED" ? (

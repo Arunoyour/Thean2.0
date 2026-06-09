@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { IndianRupee, Navigation, Package, Truck } from "lucide-react";
+import { IndianRupee, Navigation, Package, RefreshCw, Truck } from "lucide-react";
 import { getDeliveryOrders } from "../lib/api.js";
 
 const STATUS_COLORS = {
@@ -46,11 +46,14 @@ export function OrdersListPage() {
       {error ? <div className="dl-error">{error}</div> : null}
 
       {isLoading ? (
-        <div className="dl-loading"><p>Loading…</p></div>
-      ) : orders.length === 0 ? (
+        <div className="dl-loading"><RefreshCw size={24} className="dl-spin" /><p>Loading…</p></div>
+      ) : error ? null /* error already shown above */ : orders.length === 0 ? (
         <div className="dl-no-order-card">
           <Package size={36} />
           <p>No delivery orders yet.</p>
+          <p style={{ fontSize: "0.85em", color: "#9ca3af", marginTop: "0.35rem" }}>
+            Orders will appear here once you start accepting deliveries.
+          </p>
         </div>
       ) : (
         <div className="dl-orders-list">
@@ -69,7 +72,8 @@ export function OrdersListPage() {
               </div>
               <div className="dl-order-card-meta">
                 <span><Navigation size={13} /> {o.distance_km ? `${Number(o.distance_km).toFixed(1)} km` : "—"}</span>
-                <span>{new Date(o.created_at).toLocaleDateString()}</span>
+                {/* toLocaleString() shows both date and time */}
+                <span>{new Date(o.created_at).toLocaleString()}</span>
               </div>
             </Link>
           ))}

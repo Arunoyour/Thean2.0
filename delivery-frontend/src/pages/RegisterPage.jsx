@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Bike, Car, CheckCircle2, ChevronRight, FileText, Upload, AlertTriangle } from "lucide-react";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { Bike, Car, CheckCircle2, ChevronRight, AlertTriangle } from "lucide-react";
 import { registerDelivery } from "../lib/api.js";
 import { validatePhone, validateEmail, validateRequired, inputClass, touch } from "../lib/validation.js";
 
@@ -14,9 +14,12 @@ const VEHICLES = [
   { value: "cycle", label: "Cycle", icon: Bike },
 ];
 
+// Accepted MIME types for document uploads (used post-login on home screen)
+export const ALLOWED_DOC_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+
 export function RegisterPage() {
-  const navigate = useNavigate();
-  const [step, setStep] = useState(1); // 1=details, 2=docs, 3=done
+  // Two steps: 1=details, 2=done
+  const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     full_name: "",
     phone_number: "",
@@ -26,9 +29,6 @@ export function RegisterPage() {
     license_number: "",
     id_number: "",
   });
-  const [account, setAccount] = useState(null);
-  const [licenseFile, setLicenseFile] = useState(null);
-  const [idFile, setIdFile] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState([]);
   const [touched, setTouched] = useState({});
@@ -57,8 +57,7 @@ export function RegisterPage() {
     ) return;
     setErrors([]); setIsLoading(true);
     try {
-      const acc = await registerDelivery(form);
-      setAccount(acc);
+      await registerDelivery(form);
       setStep(2);
     } catch (err) {
       // Server may return {errors: [...]} for duplicate fields
@@ -71,12 +70,6 @@ export function RegisterPage() {
     } finally { setIsLoading(false); }
   }
 
-  async function handleDocStep(e) {
-    e.preventDefault();
-    // Docs are uploaded after admin activation. Just advance.
-    setStep(3);
-  }
-
   return (
     <div className="dl-auth-page">
       <div className="dl-auth-card">
@@ -87,7 +80,7 @@ export function RegisterPage() {
 
         {/* Step indicator */}
         <div className="dl-steps">
-          {["Details", "Documents", "Done"].map((label, i) => (
+          {["Details", "Done"].map((label, i) => (
             <div key={label} className={`dl-step ${step > i + 1 ? "dl-step-done" : step === i + 1 ? "dl-step-active" : ""}`}>
               <span>{step > i + 1 ? <CheckCircle2 size={14} /> : i + 1}</span>
               <p>{label}</p>
@@ -107,7 +100,9 @@ export function RegisterPage() {
         {step === 1 && (
           <form onSubmit={handleRegister} className="dl-form">
             <h2>Create your account</h2>
-            <p className="dl-hint">All details must be unique. Duplicate entries will be rejected to prevent fraud.</p>
+            <p className="dl-hint">
+              Phone number, license number, and ID number must each be unique — duplicate entries will be rejected.
+            </p>
 
             <label>Full Name *
               <input required value={form.full_name}
@@ -178,28 +173,17 @@ export function RegisterPage() {
         )}
 
         {step === 2 && (
-          <form onSubmit={handleDocStep} className="dl-form">
-            <h2>Upload Documents</h2>
-            <p className="dl-hint">
-              Upload your driving license and ID proof for admin verification.
-              Accepted formats: image or PDF.
-            </p>
-            <DocUpload label="Driving License" icon={FileText} file={licenseFile} onChange={setLicenseFile} />
-            <DocUpload label="ID Proof (Aadhar / PAN)" icon={FileText} file={idFile} onChange={setIdFile} />
-            <p className="dl-hint" style={{ marginTop: 8 }}>
-              Documents can also be re-uploaded after login once your account is activated.
-            </p>
-            <button className="dl-btn" type="submit">{isLoading ? "Uploading…" : "Submit"} <ChevronRight size={16} /></button>
-          </form>
-        )}
-
-        {step === 3 && (
           <div className="dl-form">
             <div className="dl-success-icon"><CheckCircle2 size={56} /></div>
             <h2>Registration Submitted!</h2>
             <p className="dl-hint">
               Your account is <strong>pending admin activation</strong>.
+              Activation typically takes <strong>1–2 business days</strong>.
               You will be able to log in once an admin approves your profile.
+            </p>
+            <p className="dl-hint" style={{ marginTop: "0.75rem" }}>
+              After your account is activated and you log in, you can upload your
+              <strong> driving license</strong> and <strong>ID proof</strong> documents directly from the home screen.
             </p>
             <Link className="dl-btn" to="/login">Go to Login</Link>
           </div>
@@ -209,21 +193,6 @@ export function RegisterPage() {
           <p className="dl-auth-link">Already have an account? <Link to="/login">Login</Link></p>
         )}
       </div>
-    </div>
-  );
-}
-
-function DocUpload({ label, icon: Icon, file, onChange }) {
-  const inputRef = useRef();
-  return (
-    <div className="dl-doc-upload">
-      <div className="dl-doc-label"><Icon size={18} />{label}</div>
-      <button type="button" className="dl-doc-btn" onClick={() => inputRef.current.click()}>
-        <Upload size={16} />
-        {file ? file.name : "Choose file"}
-      </button>
-      <input ref={inputRef} type="file" accept="image/*,application/pdf" hidden
-        onChange={(e) => onChange(e.target.files[0] || null)} />
     </div>
   );
 }
