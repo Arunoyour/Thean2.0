@@ -7,6 +7,11 @@ import { validatePhone, validateOtp, inputClass, touch } from "../lib/validation
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const [sessionExpired] = useState(() => {
+    const flag = window.sessionStorage.getItem("thean:session_expired");
+    if (flag) window.sessionStorage.removeItem("thean:session_expired");
+    return flag === "1";
+  });
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState("");
   const [phase, setPhase] = useState("request");
@@ -63,6 +68,11 @@ export function LoginPage() {
       </section>
 
       <form className="panel form-grid" onSubmit={phase === "request" ? requestLoginOtp : verifyLoginOtp}>
+        {sessionExpired && (
+          <div className="session-expired-banner" role="alert">
+            Your session has expired. Please login again.
+          </div>
+        )}
         <div className="brand-row">
           <span className="brand-mark"><ShieldCheck size={22} aria-hidden="true" /></span>
           <strong>Thean Super Admin</strong>

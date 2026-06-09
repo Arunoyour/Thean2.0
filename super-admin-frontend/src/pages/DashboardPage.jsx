@@ -52,11 +52,17 @@ export function DashboardPage() {
 
   if (isLoading) {
     return (
-      <main className="page">
-        <section className="panel loading-panel">
-          <RefreshCw size={20} aria-hidden="true" />
-          Loading sectors
-        </section>
+      <main className="page" aria-busy="true" aria-label="Loading dashboard">
+        <div className="dashboard-skeleton-header">
+          <span className="skeleton skeleton-text-sm" style={{ width: "80px", display: "inline-block" }} />
+          <span className="skeleton skeleton-text-lg" style={{ width: "220px", marginTop: "0.4rem" }} />
+          <span className="skeleton skeleton-text" style={{ width: "340px", marginTop: "0.4rem" }} />
+        </div>
+        <div className="dashboard-skeleton-grid">
+          {[1, 2, 3, 4].map((i) => (
+            <span key={i} className="skeleton skeleton-card" />
+          ))}
+        </div>
       </main>
     );
   }

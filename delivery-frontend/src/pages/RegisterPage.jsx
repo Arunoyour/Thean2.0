@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Bike, Car, CheckCircle2, ChevronRight, AlertTriangle } from "lucide-react";
 import { registerDelivery } from "../lib/api.js";
@@ -17,20 +17,39 @@ const VEHICLES = [
 // Accepted MIME types for document uploads (used post-login on home screen)
 export const ALLOWED_DOC_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 
+const REGISTER_DRAFT_KEY = "thean_delivery_register_draft";
+function loadDraft() {
+  try { const s = window.localStorage.getItem(REGISTER_DRAFT_KEY); return s ? JSON.parse(s) : null; }
+  catch { return null; }
+}
+function saveDraft(form) {
+  try { window.localStorage.setItem(REGISTER_DRAFT_KEY, JSON.stringify(form)); } catch { /* ignore */ }
+}
+function clearDraft() {
+  try { window.localStorage.removeItem(REGISTER_DRAFT_KEY); } catch { /* ignore */ }
+}
+
 export function RegisterPage() {
   // Two steps: 1=details, 2=done
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState({
-    full_name: "",
-    phone_number: "",
-    email: "",
-    vehicle_type: "bike",
-    vehicle_number: "",
-    license_number: "",
-    id_number: "",
+  const [hasDraft] = useState(() => loadDraft() !== null);
+  const [form, setForm] = useState(() => {
+    const draft = loadDraft();
+    return draft ?? {
+      full_name: "",
+      phone_number: "",
+      email: "",
+      vehicle_type: "bike",
+      vehicle_number: "",
+      license_number: "",
+      id_number: "",
+    };
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState([]);
+
+  // Persist form to localStorage on every change; clear on successful registration
+  useEffect(() => { saveDraft(form); }, [form]);
   const [touched, setTouched] = useState({});
 
   function setErr(msg) {
@@ -58,6 +77,7 @@ export function RegisterPage() {
     setErrors([]); setIsLoading(true);
     try {
       await registerDelivery(form);
+      clearDraft();
       setStep(2);
     } catch (err) {
       // Server may return {errors: [...]} for duplicate fields
@@ -100,6 +120,15 @@ export function RegisterPage() {
         {step === 1 && (
           <form onSubmit={handleRegister} className="dl-form">
             <h2>Create your account</h2>
+            {hasDraft && (
+              <div style={{ fontSize: "0.8rem", color: "#6b7280", padding: "0.4rem 0.75rem", background: "#f9fafb", borderRadius: 4, border: "1px solid #e5e7eb", marginBottom: "0.5rem" }}>
+                ✏ Draft restored.{" "}
+                <button type="button" style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: "inherit", padding: 0 }}
+                  onClick={() => { clearDraft(); setForm({ full_name: "", phone_number: "", email: "", vehicle_type: "bike", vehicle_number: "", license_number: "", id_number: "" }); }}>
+                  Clear
+                </button>
+              </div>
+            )}
             <p className="dl-hint">
               Phone number, license number, and ID number must each be unique — duplicate entries will be rejected.
             </p>

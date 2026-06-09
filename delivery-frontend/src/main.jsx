@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
+import { ErrorBoundary } from "./components/ErrorBoundary.jsx";
 import { ChatPage } from "./pages/ChatPage.jsx";
 import { EarningsPage } from "./pages/EarningsPage.jsx";
 import { HomePage } from "./pages/HomePage.jsx";
@@ -17,9 +18,31 @@ function RequireAuth({ children }) {
   return token ? children : <Navigate to="/login" replace />;
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(
-  <React.StrictMode>
-    <BrowserRouter>
+/** Sticky bottom banner shown when the device loses network connectivity. */
+function OfflineBanner() {
+  const [offline, setOffline] = useState(!navigator.onLine);
+  useEffect(() => {
+    const goOff = () => setOffline(true);
+    const goOn  = () => setOffline(false);
+    window.addEventListener("offline", goOff);
+    window.addEventListener("online",  goOn);
+    return () => {
+      window.removeEventListener("offline", goOff);
+      window.removeEventListener("online",  goOn);
+    };
+  }, []);
+  if (!offline) return null;
+  return (
+    <div className="offline-banner" role="alert" aria-live="polite">
+      ⚠ You're offline — some features may not work until your connection is restored.
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <ErrorBoundary>
+      <OfflineBanner />
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/register" element={<RegisterPage />} />
@@ -31,6 +54,14 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Route path="/chat/:deliveryOrderId" element={<RequireAuth><ChatPage /></RequireAuth>} />
         <Route path="/earnings" element={<RequireAuth><EarningsPage /></RequireAuth>} />
       </Routes>
+    </ErrorBoundary>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <App />
     </BrowserRouter>
   </React.StrictMode>,
 );

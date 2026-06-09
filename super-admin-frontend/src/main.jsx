@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
+import { ErrorBoundary } from "./components/ErrorBoundary.jsx";
 import { AutoAssignPage } from "./pages/AutoAssignPage.jsx";
 import { CustomerDashboardPage } from "./pages/CustomerDashboardPage.jsx";
 import { CustomerDetailPage } from "./pages/CustomerDetailPage.jsx";
@@ -20,9 +21,31 @@ import { PharmacyOrderManagementPage } from "./pages/PharmacyOrderManagementPage
 import { SubstitutionAuditPage } from "./pages/SubstitutionAuditPage.jsx";
 import "./styles/global.css";
 
-ReactDOM.createRoot(document.getElementById("root")).render(
-  <React.StrictMode>
-    <BrowserRouter>
+/** Sticky bottom banner shown when the device loses network connectivity. */
+function OfflineBanner() {
+  const [offline, setOffline] = useState(!navigator.onLine);
+  useEffect(() => {
+    const goOff = () => setOffline(true);
+    const goOn  = () => setOffline(false);
+    window.addEventListener("offline", goOff);
+    window.addEventListener("online",  goOn);
+    return () => {
+      window.removeEventListener("offline", goOff);
+      window.removeEventListener("online",  goOn);
+    };
+  }, []);
+  if (!offline) return null;
+  return (
+    <div className="offline-banner" role="alert" aria-live="polite">
+      ⚠ You're offline — some features may not work until your connection is restored.
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <ErrorBoundary>
+      <OfflineBanner />
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginPage />} />
@@ -44,6 +67,14 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         <Route path="/dashboard/delivery/auto-assign" element={<AutoAssignPage />} />
         <Route path="/dashboard/fee-config" element={<FeeConfigPage />} />
       </Routes>
+    </ErrorBoundary>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <App />
     </BrowserRouter>
   </React.StrictMode>,
 );

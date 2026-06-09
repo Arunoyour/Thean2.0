@@ -1,14 +1,34 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/v1";
 const TOKEN_KEY = "thean_pharmacy_access_token";
 
+/** Returns true when an error was caused by an AbortController signal — callers
+ *  should silently ignore these (component unmounted before the request finished). */
+export function isAbortError(e) {
+  return e?.name === "AbortError";
+}
+
 async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+    });
+  } catch (fetchError) {
+    // Re-throw AbortError unchanged so callers can detect navigation-away cancellations
+    if (fetchError.name === "AbortError") throw fetchError;
+    throw new Error("Network error. Check your connection and try again.");
+  }
+
+  // 401 means the session token has expired — redirect to login with a flag
+  if (response.status === 401) {
+    window.sessionStorage.setItem("thean:session_expired", "1");
+    window.location.href = "/login";
+    throw new Error("Session expired. Please login again.");
+  }
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {

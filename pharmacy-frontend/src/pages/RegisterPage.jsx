@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Building2, CheckCircle2, LocateFixed, ShieldAlert } from "lucide-react";
 
@@ -11,6 +11,20 @@ const reqLicense = validateRequired("License number");
 const reqAddr    = validateRequired("Address");
 
 const LOCATION_ACCURACY_THRESHOLD_M = 100;
+const REGISTER_DRAFT_KEY = "thean_pharmacy_register_draft";
+
+function loadDraft() {
+  try {
+    const saved = window.localStorage.getItem(REGISTER_DRAFT_KEY);
+    return saved ? JSON.parse(saved) : null;
+  } catch { return null; }
+}
+function saveDraft(form) {
+  try { window.localStorage.setItem(REGISTER_DRAFT_KEY, JSON.stringify(form)); } catch { /* ignore */ }
+}
+function clearDraft() {
+  try { window.localStorage.removeItem(REGISTER_DRAFT_KEY); } catch { /* ignore */ }
+}
 
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -22,16 +36,20 @@ function readFileAsDataUrl(file) {
 }
 
 export function RegisterPage() {
-  const [form, setForm] = useState({
-    owner_name: "",
-    phone_number: "",
-    email: "",
-    store_name: "",
-    license_number: "",
-    address_line_1: "",
-    city: "",
-    state: "",
-    pincode: "",
+  const [hasDraft] = useState(() => loadDraft() !== null);
+  const [form, setForm] = useState(() => {
+    const draft = loadDraft();
+    return draft ?? {
+      owner_name: "",
+      phone_number: "",
+      email: "",
+      store_name: "",
+      license_number: "",
+      address_line_1: "",
+      city: "",
+      state: "",
+      pincode: "",
+    };
   });
   const [location, setLocation] = useState(null);
   const [licenseFile, setLicenseFile] = useState(null);
@@ -40,6 +58,10 @@ export function RegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [touched, setTouched] = useState({});
+
+  // Persist form state to localStorage on every change so the user doesn't lose
+  // their work if they navigate away or accidentally close the tab.
+  useEffect(() => { saveDraft(form); }, [form]);
 
   function updateField(event) {
     setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
@@ -127,6 +149,7 @@ export function RegisterPage() {
         longitude: location.longitude,
         ...(licenseDocumentDataUrl ? { license_document_data_url: licenseDocumentDataUrl } : {}),
       });
+      clearDraft();
       setMessage(`${response.profile.store_name} registered. Status: pending super admin approval.`);
     } catch (requestError) {
       setError(requestError.message);
@@ -183,6 +206,15 @@ export function RegisterPage() {
       </section>
 
       <form className="panel form-grid" onSubmit={submit}>
+        {hasDraft && (
+          <div style={{ fontSize: "0.8rem", color: "#6b7280", padding: "0.4rem 0.75rem", background: "#f9fafb", borderRadius: 4, border: "1px solid #e5e7eb" }}>
+            ✏ Draft restored — your previous entries have been re-loaded.{" "}
+            <button type="button" style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: "inherit", padding: 0 }}
+              onClick={() => { clearDraft(); setForm({ owner_name: "", phone_number: "", email: "", store_name: "", license_number: "", address_line_1: "", city: "", state: "", pincode: "" }); }}>
+              Clear draft
+            </button>
+          </div>
+        )}
         <label>
           Owner name
           <input

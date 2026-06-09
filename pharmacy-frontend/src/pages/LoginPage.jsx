@@ -7,6 +7,12 @@ import { validatePhone, validateOtp, inputClass, touch } from "../lib/validation
 
 export function LoginPage() {
   const navigate = useNavigate();
+  // Show a banner if the user was redirected here because their session expired
+  const [sessionExpired] = useState(() => {
+    const flag = window.sessionStorage.getItem("thean:session_expired");
+    if (flag) window.sessionStorage.removeItem("thean:session_expired");
+    return flag === "1";
+  });
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState("");
   const [phase, setPhase] = useState("request");
@@ -62,6 +68,11 @@ export function LoginPage() {
       </section>
 
       <form className="panel form-grid" onSubmit={phase === "request" ? requestOtp : verifyOtp}>
+        {sessionExpired && (
+          <div className="session-expired-banner" role="alert">
+            Your session has expired. Please login again.
+          </div>
+        )}
         <label>
           Phone number
           <input

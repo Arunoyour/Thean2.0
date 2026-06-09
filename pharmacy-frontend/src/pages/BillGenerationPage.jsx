@@ -12,7 +12,20 @@ import {
 } from "lucide-react";
 
 import { PharmacyPageShell } from "../components/PharmacyPageShell.jsx";
-import { fetchPharmacyMedia, getPharmacyOrderById, submitPharmacyBill } from "../lib/api.js";
+import { fetchPharmacyMedia, getPharmacyOrderById, isAbortError, submitPharmacyBill } from "../lib/api.js";
+
+// Draft persistence — row edits survive navigation away from the page
+function draftKey(orderId) { return `thean_bill_draft_${orderId}`; }
+function loadRowDraft(orderId) {
+  try { const s = window.localStorage.getItem(draftKey(orderId)); return s ? JSON.parse(s) : null; }
+  catch { return null; }
+}
+function saveRowDraft(orderId, rows) {
+  try { window.localStorage.setItem(draftKey(orderId), JSON.stringify(rows)); } catch { /* ignore */ }
+}
+function clearRowDraft(orderId) {
+  try { window.localStorage.removeItem(draftKey(orderId)); } catch { /* ignore */ }
+}
 
 const DEFAULT_ROW = () => ({
   _id: Math.random().toString(36).slice(2),
@@ -42,6 +55,8 @@ export function BillGenerationPage() {
 
   const [order, setOrder] = useState(null);
   const [rows, setRows] = useState([DEFAULT_ROW()]);
+  // Track whether rows have been initialised from the order/draft yet
+  const rowsReadyRef = useRef(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -53,22 +68,31 @@ export function BillGenerationPage() {
   const objectUrlsRef = useRef([]);
 
   useEffect(() => {
-    let mounted = true;
+    const ctrl = new AbortController();
+    rowsReadyRef.current = false;
+
     async function loadOrder() {
       setIsLoading(true);
       try {
         const data = await getPharmacyOrderById(orderId);
-        if (!mounted) return;
+        if (ctrl.signal.aborted) return;
         setOrder(data);
-        // Pre-fill rows if typed items exist
-        if (data.items?.length) {
+
+        // Prefer saved draft rows; fall back to order pre-fill
+        const draft = loadRowDraft(orderId);
+        if (draft?.length) {
+          setRows(draft);
+        } else if (data.items?.length) {
           setRows(prefillRows(data.items));
         } else {
           setRows([DEFAULT_ROW()]);
         }
-        // Load media
+        rowsReadyRef.current = true;
+
+        // Load media (individual fetch errors are non-fatal)
         const prescriptions = await Promise.all(
           (data.prescription_files || []).map(async (fileInfo) => {
+            if (ctrl.signal.aborted) return null;
             const blob = await fetchPharmacyMedia(fileInfo.pharmacy_url);
             const url = URL.createObjectURL(blob);
             objectUrlsRef.current.push(url);
@@ -76,24 +100,29 @@ export function BillGenerationPage() {
           }),
         );
         let voice = null;
-        if (data.voice_note_file?.pharmacy_url) {
+        if (data.voice_note_file?.pharmacy_url && !ctrl.signal.aborted) {
           const blob = await fetchPharmacyMedia(data.voice_note_file.pharmacy_url);
           const url = URL.createObjectURL(blob);
           objectUrlsRef.current.push(url);
           voice = { ...data.voice_note_file, objectUrl: url };
         }
-        if (mounted) setMediaUrls({ prescriptions, voice });
+        if (!ctrl.signal.aborted) setMediaUrls({ prescriptions: prescriptions.filter(Boolean), voice });
       } catch (e) {
-        if (mounted) setError(e.message);
+        if (isAbortError(e)) return; // navigated away — discard silently
+        if (!ctrl.signal.aborted) setError(e.message);
       } finally {
-        if (mounted) setIsLoading(false);
+        if (!ctrl.signal.aborted) setIsLoading(false);
       }
     }
     loadOrder();
-    return () => {
-      mounted = false;
-    };
+    return () => ctrl.abort();
   }, [orderId]);
+
+  // Save rows as a draft whenever they change (but only after initial load)
+  useEffect(() => {
+    if (!rowsReadyRef.current) return;
+    saveRowDraft(orderId, rows);
+  }, [rows, orderId]);
 
   useEffect(() => {
     const urls = objectUrlsRef.current;
@@ -147,6 +176,7 @@ export function BillGenerationPage() {
     setIsSubmitting(true);
     try {
       const updated = await submitPharmacyBill(orderId, items);
+      clearRowDraft(orderId);
       setPickupCode(updated.pickup_code || "");
       setOrder(updated);
     } catch (err) {
@@ -166,7 +196,27 @@ export function BillGenerationPage() {
   if (isLoading) {
     return (
       <PharmacyPageShell>
-        <div className="panel loading-panel">Loading order…</div>
+        <div className="panel">
+          <div className="bill-skeleton" aria-busy="true" aria-label="Loading order">
+            <span className="skeleton skeleton-text-lg" style={{ width: "45%" }} />
+            <span className="skeleton skeleton-text-sm" style={{ width: "30%" }} />
+            <div className="bill-skeleton-row" style={{ marginTop: "1rem" }}>
+              <span className="skeleton skeleton-rect" />
+              <span className="skeleton skeleton-rect" />
+              <span className="skeleton skeleton-rect" />
+              <span className="skeleton skeleton-rect" />
+              <span className="skeleton skeleton-rect" style={{ width: "2rem" }} />
+            </div>
+            <div className="bill-skeleton-row">
+              <span className="skeleton skeleton-rect" />
+              <span className="skeleton skeleton-rect" />
+              <span className="skeleton skeleton-rect" />
+              <span className="skeleton skeleton-rect" />
+              <span className="skeleton skeleton-rect" style={{ width: "2rem" }} />
+            </div>
+            <span className="skeleton skeleton-rect" style={{ width: "180px", marginTop: "0.5rem" }} />
+          </div>
+        </div>
       </PharmacyPageShell>
     );
   }

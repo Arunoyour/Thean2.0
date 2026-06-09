@@ -6,6 +6,11 @@ import { validatePhone, validateOtp, inputClass, touch } from "../lib/validation
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const [sessionExpired] = useState(() => {
+    const flag = window.sessionStorage.getItem("thean:session_expired");
+    if (flag) window.sessionStorage.removeItem("thean:session_expired");
+    return flag === "1";
+  });
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState(1); // 1=phone, 2=otp
@@ -51,6 +56,11 @@ export function LoginPage() {
           <h1>Thean Delivery</h1>
         </div>
 
+        {sessionExpired && (
+          <div className="session-expired-banner" role="alert">
+            Your session has expired. Please login again.
+          </div>
+        )}
         {error ? <div className="dl-error">{error}</div> : null}
         {/* otpHint is only populated in import.meta.env.DEV builds */}
         {otpHint ? <div className="dl-otp-hint">{otpHint}</div> : null}
