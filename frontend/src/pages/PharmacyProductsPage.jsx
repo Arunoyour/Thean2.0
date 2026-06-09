@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, ClipboardList, PackagePlus, PackageSearch, RefreshCw } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ClipboardList, PackagePlus, PackageSearch, RefreshCw } from "lucide-react";
 
 import { FormMessage } from "../components/FormMessage.jsx";
 import { listCustomerAddresses, listNearbyPharmacies, listPharmacyProducts } from "../lib/api.js";
@@ -34,8 +34,10 @@ export function PharmacyProductsPage() {
   const [products, setProducts] = useState([]);
   const [nearbyPharmacyMap, setNearbyPharmacyMap] = useState(new Map());
   const [error, setError] = useState("");
+  const [pharmacyError, setPharmacyError] = useState(""); // real pharmacy lookup error
   const [listingNote, setListingNote] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [bucketToast, setBucketToast] = useState(""); // product name shown in toast
 
   useEffect(() => {
     let isMounted = true;
@@ -45,6 +47,7 @@ export function PharmacyProductsPage() {
         const response = await listPharmacyProducts();
         let nearbyMap = new Map();
         let note = "Sorted by maximum offers.";
+        let nearbyErr = "";
         try {
           const addresses = await listCustomerAddresses();
           const defaultAddress = addresses.find((address) => address.is_default) || addresses[0];
@@ -53,14 +56,27 @@ export function PharmacyProductsPage() {
             nearbyMap = new Map(nearby.map((pharmacy) => [pharmacy.account_id, pharmacy]));
             note = `Sorted by nearest pharmacy around ${defaultAddress.label}, then maximum offers.`;
           }
-        } catch {
-          note = "Login and save an address to sort by nearest pharmacy. Showing maximum offers first.";
+        } catch (lookupError) {
+          const msg = lookupError?.message || "";
+          // Auth / not-logged-in errors are expected for guests — show soft note
+          if (
+            msg.toLowerCase().includes("login") ||
+            msg.toLowerCase().includes("unauthori") ||
+            msg.includes("403")
+          ) {
+            note = "Login and save an address to sort by nearest pharmacy. Showing maximum offers first.";
+          } else {
+            // Real network or API error while user is logged in — surface it
+            nearbyErr = `Could not load nearby pharmacy data: ${msg}`;
+            note = "Showing maximum offers first.";
+          }
         }
 
         if (isMounted) {
           setNearbyPharmacyMap(nearbyMap);
           setProducts(sortProducts(response, nearbyMap));
           setListingNote(note);
+          setPharmacyError(nearbyErr);
           setError("");
         }
       } catch (requestError) {
@@ -104,11 +120,26 @@ export function PharmacyProductsPage() {
         items: [draftItem],
       }),
     );
-    navigate("/home/pharmacy/order?draft=1");
+
+    // Show brief confirmation toast, then navigate to order page
+    setBucketToast(product.product_name);
+    setTimeout(() => {
+      navigate("/home/pharmacy/order?draft=1");
+    }, 900);
   }
 
   return (
     <section className="home-layout">
+      {/* ── Bucket confirmation toast ── */}
+      {bucketToast ? (
+        <div className="bucket-toast" role="status" aria-live="polite">
+          <CheckCircle2 size={18} aria-hidden="true" />
+          <span>
+            <strong>{bucketToast}</strong> added to bucket
+          </span>
+        </div>
+      ) : null}
+
       <div className="pharmacy-page-header">
         <Link className="icon-text-button" to="/home">
           <ArrowLeft size={18} aria-hidden="true" />
@@ -164,6 +195,11 @@ export function PharmacyProductsPage() {
 
       {!isLoading && !error && products.length > 0 ? (
         <>
+          {/* Nearby pharmacy lookup error — inline banner above product grid */}
+          {pharmacyError ? (
+            <FormMessage kind="error">{pharmacyError}</FormMessage>
+          ) : null}
+
           <div className="supplementary-product-header">
             <div>
               <p className="eyebrow">Supplementary products</p>
@@ -219,7 +255,7 @@ export function PharmacyProductsPage() {
                   onClick={() => addProductToBucket(product)}
                 >
                   <PackagePlus size={18} />
-                  Add to bucket
+                  {product.stock_quantity === 0 ? "Out of stock" : "Add to bucket"}
                 </button>
               </article>
             ))}

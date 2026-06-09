@@ -1574,6 +1574,32 @@ h1 {
   color: #115e36;
 }
 
+/* ── Bucket confirmation toast ─────────────────────────────────── */
+.bucket-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #0f766e;
+  color: #fff;
+  padding: 12px 22px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: 0 4px 18px rgba(15, 118, 110, 0.35);
+  pointer-events: none;
+  animation: bucket-toast-in 0.22s ease;
+}
+
+@keyframes bucket-toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 .order-list {
   display: grid;
   gap: 14px;
