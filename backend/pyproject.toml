@@ -1,0 +1,33 @@
+[project]
+name = "thean-backend"
+version = "0.1.0"
+description = "FastAPI backend for Thean unified super app."
+requires-python = ">=3.11"
+dependencies = [
+    "asyncpg>=0.29.0",
+    "bcrypt>=4.1.2",
+    "email-validator>=2.1.1",
+    "fastapi>=0.111.0",
+    "pydantic-settings>=2.3.0",
+    "python-multipart>=0.0.9",
+    "python-jose[cryptography]>=3.3.0",
+    "sqlalchemy[asyncio]>=2.0.30",
+    "uvicorn[standard]>=0.30.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.5.0",
+]
+
+[build-system]
+requires = ["setuptools>=69.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

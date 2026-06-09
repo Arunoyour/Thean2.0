@@ -1,0 +1,149 @@
+# Thean Pharmacy Flow
+
+```mermaid
+flowchart TD
+    A["Customer App"] --> B["Customer Register / Login"]
+    B --> C["Customer Home"]
+    C --> D["Pharmacy Sector"]
+    C --> E["Address Management"]
+
+    E --> E1["Add / Edit Address"]
+    E1 --> E2["Capture Nickname, Landmark, Pincode"]
+    E1 --> E3["Current Location OR Map Pin"]
+    E1 --> E4["Save Address in Thean DB - T Schema"]
+
+    D --> F["Browse Pharmacy Products"]
+    F --> F1["Products from Online + Approved Pharmacies"]
+    F1 --> F2["Add Product to Bucket"]
+    F2 --> F3["Pharmacy Locked for Offer Product"]
+    F3 --> G["Medicine Order Page"]
+
+    D --> G
+    G --> G1["Choose Delivery Address"]
+    G1 --> G2["Find Pharmacies Within Radius"]
+    G2 --> G3{"Selection Mode"}
+    G3 --> G4["Auto Choose Pharmacy"]
+    G3 --> G5["Customer Chosen Pharmacy"]
+
+    G4 --> G6["Recommend by Distance, Response Time, Fill Rate, Rating"]
+    G5 --> G7["Show Nearby Online Pharmacies"]
+    G7 --> G8["Customer Selects Pharmacy"]
+
+    G --> H["Order Input"]
+    H --> H1["Text Medicine Search"]
+    H --> H2["Prescription Image / PDF Upload"]
+    H --> H3["Voice Note Recording"]
+    H --> H4["Doctor Name / Patient Name"]
+
+    H --> I["Order Validation"]
+    I --> I1["Restricted Drug Notice Required"]
+    I --> I2["Voice Note Must Be Attached if Recorded"]
+    I --> I3["Pharmacy and Delivery Address Within 60 KM"]
+    I --> I4["Offline Pharmacy Blocked"]
+
+    I --> J["Submit Order"]
+    J --> J1["Media Saved in Backend Blob Storage"]
+    J --> J2["Order Saved in Pharmacy DB - PH Schema"]
+    J2 --> K["Customer Review Window"]
+
+    K --> K1{"Billing Mode"}
+    K1 --> K2["Auto Approval: 2 Minute Cancel Window"]
+    K1 --> K3["Manual Approval: 5 Minute Approve / Reject Window"]
+
+    K2 --> K4["Timer Ends"]
+    K3 --> K5{"Customer Action"}
+    K5 --> K6["Approve"]
+    K5 --> K7["Reject / Auto Cancel"]
+
+    K4 --> L["Assign Order to Pharmacy"]
+    K6 --> L
+    K7 --> M["Order Cancelled"]
+
+    L --> N["Pharmacy Order Management"]
+    N --> N1["Assigned Orders Listed Latest First"]
+    N1 --> N2["View Details"]
+    N2 --> N3["Medicine Items"]
+    N2 --> N4["Image / PDF In-App Reader"]
+    N2 --> N5["Voice Playback"]
+    N1 --> N6{"Pharmacy Action Within 7 Min"}
+
+    N6 --> N7["Accept"]
+    N6 --> N8["Reject"]
+    N6 --> N9["Timeout"]
+
+    N7 --> O["Order Accepted by Pharmacy"]
+    O --> P["Pending Billing / Pricing Module"]
+
+    N8 --> Q["Treat as Rejection"]
+    N9 --> Q
+
+    Q --> R{"Auto Choose OR Inventory Protection Enabled?"}
+    R -->|Yes| S["Silent Waterfall Reroute"]
+    S --> S1["Find Next Online Pharmacy Within 5 KM"]
+    S1 --> L
+
+    R -->|No| T["Hard Cancel"]
+    T --> T1["Notify Customer via WebSocket"]
+    T1 --> T2["Customer Popup: Recreate Nearby Order"]
+    T2 --> T3["Recreate Order with Auto Choose / Inventory Protection Forced"]
+    T3 --> J
+
+    U["Pharmacy App"] --> U1["Register Pharmacy"]
+    U1 --> U2["Capture Store + License + Location"]
+    U2 --> U3["Default Deactivated"]
+    U3 --> V["Super Admin Activation Required"]
+
+    U --> U4["Login"]
+    U4 --> U5["Pharmacy Home"]
+    U5 --> U6["Go Online / Offline"]
+    U6 --> U7["Availability Event Audit"]
+    U6 --> U8["Offline Pharmacies Hidden from Customer App"]
+
+    U --> W["Product Management"]
+    W --> W1["Add Product with Minimum 2 Photos"]
+    W1 --> W2["Pending Approval"]
+    W2 --> X["Super Admin Product Review"]
+
+    W --> W3["Listed Products"]
+    W3 --> W4["Edit Product"]
+    W3 --> W5["Mark Out of Stock"]
+    W5 --> W6["Customer Sees Black and White Product"]
+
+    X --> X1{"Admin Decision"}
+    X1 --> X2["Approve Product"]
+    X2 --> X3["Visible to Customer App"]
+    X1 --> X4["Needs Revision with Comment"]
+    X4 --> X5["Realtime Notification to Pharmacy"]
+    X5 --> W4
+    W4 --> X6["Pharmacy Resubmits"]
+    X6 --> W2
+
+    Y["Super Admin Portal"] --> Y1["Login via Mobile + OTP"]
+    Y1 --> Y2["Dashboard"]
+    Y2 --> Y3["Pharmacy Dashboard"]
+    Y2 --> Y4["Customer Dashboard"]
+    Y2 --> Y5["Product Review"]
+
+    Y3 --> Y31["List Pharmacies"]
+    Y31 --> Y32["Activate / Deactivate with Mandatory Comment"]
+    Y31 --> Y33["Edit Pharmacy Details"]
+    Y31 --> Y34["Set Commission and Platform Fee"]
+    Y31 --> Y35["View Online / Offline Status"]
+    Y31 --> Y36["Availability History with Date Filter"]
+    Y31 --> Y37["Pagination + Excel Export"]
+
+    Y4 --> Y41["List Customers"]
+    Y41 --> Y42["Search Customer"]
+    Y42 --> Y43["View Customer Detail"]
+    Y43 --> Y44["Saved Addresses"]
+    Y43 --> Y45["Sector Orders"]
+    Y44 --> Y46["Pagination + Excel Export"]
+    Y45 --> Y46
+
+    Y5 --> Y51["Review Product Details"]
+    Y51 --> Y52["View Platform Earning Breakdown"]
+    Y51 --> Y53["Approve Product"]
+    Y51 --> Y54["Request Revision with Comment"]
+    Y51 --> Y55["Comment Audit"]
+    Y51 --> Y56["Pagination + Excel Export"]
+```

@@ -1,0 +1,944 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Clock3,
+  Eye,
+  FileAudio,
+  FileImage,
+  Maximize2,
+  PackagePlus,
+  Phone,
+  RefreshCw,
+  RotateCw,
+  Star,
+  XCircle,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
+
+import { FormMessage } from "../components/FormMessage.jsx";
+import {
+  approvePriceEstimate,
+  fetchCustomerMedia,
+  getDeliveryTracking,
+  listCustomerPharmacyOrders,
+  rejectPriceEstimate,
+  reorderCustomerPharmacyOrder,
+  setSubstitutionPermission,
+  submitDeliveryRating,
+  updateCustomerPharmacyOrder,
+} from "../lib/api.js";
+
+// Delivery statuses where we should poll the driver's location
+const DELIVERY_IN_TRANSIT_STATUSES = new Set([
+  "READY_FOR_DELIVERY",
+  "ASSIGNED_TO_DELIVERY",
+  "DELIVERY_ACCEPTED",
+  "ARRIVED_AT_STORE",
+  "ORDER_PICKED_UP",
+  "ARRIVED_AT_CUSTOMER",
+]);
+
+// Haversine distance in metres between two lat/lng points
+function haversineMetres(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+}
+
+const CALL_VISIBLE_METRES = 150; // show call button when driver is this close
+
+const AUTO_APPROVAL_SECONDS = 120;
+const MANUAL_REVIEW_SECONDS = 300;
+
+function formatStatus(status) {
+  return status.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatCountdown(totalSeconds) {
+  const safeSeconds = Math.max(0, totalSeconds);
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function getReviewState(order, nowMs) {
+  const billingMode = order.notes?.billing_mode === "manual" ? "manual" : "auto";
+  const windowSeconds = billingMode === "manual" ? MANUAL_REVIEW_SECONDS : AUTO_APPROVAL_SECONDS;
+  const placedAtMs = new Date(order.created_at).getTime();
+  const deadlineMs = placedAtMs + windowSeconds * 1000;
+  const elapsedSeconds = Math.floor((nowMs - placedAtMs) / 1000);
+  const remainingSeconds = Math.max(0, windowSeconds - elapsedSeconds);
+  return { billingMode, deadlineMs, remainingSeconds };
+}
+
+function AttachmentReader({ fileInfo, onClose }) {
+  const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0);
+  const isPdf = fileInfo?.content_type === "application/pdf";
+
+  useEffect(() => {
+    function onKeyDown(event) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  if (!fileInfo) return null;
+
+  const documentStyle = {
+    transform: `scale(${zoom}) rotate(${rotation}deg)`,
+  };
+
+  return (
+    <div className="attachment-reader" role="dialog" aria-modal="true" aria-label="Prescription attachment reader">
+      <div className="attachment-reader-toolbar">
+        <div>
+          <p className="eyebrow">Prescription reader</p>
+          <strong>{fileInfo.original_name || fileInfo.filename}</strong>
+        </div>
+        <div className="attachment-reader-actions">
+          <button type="button" onClick={() => setZoom((value) => Math.max(0.75, value - 0.25))}>
+            <ZoomOut size={18} />
+            Zoom out
+          </button>
+          <span>{Math.round(zoom * 100)}%</span>
+          <button type="button" onClick={() => setZoom((value) => Math.min(3, value + 0.25))}>
+            <ZoomIn size={18} />
+            Zoom in
+          </button>
+          {!isPdf ? (
+            <button type="button" onClick={() => setRotation((value) => (value + 90) % 360)}>
+              <RotateCw size={18} />
+              Rotate
+            </button>
+          ) : null}
+          <button type="button" onClick={() => {
+            setZoom(1);
+            setRotation(0);
+          }}>
+            <Maximize2 size={18} />
+            Reset
+          </button>
+          <button type="button" onClick={onClose}>
+            <XCircle size={18} />
+            Close
+          </button>
+        </div>
+      </div>
+
+      <div className="attachment-reader-canvas">
+        <div className={isPdf ? "attachment-document attachment-document-pdf" : "attachment-document"} style={documentStyle}>
+          {isPdf ? (
+            <iframe title={fileInfo.original_name || "PDF prescription"} src={fileInfo.objectUrl} />
+          ) : (
+            <img alt={fileInfo.original_name || "Prescription attachment"} src={fileInfo.objectUrl} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OrderAttachmentPreview({ order }) {
+  const [mediaUrls, setMediaUrls] = useState({ prescriptions: [], voice: null });
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [mediaError, setMediaError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    const objectUrls = [];
+
+    async function loadMedia() {
+      setMediaError("");
+      setMediaUrls({ prescriptions: [], voice: null });
+      try {
+        const prescriptions = await Promise.all(
+          (order.prescription_files || []).map(async (fileInfo) => {
+            const blob = await fetchCustomerMedia(fileInfo.url);
+            const objectUrl = URL.createObjectURL(blob);
+            objectUrls.push(objectUrl);
+            return { ...fileInfo, objectUrl };
+          }),
+        );
+
+        let voice = null;
+        if (order.voice_note_file?.url) {
+          const voiceBlob = await fetchCustomerMedia(order.voice_note_file.url);
+          const objectUrl = URL.createObjectURL(voiceBlob);
+          objectUrls.push(objectUrl);
+          voice = { ...order.voice_note_file, objectUrl };
+        }
+
+        if (!cancelled) {
+          setMediaUrls({ prescriptions, voice });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setMediaError(error.message);
+        }
+      }
+    }
+
+    loadMedia();
+
+    return () => {
+      cancelled = true;
+      objectUrls.forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
+    };
+  }, [order.order_id, order.prescription_files, order.voice_note_file]);
+
+  const hasAttachments = Boolean((order.prescription_files || []).length || order.voice_note_file);
+  if (!hasAttachments) {
+    return (
+      <div className="order-attachment-panel">
+        <h3>Attachments</h3>
+        <p>No prescription image, PDF, or audio note attached.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="order-attachment-panel">
+      <h3>Attachments</h3>
+      {mediaError ? <FormMessage kind="error">{mediaError}</FormMessage> : null}
+
+      <div className="customer-media-grid">
+        <article>
+          <h4><FileImage size={16} /> Prescription files</h4>
+          {mediaUrls.prescriptions.length ? (
+            <div className="customer-prescription-grid">
+              {mediaUrls.prescriptions.map((fileInfo) => (
+                fileInfo.content_type === "application/pdf" ? (
+                  <button
+                    className="customer-prescription-document"
+                    key={fileInfo.filename}
+                    type="button"
+                    onClick={() => setSelectedFile(fileInfo)}
+                  >
+                    <FileImage size={18} />
+                    Open {fileInfo.original_name || "PDF prescription"}
+                  </button>
+                ) : (
+                  <button
+                    className="customer-prescription-thumb"
+                    key={fileInfo.filename}
+                    type="button"
+                    onClick={() => setSelectedFile(fileInfo)}
+                  >
+                    <img
+                      alt={fileInfo.original_name || "Prescription attachment"}
+                      src={fileInfo.objectUrl}
+                    />
+                  </button>
+                )
+              ))}
+            </div>
+          ) : (
+            <p>{order.prescription_files?.length ? "Loading prescription files..." : "No prescription file attached."}</p>
+          )}
+        </article>
+
+        <article>
+          <h4><FileAudio size={16} /> Voice note</h4>
+          {mediaUrls.voice ? (
+            <audio className="customer-order-audio" controls src={mediaUrls.voice.objectUrl}>
+              <track kind="captions" />
+            </audio>
+          ) : (
+            <p>{order.voice_note_file ? "Loading voice note..." : "No voice note attached."}</p>
+          )}
+        </article>
+      </div>
+      {selectedFile ? <AttachmentReader fileInfo={selectedFile} onClose={() => setSelectedFile(null)} /> : null}
+    </div>
+  );
+}
+
+export function PharmacyOrdersPage() {
+  const [orders, setOrders] = useState([]);
+  const [expandedOrderId, setExpandedOrderId] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [nowMs, setNowMs] = useState(Date.now());
+  const refreshedExpiredOrdersRef = useRef(new Set());
+  const isExpiryRefreshRunningRef = useRef(false);
+
+  // Delivery tracking: { [order_id]: DeliveryTrackingResponse | null }
+  const [trackingMap, setTrackingMap] = useState({});
+  const trackingIntervalRef = useRef(null);
+
+  // Delivery rating: { [order_id]: { star: number, comment: string, submitting: bool, submitted: bool, error: string } }
+  const [ratingState, setRatingState] = useState({});
+
+  async function loadOrders({ showLoading = true } = {}) {
+    if (showLoading) {
+      setIsLoading(true);
+    }
+    try {
+      const response = await listCustomerPharmacyOrders();
+      setOrders(response);
+      setError("");
+      return true;
+    } catch (requestError) {
+      setError(requestError.message);
+      return false;
+    } finally {
+      if (showLoading) {
+        setIsLoading(false);
+      }
+    }
+  }
+
+  useEffect(() => {
+    loadOrders();
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const expiredPendingOrder = orders.find((order) => {
+      if (order.status !== "PENDING_CUSTOMER_APPROVAL") {
+        return false;
+      }
+      const { remainingSeconds } = getReviewState(order, nowMs);
+      return remainingSeconds === 0 && !refreshedExpiredOrdersRef.current.has(order.order_id);
+    });
+
+    if (!expiredPendingOrder || isExpiryRefreshRunningRef.current) {
+      return;
+    }
+
+    isExpiryRefreshRunningRef.current = true;
+    loadOrders({ showLoading: false }).then((isUpdated) => {
+      if (isUpdated) {
+        refreshedExpiredOrdersRef.current.add(expiredPendingOrder.order_id);
+      }
+      isExpiryRefreshRunningRef.current = false;
+    });
+  }, [nowMs, orders]);
+
+  // Poll delivery tracking every 5 seconds for orders that are in transit
+  const pollTracking = useCallback(async (currentOrders) => {
+    const inTransitOrders = currentOrders.filter((o) => DELIVERY_IN_TRANSIT_STATUSES.has(o.status));
+    if (inTransitOrders.length === 0) return;
+    const results = await Promise.allSettled(
+      inTransitOrders.map((o) => getDeliveryTracking(o.order_id))
+    );
+    setTrackingMap((prev) => {
+      const next = { ...prev };
+      inTransitOrders.forEach((o, i) => {
+        const r = results[i];
+        if (r.status === "fulfilled") {
+          next[o.order_id] = r.value; // may be null if no delivery yet
+        }
+      });
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (trackingIntervalRef.current) clearInterval(trackingIntervalRef.current);
+    // Immediate first poll
+    pollTracking(orders);
+    trackingIntervalRef.current = setInterval(() => pollTracking(orders), 5000);
+    return () => clearInterval(trackingIntervalRef.current);
+  }, [orders, pollTracking]);
+
+  function setRating(orderId, star) {
+    setRatingState((prev) => ({ ...prev, [orderId]: { ...(prev[orderId] || {}), star, error: "" } }));
+  }
+
+  function setRatingComment(orderId, comment) {
+    setRatingState((prev) => ({ ...prev, [orderId]: { ...(prev[orderId] || {}), comment } }));
+  }
+
+  async function submitRating(orderId, deliveryOrderId) {
+    const rs = ratingState[orderId] || {};
+    if (!rs.star) return;
+    setRatingState((prev) => ({ ...prev, [orderId]: { ...rs, submitting: true, error: "" } }));
+    try {
+      await submitDeliveryRating(deliveryOrderId, rs.star, rs.comment || null);
+      setRatingState((prev) => ({ ...prev, [orderId]: { ...rs, submitting: false, submitted: true } }));
+      // Refresh orders so delivery_rated flips to true
+      await loadOrders({ showLoading: false });
+    } catch (e) {
+      setRatingState((prev) => ({ ...prev, [orderId]: { ...rs, submitting: false, error: e.message } }));
+    }
+  }
+
+  async function actOnOrder(orderId, action) {
+    try {
+      const updatedOrder = await updateCustomerPharmacyOrder(orderId, action);
+      setOrders((current) => current.map((order) => (order.order_id === orderId ? updatedOrder : order)));
+      setMessage(`Order ${formatStatus(updatedOrder.status)}.`);
+      setError("");
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  }
+
+  async function reorder(orderId) {
+    try {
+      const newOrder = await reorderCustomerPharmacyOrder(orderId);
+      setOrders((current) => [newOrder, ...current]);
+      setExpandedOrderId(newOrder.order_id);
+      setMessage("Re-order created and is pending approval.");
+      setError("");
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  }
+
+  function priceReviewSecondsLeft(order) {
+    if (!order.customer_review_deadline_at) return 0;
+    return Math.max(0, Math.ceil((new Date(order.customer_review_deadline_at).getTime() - nowMs) / 1000));
+  }
+
+  async function handleApprovePrice(orderId) {
+    try {
+      const updatedOrder = await approvePriceEstimate(orderId);
+      setOrders((current) => current.map((o) => (o.order_id === orderId ? updatedOrder : o)));
+      setMessage("Price approved. The pharmacy is preparing your bill.");
+      setError("");
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  async function handleRejectPrice(orderId) {
+    try {
+      const updatedOrder = await rejectPriceEstimate(orderId);
+      setOrders((current) => current.map((o) => (o.order_id === orderId ? updatedOrder : o)));
+      setMessage("Price rejected. The order has been cancelled.");
+      setError("");
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  async function respondSubstitution(orderId, allowed) {
+    try {
+      const updatedOrder = await setSubstitutionPermission(orderId, allowed);
+      setOrders((current) => current.map((order) => (order.order_id === orderId ? updatedOrder : order)));
+      setMessage(allowed ? "Alternative medicine approved." : "No substitution preference saved.");
+      setError("");
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  }
+
+  return (
+    <section className="home-layout">
+      <div className="pharmacy-page-header">
+        <Link className="icon-text-button" to="/home/pharmacy">
+          <ArrowLeft size={18} aria-hidden="true" />
+          Pharmacy
+        </Link>
+        <div>
+          <p className="eyebrow">Pharmacy orders</p>
+          <h1>My orders</h1>
+          <p>Track pharmacy orders, review pharmacy updates, and take customer actions.</p>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="home-loading">
+          <RefreshCw size={20} aria-hidden="true" />
+          Loading orders
+        </div>
+      ) : null}
+
+      {message ? <FormMessage kind="success">{message}</FormMessage> : null}
+      {error ? <FormMessage kind="error">{error}</FormMessage> : null}
+
+      {!isLoading && !error && orders.length === 0 ? (
+        <div className="home-empty">
+          <p>No pharmacy orders yet.</p>
+          <Link className="button" to="/home/pharmacy/order">Order Medicine</Link>
+        </div>
+      ) : null}
+
+      <div className="order-list">
+        {orders.map((order) => {
+          const isExpanded = expandedOrderId === order.order_id;
+          const { billingMode, deadlineMs, remainingSeconds } = getReviewState(order, nowMs);
+          const isPending = order.status === "PENDING_CUSTOMER_APPROVAL";
+          const isManualPending = isPending && billingMode === "manual";
+          const isAutoPending = isPending && billingMode === "auto";
+          const isAutoCancelOpen = isAutoPending && remainingSeconds > 0;
+          const isManualActionOpen = isManualPending && remainingSeconds > 0;
+          const isLockedOfferOrder = Boolean(order.notes?.locked_offer_order);
+          const deadlineLabel = new Date(deadlineMs).toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit",
+          });
+          const canReorder = order.status === "COMPLETED";
+          const sampleMrp = Number(order.final_amount || order.estimated_amount || 0);
+          const sampleDiscount = Math.round(sampleMrp * 0.08);
+          const samplePayable = Math.max(sampleMrp - sampleDiscount, 0);
+          return (
+            <article className="order-card" key={order.order_id}>
+              <div className="order-card-header">
+                <div>
+                  <span className={`order-status order-status-${order.status.toLowerCase()}`}>
+                    {formatStatus(order.status)}
+                  </span>
+                  <h2>{order.pharmacy_name || "Pharmacy order"}</h2>
+                  <p>
+                    {[order.pharmacy_city, order.pharmacy_pincode].filter(Boolean).join(" - ") ||
+                      "Pharmacy details pending"}
+                  </p>
+                </div>
+                <div className="order-amount">
+                  <span>Sample payable</span>
+                  <strong>₹{samplePayable.toFixed(2)}</strong>
+                </div>
+              </div>
+
+              <div className={`order-review-banner ${billingMode === "manual" ? "order-review-banner-manual" : ""}`}>
+                <Clock3 size={18} />
+                {isAutoPending ? (
+                  <span>
+                    {isLockedOfferOrder ? "Offer order" : "Auto approval is ON"}. You can cancel this order for a maximum
+                    of 2 minutes from order placed time, until <strong>{deadlineLabel}</strong>. Time left:{" "}
+                    <strong>{formatCountdown(remainingSeconds)}</strong>.
+                    After that, it will go for pharmacy approval automatically.
+                  </span>
+                ) : null}
+                {isManualPending ? (
+                  <span>
+                    Manual approval is ON. You have 5 minutes from order placed time, until{" "}
+                    <strong>{deadlineLabel}</strong>, to review pricing and approve. Time left:{" "}
+                    <strong>{formatCountdown(remainingSeconds)}</strong>. After that, this order will be auto-cancelled.
+                  </span>
+                ) : null}
+                {!isPending ? (
+                  <span>{formatStatus(order.status)} order. Customer action window is closed.</span>
+                ) : null}
+              </div>
+
+              <div className="order-pricing-box">
+                <span>Estimated MRP: ₹{sampleMrp.toFixed(2)}</span>
+                <span>Sample savings: ₹{sampleDiscount.toFixed(2)}</span>
+                <strong>Sample payable now: ₹{samplePayable.toFixed(2)}</strong>
+              </div>
+
+              <div className="order-action-row">
+                <button className="button button-secondary" type="button" onClick={() => setExpandedOrderId(isExpanded ? "" : order.order_id)}>
+                  <Eye size={18} />
+                  {isExpanded ? "Hide details" : "View details"}
+                </button>
+                {isAutoCancelOpen ? (
+                  <button className="button button-danger" type="button" onClick={() => actOnOrder(order.order_id, "cancel")}>
+                    <XCircle size={18} />
+                    Cancel ({formatCountdown(remainingSeconds)})
+                  </button>
+                ) : null}
+                {isManualActionOpen ? (
+                  <>
+                    <button className="button" type="button" onClick={() => actOnOrder(order.order_id, "approve")}>
+                      <CheckCircle2 size={18} />
+                      Approve ({formatCountdown(remainingSeconds)})
+                    </button>
+                    <button className="button button-danger" type="button" onClick={() => actOnOrder(order.order_id, "reject")}>
+                      <XCircle size={18} />
+                      Reject
+                    </button>
+                  </>
+                ) : null}
+                {canReorder ? (
+                  <button className="button" type="button" onClick={() => reorder(order.order_id)}>
+                    <PackagePlus size={18} />
+                    Re-order
+                  </button>
+                ) : null}
+              </div>
+
+              {/* ── Delivery rating banner (COMPLETED, not yet rated) ── */}
+              {order.status === "COMPLETED" && order.delivery_order_id && !order.delivery_rated ? (() => {
+                const rs = ratingState[order.order_id] || {};
+                if (rs.submitted) return null;
+                return (
+                  <div className="delivery-rating-banner">
+                    <div className="delivery-rating-title">⭐ Rate your delivery</div>
+                    <p className="delivery-rating-sub">How was your delivery experience?</p>
+
+                    {/* Star picker */}
+                    <div className="delivery-rating-stars" role="group" aria-label="Rating">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          className={`delivery-rating-star ${(rs.star || 0) >= n ? "delivery-rating-star-filled" : ""}`}
+                          onClick={() => setRating(order.order_id, n)}
+                          aria-label={`${n} star${n > 1 ? "s" : ""}`}
+                        >
+                          <Star size={28} />
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Comment */}
+                    <textarea
+                      className="delivery-rating-comment"
+                      placeholder="Leave a comment (optional)"
+                      maxLength={500}
+                      rows={3}
+                      value={rs.comment || ""}
+                      onChange={(e) => setRatingComment(order.order_id, e.target.value)}
+                    />
+                    <div className="delivery-rating-char-count">
+                      {(rs.comment || "").length} / 500
+                    </div>
+
+                    {rs.error ? <p className="delivery-rating-error">{rs.error}</p> : null}
+
+                    <button
+                      type="button"
+                      className="delivery-rating-submit"
+                      disabled={!rs.star || rs.submitting}
+                      onClick={() => submitRating(order.order_id, order.delivery_order_id)}
+                    >
+                      {rs.submitting ? "Submitting…" : "Submit Rating"}
+                    </button>
+                  </div>
+                );
+              })() : null}
+
+              {/* ── Price review invoice card (PENDING_PRICE_REVIEW) ── */}
+              {order.status === "PENDING_PRICE_REVIEW" ? (() => {
+                const secs = priceReviewSecondsLeft(order);
+                const bd = order.price_breakdown;
+                const totalAmt = parseFloat(order.estimated_amount || 0);
+                const urgency = secs <= 60 ? "critical" : secs <= 180 ? "warning" : "normal";
+                return (
+                  <div className="price-invoice-card">
+                    {/* Header */}
+                    <div className="price-invoice-header">
+                      <div className="price-invoice-title-row">
+                        <span className="price-invoice-label">Price Estimate from Pharmacy</span>
+                        <span className={`price-invoice-timer price-invoice-timer-${urgency}`}>
+                          <Clock3 size={14} />
+                          {secs > 0 ? `Expires in ${formatCountdown(secs)}` : "Expired"}
+                        </span>
+                      </div>
+                      <p className="price-invoice-sub">
+                        Review the breakdown below and accept or reject within the time limit.
+                        If no action is taken, the order will be <strong>auto-cancelled</strong>.
+                      </p>
+                    </div>
+
+                    {/* Invoice table */}
+                    <div className="price-invoice-body">
+                      <div className="price-invoice-from">
+                        <span className="price-invoice-from-label">From</span>
+                        <span className="price-invoice-from-name">{order.pharmacy_name || "Pharmacy"}</span>
+                        {(order.pharmacy_city || order.pharmacy_pincode) && (
+                          <span className="price-invoice-from-loc">
+                            {[order.pharmacy_city, order.pharmacy_pincode].filter(Boolean).join(" – ")}
+                          </span>
+                        )}
+                      </div>
+
+                      <table className="price-invoice-table">
+                        <thead>
+                          <tr>
+                            <th>Description</th>
+                            <th className="price-invoice-amt-col">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {bd ? (
+                            <>
+                              <tr>
+                                <td>
+                                  <span className="price-invoice-item-icon">💊</span>
+                                  Medicine / Products
+                                </td>
+                                <td className="price-invoice-amt-col">₹{parseFloat(bd.medicine_cost).toFixed(2)}</td>
+                              </tr>
+                              <tr>
+                                <td>
+                                  <span className="price-invoice-item-icon">🚚</span>
+                                  Delivery Charge
+                                  {bd.delivery_km > 0 && (
+                                    <span className="price-invoice-sub-detail">
+                                      {parseFloat(bd.delivery_km).toFixed(2)} km × ₹{parseFloat(bd.rate_per_km).toFixed(2)}/km
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="price-invoice-amt-col">₹{parseFloat(bd.delivery_charge).toFixed(2)}</td>
+                              </tr>
+                              <tr>
+                                <td>
+                                  <span className="price-invoice-item-icon">🏷️</span>
+                                  Platform Fee
+                                </td>
+                                <td className="price-invoice-amt-col">₹{parseFloat(bd.platform_fee).toFixed(2)}</td>
+                              </tr>
+                              <tr className="price-invoice-subtotal-row">
+                                <td>Subtotal</td>
+                                <td className="price-invoice-amt-col">₹{parseFloat(bd.subtotal).toFixed(2)}</td>
+                              </tr>
+                              <tr>
+                                <td>
+                                  <span className="price-invoice-item-icon">🧾</span>
+                                  GST ({parseFloat(bd.gst_percent).toFixed(1)}%)
+                                </td>
+                                <td className="price-invoice-amt-col">₹{parseFloat(bd.gst_amount).toFixed(2)}</td>
+                              </tr>
+                              {bd.notes && (
+                                <tr className="price-invoice-notes-row">
+                                  <td colSpan={2}>
+                                    <span className="price-invoice-notes-text">📝 {bd.notes}</span>
+                                  </td>
+                                </tr>
+                              )}
+                            </>
+                          ) : (
+                            <tr>
+                              <td>Order total</td>
+                              <td className="price-invoice-amt-col">₹{totalAmt.toFixed(2)}</td>
+                            </tr>
+                          )}
+                        </tbody>
+                        <tfoot>
+                          <tr className="price-invoice-total-row">
+                            <td><strong>Total Payable</strong></td>
+                            <td className="price-invoice-amt-col price-invoice-total-amt">
+                              <strong>₹{totalAmt.toFixed(2)}</strong>
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="price-invoice-actions">
+                      <button
+                        className={`price-invoice-accept-btn${secs === 0 ? " disabled" : ""}`}
+                        type="button"
+                        disabled={secs === 0}
+                        onClick={() => handleApprovePrice(order.order_id)}
+                      >
+                        <CheckCircle2 size={18} />
+                        Accept ₹{totalAmt.toFixed(2)}
+                      </button>
+                      <button
+                        className="price-invoice-reject-btn"
+                        type="button"
+                        onClick={() => handleRejectPrice(order.order_id)}
+                      >
+                        <XCircle size={18} />
+                        Reject &amp; Cancel
+                      </button>
+                    </div>
+
+                    {/* Progress bar for timer */}
+                    {order.customer_review_deadline_at && (
+                      <div className="price-invoice-progress-track">
+                        <div
+                          className={`price-invoice-progress-bar price-invoice-progress-${urgency}`}
+                          style={{ width: `${Math.min(100, (secs / 420) * 100)}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })() : null}
+
+              {/* ── Pickup code (READY_FOR_PICKUP) ── */}
+              {order.status === "READY_FOR_PICKUP" && order.pickup_code ? (
+                <div className="pickup-code-banner">
+                  <strong>Your order is ready!</strong>
+                  <p>Show this code at the pharmacy counter:</p>
+                  <div className="pickup-code-chip">{order.pickup_code}</div>
+                </div>
+              ) : null}
+
+              {/* ── Delivery status context messages ── */}
+              {order.status === "READY_FOR_DELIVERY" ? (
+                <div className="delivery-status-banner delivery-status-banner-waiting">
+                  📦 Your order is packed and waiting for a delivery partner to be assigned.
+                </div>
+              ) : order.status === "ASSIGNED_TO_DELIVERY" ? (
+                <div className="delivery-status-banner delivery-status-banner-assigned">
+                  🛵 A delivery partner has been assigned and will pick up your order shortly.
+                </div>
+              ) : null}
+
+              {/* ── Delivery tracking & call button ── */}
+              {(() => {
+                if (!DELIVERY_IN_TRANSIT_STATUSES.has(order.status)) return null;
+                const tracking = trackingMap[order.order_id];
+                if (!tracking) return null;
+
+                // Calculate distance from driver to customer dropoff
+                const dropLat = order.order_notes?.address_latitude;
+                const dropLng = order.order_notes?.address_longitude;
+                const distToCustomer =
+                  tracking.driver_lat && tracking.driver_lng && dropLat && dropLng
+                    ? haversineMetres(tracking.driver_lat, tracking.driver_lng, dropLat, dropLng)
+                    : null;
+
+                const isNear = distToCustomer !== null && distToCustomer <= CALL_VISIBLE_METRES;
+                // Phone is available after pickup AND when driver is nearby
+                const canCall = isNear && tracking.driver_phone;
+
+                return (
+                  <div className="delivery-tracking-banner">
+                    <div className="delivery-tracking-info">
+                      <span className="delivery-tracking-icon">🛵</span>
+                      <div>
+                        <strong>{tracking.driver_name || "Driver"}</strong>
+                        <span className="delivery-tracking-status">
+                          {tracking.status.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase())}
+                        </span>
+                        {distToCustomer !== null && (
+                          <span className="delivery-tracking-distance">
+                            {distToCustomer < 1000
+                              ? `${Math.round(distToCustomer)} m away`
+                              : `${(distToCustomer / 1000).toFixed(1)} km away`}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {canCall && (
+                      <a
+                        href={`tel:${tracking.driver_phone}`}
+                        className="delivery-call-button"
+                        aria-label={`Call delivery driver ${tracking.driver_name}`}
+                      >
+                        <Phone size={18} />
+                        Call Driver
+                      </a>
+                    )}
+                  </div>
+
+                );
+              })()}
+
+              {/* Delivery PIN — shown once driver has picked up (status OUT_FOR_DELIVERY or beyond) */}
+              {(() => {
+                const tracking = trackingMap[order.order_id];
+                if (!tracking?.delivery_pin) return null;
+                return (
+                  <div className="delivery-pin-banner">
+                    <div className="delivery-pin-label">🔐 Delivery PIN</div>
+                    <div className="delivery-pin-chip">{tracking.delivery_pin}</div>
+                    <p className="delivery-pin-hint">
+                      Share this PIN with your delivery partner when they hand over the order.
+                    </p>
+                  </div>
+                );
+              })()}
+
+              {isExpanded ? (
+                <div className="order-detail-panel">
+                  <dl>
+                    <div>
+                      <dt>Doctor</dt>
+                      <dd>{order.doctor_name || "Self"}</dd>
+                    </div>
+                    <div>
+                      <dt>Patient</dt>
+                      <dd>{order.patient_name || "Customer"}</dd>
+                    </div>
+                    <div>
+                      <dt>Created</dt>
+                      <dd>{new Date(order.created_at).toLocaleString()}</dd>
+                    </div>
+                    <div>
+                      <dt>Billing mode</dt>
+                      <dd>{order.notes?.billing_mode === "manual" ? "Manual review" : "Auto approval"}</dd>
+                    </div>
+                  </dl>
+                  {/* Substitution permission — shown while order is with the pharmacy */}
+                  {(order.status === "ASSIGNED_TO_PHARMACY" || order.status === "PHARMACY_ACCEPTED") ? (
+                    <div className="substitution-permission-panel">
+                      <h3>Medicine substitution</h3>
+                      {order.substitution_allowed === true ? (
+                        <div className="substitution-badge substitution-badge-approved">
+                          <CheckCircle2 size={16} aria-hidden="true" />
+                          Alternative Approved
+                        </div>
+                      ) : order.substitution_allowed === false ? (
+                        <div className="substitution-badge substitution-badge-denied">
+                          <XCircle size={16} aria-hidden="true" />
+                          No Substitution Allowed
+                        </div>
+                      ) : (
+                        <>
+                          <p className="substitution-prompt">
+                            If a medicine in your order is out of stock, can the pharmacy suggest an alternative?
+                          </p>
+                          <div className="substitution-actions">
+                            <button
+                              className="button"
+                              type="button"
+                              onClick={() => respondSubstitution(order.order_id, true)}
+                            >
+                              <CheckCircle2 size={16} />
+                              Yes, Allow Alternative
+                            </button>
+                            <button
+                              className="button button-secondary"
+                              type="button"
+                              onClick={() => respondSubstitution(order.order_id, false)}
+                            >
+                              <XCircle size={16} />
+                              No, Keep Original Only
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ) : order.substitution_allowed === true ? (
+                    <div className="substitution-badge substitution-badge-approved">
+                      <CheckCircle2 size={16} aria-hidden="true" />
+                      Alternative Approved
+                    </div>
+                  ) : null}
+
+                  <div>
+                    <h3>Order items</h3>
+                    {order.items.length ? order.items.map((item) => (
+                      <div className="order-item-row" key={`${order.order_id}-${item.name}-${item.metric}`}>
+                        <strong>{item.name}</strong>
+                        <span>
+                          {item.quantity} {item.metric}
+                          {item.line_total ? ` • ₹${item.line_total}` : ""}
+                        </span>
+                      </div>
+                    )) : <p>No typed medicines. Prescription or voice note order.</p>}
+                  </div>
+                  <OrderAttachmentPreview order={order} />
+                  {order.customer_action_comment ? (
+                    <p className="hint">Customer comment: {order.customer_action_comment}</p>
+                  ) : null}
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
