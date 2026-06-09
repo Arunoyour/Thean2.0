@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { KeyRound, Send } from "lucide-react";
 
 import { FormMessage } from "../components/FormMessage.jsx";
@@ -8,6 +8,7 @@ import { validateOtp, validatePhone, inputClass, touch } from "../lib/validation
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState("");
   const [phase, setPhase] = useState("request");
@@ -54,7 +55,9 @@ export function LoginPage() {
       window.localStorage.setItem("thean_access_token", response.access_token);
       setMessage(`Welcome back, ${response.user.full_name || response.user.phone_number}.`);
       setOtp("");
-      navigate("/home");
+      // If the user was redirected here from a protected page, send them back
+      const next = searchParams.get("next");
+      navigate(next && next.startsWith("/") ? next : "/home");
     } catch (requestError) {
       setError(requestError.message);
     } finally {

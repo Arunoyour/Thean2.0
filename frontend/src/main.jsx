@@ -3,12 +3,14 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { AppShell } from "./components/AppShell.jsx";
+import { RequireAuth } from "./components/RequireAuth.jsx";
 import { AddressListPage } from "./pages/AddressListPage.jsx";
 import { AddressPage } from "./pages/AddressPage.jsx";
 import { LandingPage } from "./pages/LandingPage.jsx";
 import { HomePage } from "./pages/HomePage.jsx";
 import { LoginPage } from "./pages/LoginPage.jsx";
 import { MedicineOrderPage } from "./pages/MedicineOrderPage.jsx";
+import { NotFoundPage } from "./pages/NotFoundPage.jsx";
 import { PharmacyOrdersPage } from "./pages/PharmacyOrdersPage.jsx";
 import { PharmacyProductsPage } from "./pages/PharmacyProductsPage.jsx";
 import { RegisterPage } from "./pages/RegisterPage.jsx";
@@ -19,16 +21,22 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     <BrowserRouter>
       <Routes>
         <Route element={<AppShell />}>
+          {/* Public routes */}
           <Route path="/" element={<LandingPage />} />
-          <Route path="/home" element={<HomePage />} />
-          <Route path="/home/addresses" element={<AddressListPage />} />
-          <Route path="/home/address/new" element={<AddressPage />} />
-          <Route path="/home/address/:addressId/edit" element={<AddressPage />} />
-          <Route path="/home/pharmacy" element={<PharmacyProductsPage />} />
-          <Route path="/home/pharmacy/order" element={<MedicineOrderPage />} />
-          <Route path="/home/pharmacy/orders" element={<PharmacyOrdersPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+
+          {/* Protected routes — redirect to /login?next=<path> if unauthenticated */}
+          <Route path="/home" element={<RequireAuth><HomePage /></RequireAuth>} />
+          <Route path="/home/addresses" element={<RequireAuth><AddressListPage /></RequireAuth>} />
+          <Route path="/home/address/new" element={<RequireAuth><AddressPage /></RequireAuth>} />
+          <Route path="/home/address/:addressId/edit" element={<RequireAuth><AddressPage /></RequireAuth>} />
+          <Route path="/home/pharmacy" element={<RequireAuth><PharmacyProductsPage /></RequireAuth>} />
+          <Route path="/home/pharmacy/order" element={<RequireAuth><MedicineOrderPage /></RequireAuth>} />
+          <Route path="/home/pharmacy/orders" element={<RequireAuth><PharmacyOrdersPage /></RequireAuth>} />
+
+          {/* 404 catch-all */}
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
