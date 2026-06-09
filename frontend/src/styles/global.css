@@ -1600,6 +1600,178 @@ h1 {
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
+/* ── MedicineOrderPage additions ───────────────────────────────── */
+
+/* Voice countdown warning */
+.timer-warning {
+  color: #b45309 !important;
+  animation: timer-pulse 0.6s ease infinite alternate;
+}
+@keyframes timer-pulse {
+  from { opacity: 1; }
+  to   { opacity: 0.55; }
+}
+.voice-countdown-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #b45309;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-top: 4px;
+}
+
+/* Pharmacy choice body with loading overlay */
+.pharmacy-choice-body {
+  position: relative;
+  margin-top: 10px;
+}
+.pharmacy-choice-body-loading > *:not(.pharmacy-loading-overlay) {
+  opacity: 0.35;
+  pointer-events: none;
+  user-select: none;
+}
+.pharmacy-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  z-index: 2;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f766e;
+}
+.pharmacy-loading-overlay .spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Offer-lock acknowledgement checkbox */
+.offer-lock-agreement {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #7c2d12;
+  cursor: pointer;
+}
+.offer-lock-agreement input {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+/* Save draft row */
+.draft-save-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e3ebe8;
+  flex-wrap: wrap;
+}
+.draft-saved-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #0f766e;
+  font-weight: 600;
+}
+
+/* Basket total pending (no price yet) */
+.basket-total-pending {
+  color: #6b7280;
+  font-style: italic;
+  font-weight: 600;
+}
+
+/* Leave page / confirm order modals */
+.order-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.order-modal {
+  background: #fff;
+  border-radius: 14px;
+  padding: 28px 28px 22px;
+  max-width: 500px;
+  width: 100%;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+}
+.order-modal h2 {
+  margin: 0 0 10px;
+  font-size: 20px;
+}
+.order-modal p {
+  margin: 0 0 18px;
+  color: #374151;
+  line-height: 1.55;
+}
+.order-modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+/* Confirm order summary */
+.confirm-summary {
+  margin: 0 0 20px;
+  display: grid;
+  gap: 10px;
+  background: #f0faf8;
+  border: 1px solid #ccece8;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.confirm-summary > div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.confirm-summary dt {
+  font-size: 12px;
+  font-weight: 800;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-width: 110px;
+  padding-top: 2px;
+}
+.confirm-summary dd {
+  margin: 0;
+  font-size: 14px;
+  color: #172522;
+  flex: 1;
+}
+.confirm-ack {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #0f766e !important;
+}
+
 .order-list {
   display: grid;
   gap: 14px;

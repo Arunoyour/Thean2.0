@@ -12,6 +12,8 @@ import {
   PackagePlus,
   PauseCircle,
   Play,
+  RefreshCw,
+  Save,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -35,6 +37,7 @@ const medicineCatalog = [
 
 const typeOptions = ["Strip", "Capsule", "Liquid Bottle", "Box", "Grams"];
 const MAX_PHARMACY_DISTANCE_KM = 60;
+const FORM_DRAFT_KEY = "thean_medicine_form_draft";
 
 function moneyValue(value) {
   const parsed = Number(value);
@@ -115,6 +118,14 @@ export function MedicineOrderPage() {
   const [selectedPharmacyId, setSelectedPharmacyId] = useState("");
   const [lockedPharmacy, setLockedPharmacy] = useState(null);
   const [manualRadiusKm, setManualRadiusKm] = useState(5);
+
+  // ── New state ───────────────────────────────────────────────────────────────
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [pendingNavTarget, setPendingNavTarget] = useState("");
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [offerLockUnderstood, setOfferLockUnderstood] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
+
   const intervalRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -125,6 +136,7 @@ export function MedicineOrderPage() {
   const recordingStartPendingRef = useRef(false);
   const stopAfterStartRef = useRef(false);
 
+  // ── Derived ─────────────────────────────────────────────────────────────────
   const matches = useMemo(() => {
     if (selectedMedicine && query === selectedMedicine) return [];
 
@@ -160,6 +172,17 @@ export function MedicineOrderPage() {
     (total, item) => total + moneyValue(item.customerPrice) * (Number(item.quantity) || 0),
     0,
   );
+
+  // Page is "dirty" if user has unsaved work worth warning about
+  const isDirty = cart.length > 0 || prescriptionFiles.length > 0 || Boolean(voiceBlob);
+
+  // Voice countdown warning — last 10 seconds
+  const voiceCountdownWarning = isRecording && recordingSeconds <= 10;
+
+  // Submit button gating — restricted-drug checkbox + offer-lock acknowledgement
+  const canSubmit = restrictedDrugNoticeAccepted && (!isLockedOfferOrder || offerLockUnderstood);
+
+  // ── Effects ─────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     let ignore = false;
@@ -201,6 +224,7 @@ export function MedicineOrderPage() {
     };
   }, []);
 
+  // Load product-bucket draft (from PharmacyProductsPage "Add to bucket")
   useEffect(() => {
     if (draftLoadedRef.current) return;
     draftLoadedRef.current = true;
@@ -235,8 +259,38 @@ export function MedicineOrderPage() {
       // Ignore malformed draft data and let the user continue with a blank basket.
     } finally {
       window.localStorage.removeItem("thean_pharmacy_order_draft");
+      // Clear the form draft too — product draft takes priority
+      window.localStorage.removeItem(FORM_DRAFT_KEY);
     }
   }, []);
+
+  // Restore saved form draft (from "Save draft" button)
+  useEffect(() => {
+    // Skip if a product-bucket draft is present (handled above)
+    if (window.localStorage.getItem("thean_pharmacy_order_draft")) return;
+
+    const saved = window.localStorage.getItem(FORM_DRAFT_KEY);
+    if (!saved) return;
+    try {
+      const d = JSON.parse(saved);
+      if (d.doctorName) setDoctorName(d.doctorName);
+      if (d.patientName) setPatientName(d.patientName);
+      if (Array.isArray(d.cart) && d.cart.length) {
+        setCart(d.cart.map((item) => ({ ...item, id: crypto.randomUUID() })));
+      }
+      if (d.pharmacyChoiceMode) setPharmacyChoiceMode(d.pharmacyChoiceMode);
+      if (d.selectedAddressId) setSelectedAddressId(d.selectedAddressId);
+      if (d.lockedPharmacy) {
+        setLockedPharmacy(d.lockedPharmacy);
+        setPharmacyChoiceMode("locked");
+      }
+      if (typeof d.substitutionAllowed === "boolean") setSubstitutionAllowed(d.substitutionAllowed);
+      if (d.billingMode) setBillingMode(d.billingMode);
+      if (typeof d.inventoryProtection === "boolean") setInventoryProtection(d.inventoryProtection);
+    } catch {
+      // Ignore corrupt draft
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let ignore = false;
@@ -294,6 +348,13 @@ export function MedicineOrderPage() {
       }
     };
   }, [voicePreviewUrl]);
+
+  // Reset offer-lock acknowledgement when the lock is cleared
+  useEffect(() => {
+    if (!lockedPharmacy) setOfferLockUnderstood(false);
+  }, [lockedPharmacy]);
+
+  // ── Functions ───────────────────────────────────────────────────────────────
 
   function addMedicine() {
     if (!selectedMedicine || !metric || Number(quantity) <= 0) return;
@@ -465,34 +526,71 @@ export function MedicineOrderPage() {
     }
   }
 
-  async function submitOrder() {
+  /** Intercept in-app navigation when the form is dirty. */
+  function handleNavAway(to) {
+    if (isDirty) {
+      setPendingNavTarget(to);
+      setShowLeaveModal(true);
+    } else {
+      navigate(to);
+    }
+  }
+
+  function confirmLeave() {
+    setShowLeaveModal(false);
+    navigate(pendingNavTarget);
+  }
+
+  /** Persist form state to localStorage. Files/voice cannot be saved. */
+  function saveDraft() {
+    window.localStorage.setItem(
+      FORM_DRAFT_KEY,
+      JSON.stringify({
+        doctorName,
+        patientName,
+        cart,
+        pharmacyChoiceMode,
+        selectedAddressId,
+        lockedPharmacy,
+        substitutionAllowed,
+        billingMode,
+        inventoryProtection,
+      }),
+    );
+    setDraftSaved(true);
+    setTimeout(() => setDraftSaved(false), 2500);
+  }
+
+  /** Run validations then open the confirmation modal. */
+  function openConfirmModal() {
     if (!selectedAddress) {
       setSubmitValidationError("Choose a delivery address before submitting the medicine order.");
       return;
     }
-
     if (!selectedPharmacy) {
       setSubmitValidationError("Choose a pharmacy before submitting the medicine order.");
       return;
     }
-
     if (isSelectedPharmacyOffline) {
       setSubmitValidationError("This pharmacy is offline and can't take any order right now. Please choose another pharmacy or use auto choose.");
       return;
     }
-
     if (selectedPharmacyDistanceKm === null) {
       setSubmitValidationError("Unable to verify pharmacy distance. Please refresh pharmacy selection and try again.");
       return;
     }
-
     if (selectedPharmacyDistanceKm > MAX_PHARMACY_DISTANCE_KM) {
       setSubmitValidationError(
         `Selected pharmacy is ${selectedPharmacyDistanceKm.toFixed(1)} KM from your delivery address. Maximum allowed distance is ${MAX_PHARMACY_DISTANCE_KM} KM.`,
       );
       return;
     }
+    setSubmitValidationError("");
+    setShowConfirmModal(true);
+  }
 
+  async function submitOrder() {
+    setShowConfirmModal(false);
     setSubmitValidationError("");
     setSubmitError("");
     setProcessingMode(true);
@@ -537,12 +635,16 @@ export function MedicineOrderPage() {
       } else {
         await createPharmacyOrder(orderPayload);
       }
+      // Order submitted — clear saved form draft
+      window.localStorage.removeItem(FORM_DRAFT_KEY);
       navigate("/home/pharmacy/orders");
     } catch (requestError) {
       setSubmitError(requestError.message);
       setProcessingMode(false);
     }
   }
+
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   if (processingMode) {
     return (
@@ -564,10 +666,15 @@ export function MedicineOrderPage() {
   return (
     <section className="medicine-layout">
       <div className="pharmacy-page-header">
-        <Link className="icon-text-button" to="/home/pharmacy">
+        {/* Intercepted back navigation — warns if form is dirty */}
+        <button
+          className="icon-text-button"
+          type="button"
+          onClick={() => handleNavAway("/home/pharmacy")}
+        >
           <ArrowLeft size={18} aria-hidden="true" />
           Pharmacy
-        </Link>
+        </button>
         <div>
           <p className="eyebrow">Order medicine</p>
           <h1>Build one medicine order</h1>
@@ -700,7 +807,16 @@ export function MedicineOrderPage() {
           <div className={`waveform ${isRecording ? "waveform-active" : ""}`} aria-hidden="true">
             {Array.from({ length: 20 }).map((_, index) => <span key={index} />)}
           </div>
-          <strong className="timer">{Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, "0")}</strong>
+          {/* Timer — turns amber and shows countdown warning in last 10 seconds */}
+          <strong className={`timer${voiceCountdownWarning ? " timer-warning" : ""}`}>
+            {Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, "0")}
+          </strong>
+          {voiceCountdownWarning ? (
+            <p className="voice-countdown-warning" role="alert">
+              <AlertTriangle size={14} aria-hidden="true" />
+              Recording auto-stops in {recordingSeconds}s
+            </p>
+          ) : null}
           {voiceStatus ? <p className="hint">{voiceStatus}</p> : null}
           {voiceAttached ? <p className="attached-note"><CheckCircle2 size={16} /> Voice note attached</p> : null}
         </article>
@@ -745,14 +861,33 @@ export function MedicineOrderPage() {
                   </div>
                 );
               })}
-              {basketTotal > 0 ? (
-                <div className="basket-total-row">
-                  <span>Bucket total</span>
+              {/* Basket total — always shown when cart has items */}
+              <div className="basket-total-row">
+                <span>Bucket total</span>
+                {basketTotal > 0 ? (
                   <strong>₹{formatMoney(basketTotal)}</strong>
-                </div>
-              ) : null}
+                ) : (
+                  <strong className="basket-total-pending">₹ — (price set by pharmacy)</strong>
+                )}
+              </div>
             </>
           ) : <p>No typed medicines added yet.</p>}
+
+          {/* Save draft button */}
+          {cart.length > 0 ? (
+            <div className="draft-save-row">
+              <button className="button button-secondary" type="button" onClick={saveDraft}>
+                <Save size={16} />
+                Save draft
+              </button>
+              {draftSaved ? (
+                <span className="draft-saved-note">
+                  <CheckCircle2 size={14} />
+                  Draft saved (medicines only — files not included)
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </article>
 
         <article className="medicine-panel pharmacy-selection-panel">
@@ -782,99 +917,129 @@ export function MedicineOrderPage() {
             </div>
           ) : null}
           {addressStatus ? <p className="hint">{addressStatus}</p> : null}
-          {lockedPharmacy ? (
-            <div className="locked-pharmacy-card">
-              <Lock size={22} aria-hidden="true" />
-              <p className="eyebrow">Offer pharmacy locked</p>
-              <h3>{lockedPharmacy.store_name}</h3>
-              <p>
-                You added a product offer from this pharmacy. This price and stock availability are valid only
-                for this pharmacy, so changing pharmacy is disabled for this bucket.
-              </p>
-              <p>To choose another pharmacy, remove this bucket item and start a regular medicine order.</p>
-            </div>
-          ) : (
-            <div className="choice-toggle">
-              <label>
-                <input
-                  checked={pharmacyChoiceMode === "auto"}
-                  onChange={() => setPharmacyChoiceMode("auto")}
-                  type="radio"
-                />
-                Auto choose
-                <span>Recommended by app</span>
-              </label>
-              <label>
-                <input
-                  checked={pharmacyChoiceMode === "manual"}
-                  onChange={() => {
-                    setPharmacyChoiceMode("manual");
-                    setManualRadiusKm(5);
-                  }}
-                  type="radio"
-                />
-                Customer chosen
-                <span>Pick a nearby pharmacy</span>
-              </label>
-            </div>
-          )}
-          {pharmacyChoiceMode === "auto" && recommendedPharmacy ? (
-            <div className="recommended-card">
-              <p className="eyebrow">App recommended</p>
-              <h3>{recommendedPharmacy.store_name}</h3>
-              <p>{recommendedPharmacy.distance_km} KM away • Score {recommendedPharmacy.recommendation_score}</p>
-              <div className="score-grid">
-                <span>{recommendedPharmacy.response_time_minutes}m response</span>
-                <span>{recommendedPharmacy.fill_rate_percent}% fill rate</span>
-                <span>{recommendedPharmacy.rating} rating</span>
+
+          {/* Pharmacy content with loading overlay */}
+          <div className={`pharmacy-choice-body${isLoadingPharmacies ? " pharmacy-choice-body-loading" : ""}`}>
+            {isLoadingPharmacies ? (
+              <div className="pharmacy-loading-overlay">
+                <RefreshCw size={20} className="spin" aria-hidden="true" />
+                <span>Finding pharmacies…</span>
               </div>
-            </div>
-          ) : pharmacyChoiceMode === "auto" && !isLoadingPharmacies ? (
-            <p className="hint">No online active pharmacy found within 5 KM of this address.</p>
-          ) : null}
-          {pharmacyChoiceMode === "manual" ? (
-            <>
-              <div className="manual-radius-header">
-                <strong>{nearbyPharmacies.length} pharmacies found within {manualRadiusKm} KM</strong>
-                {manualRadiusKm < 15 ? (
-                  <button
-                    className="text-button"
-                    type="button"
-                    onClick={() => setManualRadiusKm(15)}
-                  >
-                    Extend to 15 KM
-                  </button>
-                ) : null}
+            ) : null}
+
+            {lockedPharmacy ? (
+              <div className="locked-pharmacy-card">
+                <Lock size={22} aria-hidden="true" />
+                <p className="eyebrow">Offer pharmacy locked</p>
+                <h3>{lockedPharmacy.store_name}</h3>
+                <p>
+                  You added a product offer from this pharmacy. This price and stock availability are valid only
+                  for this pharmacy, so changing pharmacy is disabled for this bucket.
+                </p>
+                <p>To choose another pharmacy, remove this bucket item and start a regular medicine order.</p>
+                {/* Explicit acknowledgement required before submit */}
+                <label className="offer-lock-agreement">
+                  <input
+                    type="checkbox"
+                    checked={offerLockUnderstood}
+                    onChange={(event) => setOfferLockUnderstood(event.target.checked)}
+                  />
+                  <span>I understand that the price and pharmacy are locked for this order.</span>
+                </label>
               </div>
-              <div className="manual-pharmacy-list">
-                {nearbyPharmacies.length ? nearbyPharmacies
-                  .slice()
-                  .sort((a, b) => a.distance_km - b.distance_km)
-                  .map((pharmacy) => (
-                    <label className="pharmacy-choice-row" key={pharmacy.account_id}>
-                      <input
-                        checked={selectedPharmacyId === pharmacy.account_id}
-                        onChange={() => setSelectedPharmacyId(pharmacy.account_id)}
-                        type="radio"
-                      />
-                      <span>
-                        <strong>{pharmacy.store_name}</strong>
-                        {pharmacy.distance_km} KM • {[pharmacy.city, pharmacy.pincode].filter(Boolean).join(" - ") || "Location details pending"}
-                        {pharmacy.is_online === false ? " • Offline" : ""}
-                      </span>
-                    </label>
-                  )) : (
-                    <p className="hint">No online listed pharmacy found within {manualRadiusKm} KM of this address.</p>
-                  )}
+            ) : (
+              <div className="choice-toggle">
+                <label>
+                  <input
+                    checked={pharmacyChoiceMode === "auto"}
+                    onChange={() => setPharmacyChoiceMode("auto")}
+                    type="radio"
+                  />
+                  Auto choose
+                  <span>Recommended by app</span>
+                </label>
+                <label>
+                  <input
+                    checked={pharmacyChoiceMode === "manual"}
+                    onChange={() => {
+                      setPharmacyChoiceMode("manual");
+                      setManualRadiusKm(5);
+                    }}
+                    type="radio"
+                  />
+                  Customer chosen
+                  <span>Pick a nearby pharmacy</span>
+                </label>
               </div>
-            </>
-          ) : null}
+            )}
+            {pharmacyChoiceMode === "auto" && recommendedPharmacy ? (
+              <div className="recommended-card">
+                <p className="eyebrow">App recommended</p>
+                <h3>{recommendedPharmacy.store_name}</h3>
+                <p>{recommendedPharmacy.distance_km} KM away • Score {recommendedPharmacy.recommendation_score}</p>
+                <div className="score-grid">
+                  <span>{recommendedPharmacy.response_time_minutes}m response</span>
+                  <span>{recommendedPharmacy.fill_rate_percent}% fill rate</span>
+                  <span>{recommendedPharmacy.rating} rating</span>
+                </div>
+              </div>
+            ) : pharmacyChoiceMode === "auto" && !isLoadingPharmacies ? (
+              <p className="hint">No online active pharmacy found within 5 KM of this address.</p>
+            ) : null}
+            {pharmacyChoiceMode === "manual" ? (
+              <>
+                <div className="manual-radius-header">
+                  <strong>{nearbyPharmacies.length} pharmacies found within {manualRadiusKm} KM</strong>
+                  {manualRadiusKm < 15 ? (
+                    <button
+                      className="text-button"
+                      type="button"
+                      onClick={() => setManualRadiusKm(15)}
+                    >
+                      Extend to 15 KM
+                    </button>
+                  ) : null}
+                </div>
+                <div className="manual-pharmacy-list">
+                  {nearbyPharmacies.length ? nearbyPharmacies
+                    .slice()
+                    .sort((a, b) => a.distance_km - b.distance_km)
+                    .map((pharmacy) => (
+                      <label className="pharmacy-choice-row" key={pharmacy.account_id}>
+                        <input
+                          checked={selectedPharmacyId === pharmacy.account_id}
+                          onChange={() => setSelectedPharmacyId(pharmacy.account_id)}
+                          type="radio"
+                        />
+                        <span>
+                          <strong>{pharmacy.store_name}</strong>
+                          {pharmacy.distance_km} KM • {[pharmacy.city, pharmacy.pincode].filter(Boolean).join(" - ") || "Location details pending"}
+                          {pharmacy.is_online === false ? " • Offline" : ""}
+                        </span>
+                      </label>
+                    )) : (
+                      <p className="hint">No online listed pharmacy found within {manualRadiusKm} KM of this address.</p>
+                    )}
+                </div>
+              </>
+            ) : null}
+          </div>
+
           {selectedPharmacy ? (
             <p className={hasExceededPharmacyDistance ? "distance-warning" : "attached-note"}>
               Selected: {selectedPharmacy.store_name}
               {selectedPharmacyDistanceKm !== null ? ` • ${selectedPharmacyDistanceKm.toFixed(1)} KM from delivery address` : ""}
             </p>
           ) : null}
+
+          {/* Distance unknown inline alert */}
+          {selectedPharmacy && selectedPharmacyDistanceKm === null && !isLoadingPharmacies ? (
+            <div className="checkout-alert" role="alert">
+              <AlertTriangle size={18} />
+              <span>Unable to calculate distance to this pharmacy. Try selecting a different address or refreshing pharmacy options.</span>
+            </div>
+          ) : null}
+
           {hasExceededPharmacyDistance ? (
             <div className="checkout-alert" role="alert">
               <AlertTriangle size={18} />
@@ -973,9 +1138,9 @@ export function MedicineOrderPage() {
           ) : null}
           <button
             className="button button-full"
-            disabled={!restrictedDrugNoticeAccepted}
+            disabled={!canSubmit}
             type="button"
-            onClick={submitOrder}
+            onClick={openConfirmModal}
           >
             Submit medicine order
           </button>
@@ -983,6 +1148,7 @@ export function MedicineOrderPage() {
         </article>
       </div>
 
+      {/* ── Camera guide modal ── */}
       {isCameraGuideOpen ? (
         <div className="camera-modal">
           <div className="viewfinder">
@@ -992,6 +1158,102 @@ export function MedicineOrderPage() {
               <PauseCircle size={18} />
               Close viewfinder
             </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ── Unsaved draft leave-page modal ── */}
+      {showLeaveModal ? (
+        <div className="order-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="leave-modal-title">
+          <div className="order-modal">
+            <h2 id="leave-modal-title">Leave order page?</h2>
+            <p>
+              You have medicines in your basket that have not been submitted yet.
+              If you leave, your progress will be lost — use <strong>Save draft</strong> first to keep your basket.
+            </p>
+            <div className="order-modal-actions">
+              <button className="button" type="button" onClick={() => setShowLeaveModal(false)}>
+                Stay on page
+              </button>
+              <button className="button button-danger-outline" type="button" onClick={confirmLeave}>
+                Leave anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ── Order confirmation modal ── */}
+      {showConfirmModal ? (
+        <div className="order-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+          <div className="order-modal">
+            <h2 id="confirm-modal-title">Confirm medicine order</h2>
+
+            <dl className="confirm-summary">
+              <div>
+                <dt>Delivery to</dt>
+                <dd>
+                  <strong>{selectedAddress?.label}</strong>
+                  {selectedAddress?.address_line_1 ? ` — ${selectedAddress.address_line_1}` : ""}
+                </dd>
+              </div>
+              <div>
+                <dt>Pharmacy</dt>
+                <dd>
+                  <strong>{selectedPharmacy?.store_name}</strong>
+                  {selectedPharmacyDistanceKm !== null
+                    ? ` — ${selectedPharmacyDistanceKm.toFixed(1)} KM away`
+                    : ""}
+                </dd>
+              </div>
+              <div>
+                <dt>Items</dt>
+                <dd>{cart.length} item{cart.length !== 1 ? "s" : ""} in basket</dd>
+              </div>
+              {basketTotal > 0 ? (
+                <div>
+                  <dt>Basket total</dt>
+                  <dd>₹{formatMoney(basketTotal)}</dd>
+                </div>
+              ) : null}
+              <div>
+                <dt>Substitution</dt>
+                <dd>{substitutionAllowed ? "Allowed — pharmacy may suggest alternatives" : "Not allowed — cancel if exact medicine unavailable"}</dd>
+              </div>
+              <div>
+                <dt>Billing mode</dt>
+                <dd>{effectiveBillingMode === "auto" ? "Auto-approval (2 min review)" : "Manual review (5 min)"}</dd>
+              </div>
+              <div>
+                <dt>Restricted drug notice</dt>
+                <dd className="confirm-ack">
+                  <CheckCircle2 size={15} aria-hidden="true" />
+                  Acknowledged — I will surrender physical prescription if required
+                </dd>
+              </div>
+              {isLockedOfferOrder ? (
+                <div>
+                  <dt>Offer lock</dt>
+                  <dd className="confirm-ack">
+                    <CheckCircle2 size={15} aria-hidden="true" />
+                    Understood — price and pharmacy are locked
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+
+            <div className="order-modal-actions">
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+              >
+                Cancel
+              </button>
+              <button className="button" type="button" onClick={submitOrder}>
+                Confirm &amp; submit
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
