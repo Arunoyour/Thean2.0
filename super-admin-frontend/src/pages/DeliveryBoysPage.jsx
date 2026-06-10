@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   CheckCircle, Download, Filter, RefreshCw, Search,
   Shield, ShieldOff, UserCheck, UserX, XCircle,
@@ -45,16 +45,39 @@ function CodBadge({ balance, blocked }) {
 }
 
 export function DeliveryBoysPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [accounts, setAccounts] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(null);
   const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [onlineFilter, setOnlineFilter] = useState("");
-  const [codFilter, setCodFilter] = useState("");
-  const [vehicleFilter, setVehicleFilter] = useState("");
+
+  // Initialise filter state from URL params so filters survive navigation and refresh
+  const [search, setSearch] = useState(() => searchParams.get("q") || "");
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get("status") || "");
+  const [onlineFilter, setOnlineFilter] = useState(() => searchParams.get("online") || "");
+  const [codFilter, setCodFilter] = useState(() => searchParams.get("cod") || "");
+  const [vehicleFilter, setVehicleFilter] = useState(() => searchParams.get("vehicle") || "");
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState(new Set());
+
+  // Sync filter state back to URL
+  useEffect(() => {
+    const params = {};
+    if (search) params.q = search;
+    if (statusFilter) params.status = statusFilter;
+    if (onlineFilter) params.online = onlineFilter;
+    if (codFilter) params.cod = codFilter;
+    if (vehicleFilter) params.vehicle = vehicleFilter;
+    setSearchParams(params, { replace: true });
+  }, [search, statusFilter, onlineFilter, codFilter, vehicleFilter]);
+
+  // Clear selection whenever filters change (selected rows may no longer be visible)
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [search, statusFilter, onlineFilter, codFilter, vehicleFilter]);
 
   useEffect(() => { load(); }, []);
   useEffect(() => { applyFilters(); }, [accounts, search, statusFilter, onlineFilter, codFilter, vehicleFilter]);
@@ -82,7 +105,8 @@ export function DeliveryBoysPage() {
     if (onlineFilter === "offline") list = list.filter(a => !a.is_online);
     if (codFilter === "blocked") list = list.filter(a => a.cod_blocked);
     if (codFilter === "warn") list = list.filter(a => !a.cod_blocked && a.cod_balance >= 1000);
-    if (codFilter === "clear") list = list.filter(a => a.cod_balance === 0 || a.cod_balance === "0");
+    // Normalise to Number so both 0 and "0" match
+    if (codFilter === "clear") list = list.filter(a => Number(a.cod_balance) === 0);
     if (vehicleFilter) list = list.filter(a => a.vehicle_type === vehicleFilter);
     setFiltered(list);
   }
@@ -93,6 +117,47 @@ export function DeliveryBoysPage() {
     try {
       const updated = await setDeliveryAccountStatus(account.account_id, next);
       setAccounts(prev => prev.map(a => a.account_id === updated.account_id ? updated : a));
+    } catch (e) { setError(e.message); }
+    finally { setActionLoading(null); }
+  }
+
+  // Rows in the current filtered view that can be bulk-activated (pending or disabled)
+  const activatableFiltered = filtered.filter(
+    a => a.account_status === "pending" || a.account_status === "disabled"
+  );
+  const allActivatableSelected =
+    activatableFiltered.length > 0 &&
+    activatableFiltered.every(a => selectedIds.has(a.account_id));
+
+  function toggleSelectAll() {
+    if (allActivatableSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(activatableFiltered.map(a => a.account_id)));
+    }
+  }
+
+  function toggleSelectOne(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function bulkActivate() {
+    const ids = [...selectedIds];
+    setActionLoading("bulk");
+    try {
+      const results = await Promise.all(
+        ids.map(id => setDeliveryAccountStatus(id, "active"))
+      );
+      setAccounts(prev => {
+        const map = Object.fromEntries(results.map(r => [r.account_id, r]));
+        return prev.map(a => map[a.account_id] || a);
+      });
+      setSelectedIds(new Set());
     } catch (e) { setError(e.message); }
     finally { setActionLoading(null); }
   }
@@ -168,6 +233,29 @@ export function DeliveryBoysPage() {
 
       {error && <div className="dl-admin-error">{error}</div>}
 
+      {/* Bulk action bar — visible only when rows are selected */}
+      {selectedIds.size > 0 && (
+        <div className="dl-admin-bulk-bar">
+          <span>{selectedIds.size} driver{selectedIds.size !== 1 ? "s" : ""} selected</span>
+          <button
+            className="dl-admin-btn dl-admin-btn-success"
+            onClick={bulkActivate}
+            disabled={actionLoading === "bulk"}
+          >
+            {actionLoading === "bulk"
+              ? <><RefreshCw size={14} className="dl-spin" /> Activating…</>
+              : <><UserCheck size={14} /> Activate Selected</>}
+          </button>
+          <button
+            className="dl-admin-btn"
+            onClick={() => setSelectedIds(new Set())}
+            disabled={actionLoading === "bulk"}
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="dl-admin-loading"><RefreshCw size={22} className="dl-spin" /> Loading…</div>
       ) : (
@@ -175,6 +263,17 @@ export function DeliveryBoysPage() {
           <table className="dl-admin-table">
             <thead>
               <tr>
+                {/* Checkbox column — select-all targets only activatable rows in current view */}
+                <th style={{ width: "2.5rem" }}>
+                  {activatableFiltered.length > 0 && (
+                    <input
+                      type="checkbox"
+                      checked={allActivatableSelected}
+                      onChange={toggleSelectAll}
+                      title="Select all pending / disabled"
+                    />
+                  )}
+                </th>
                 <th>Driver</th>
                 <th>Contact</th>
                 <th>Vehicle</th>
@@ -186,66 +285,78 @@ export function DeliveryBoysPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(a => (
-                <tr key={a.account_id} className={a.cod_blocked ? "dl-row-blocked" : ""}>
-                  <td>
-                    <Link to={`/dashboard/delivery/boys/${a.account_id}`} className="dl-admin-link">
-                      <div className="dl-driver-name">{a.full_name}</div>
-                      <div className="dl-driver-sub">{a.license_number || "No license on file"}</div>
-                    </Link>
-                  </td>
-                  <td>
-                    <div>{a.phone_number}</div>
-                    {a.email && <div className="dl-driver-sub">{a.email}</div>}
-                  </td>
-                  <td>
-                    <div>{a.vehicle_type}</div>
-                    {a.vehicle_number && <div className="dl-driver-sub">{a.vehicle_number}</div>}
-                  </td>
-                  <td><StatusBadge status={a.account_status} /></td>
-                  <td>
-                    <span className={`dl-online-dot ${a.is_online ? "dl-online" : "dl-offline-dot"}`} />
-                    {a.is_online ? "Online" : "Offline"}
-                  </td>
-                  <td><CodBadge balance={a.cod_balance} blocked={a.cod_blocked} /></td>
-                  <td className="dl-driver-sub">{a.created_at ? new Date(a.created_at).toLocaleDateString() : "—"}</td>
-                  <td>
-                    <div className="dl-admin-row-actions">
-                      <Link to={`/dashboard/delivery/boys/${a.account_id}`} className="dl-admin-btn dl-admin-btn-sm">
-                        View
+              {filtered.map(a => {
+                const canSelect = a.account_status === "pending" || a.account_status === "disabled";
+                return (
+                  <tr key={a.account_id} className={a.cod_blocked ? "dl-row-blocked" : ""}>
+                    <td>
+                      {canSelect && (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(a.account_id)}
+                          onChange={() => toggleSelectOne(a.account_id)}
+                        />
+                      )}
+                    </td>
+                    <td>
+                      <Link to={`/dashboard/delivery/boys/${a.account_id}`} className="dl-admin-link">
+                        <div className="dl-driver-name">{a.full_name}</div>
+                        <div className="dl-driver-sub">{a.license_number || "No license on file"}</div>
                       </Link>
-                      {a.account_status !== "pending" && (
-                        <button
-                          className={`dl-admin-btn dl-admin-btn-sm ${a.account_status === "active" ? "dl-admin-btn-danger" : "dl-admin-btn-success"}`}
-                          onClick={() => toggleStatus(a)}
-                          disabled={actionLoading === a.account_id}
-                        >
-                          {actionLoading === a.account_id ? <RefreshCw size={13} className="dl-spin" /> :
-                            a.account_status === "active" ? <><UserX size={13} /> Disable</> : <><UserCheck size={13} /> Activate</>}
-                        </button>
-                      )}
-                      {a.account_status === "pending" && (
-                        <button
-                          className="dl-admin-btn dl-admin-btn-sm dl-admin-btn-success"
-                          onClick={async () => {
-                            setActionLoading(a.account_id);
-                            try {
-                              const updated = await setDeliveryAccountStatus(a.account_id, "active");
-                              setAccounts(prev => prev.map(x => x.account_id === updated.account_id ? updated : x));
-                            } catch (e) { setError(e.message); }
-                            finally { setActionLoading(null); }
-                          }}
-                          disabled={actionLoading === a.account_id}
-                        >
-                          <UserCheck size={13} /> Activate
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td>
+                      <div>{a.phone_number}</div>
+                      {a.email && <div className="dl-driver-sub">{a.email}</div>}
+                    </td>
+                    <td>
+                      <div>{a.vehicle_type}</div>
+                      {a.vehicle_number && <div className="dl-driver-sub">{a.vehicle_number}</div>}
+                    </td>
+                    <td><StatusBadge status={a.account_status} /></td>
+                    <td>
+                      <span className={`dl-online-dot ${a.is_online ? "dl-online" : "dl-offline-dot"}`} />
+                      {a.is_online ? "Online" : "Offline"}
+                    </td>
+                    <td><CodBadge balance={a.cod_balance} blocked={a.cod_blocked} /></td>
+                    <td className="dl-driver-sub">{a.created_at ? new Date(a.created_at).toLocaleDateString() : "—"}</td>
+                    <td>
+                      <div className="dl-admin-row-actions">
+                        <Link to={`/dashboard/delivery/boys/${a.account_id}`} className="dl-admin-btn dl-admin-btn-sm">
+                          View
+                        </Link>
+                        {a.account_status !== "pending" && (
+                          <button
+                            className={`dl-admin-btn dl-admin-btn-sm ${a.account_status === "active" ? "dl-admin-btn-danger" : "dl-admin-btn-success"}`}
+                            onClick={() => toggleStatus(a)}
+                            disabled={actionLoading === a.account_id}
+                          >
+                            {actionLoading === a.account_id ? <RefreshCw size={13} className="dl-spin" /> :
+                              a.account_status === "active" ? <><UserX size={13} /> Disable</> : <><UserCheck size={13} /> Activate</>}
+                          </button>
+                        )}
+                        {a.account_status === "pending" && (
+                          <button
+                            className="dl-admin-btn dl-admin-btn-sm dl-admin-btn-success"
+                            onClick={async () => {
+                              setActionLoading(a.account_id);
+                              try {
+                                const updated = await setDeliveryAccountStatus(a.account_id, "active");
+                                setAccounts(prev => prev.map(x => x.account_id === updated.account_id ? updated : x));
+                              } catch (e) { setError(e.message); }
+                              finally { setActionLoading(null); }
+                            }}
+                            disabled={actionLoading === a.account_id}
+                          >
+                            <UserCheck size={13} /> Activate
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="dl-admin-empty">No delivery boys match the current filters.</td></tr>
+                <tr><td colSpan={9} className="dl-admin-empty">No delivery boys match the current filters.</td></tr>
               )}
             </tbody>
           </table>

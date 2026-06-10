@@ -7,6 +7,11 @@ import { validatePhone, validateOtp, inputClass, touch } from "../lib/validation
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const [sessionExpired] = useState(() => {
+    const flag = window.sessionStorage.getItem("thean:session_expired");
+    if (flag) window.sessionStorage.removeItem("thean:session_expired");
+    return flag === "1";
+  });
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState("");
   const [phase, setPhase] = useState("request");
@@ -25,7 +30,10 @@ export function LoginPage() {
     setError(""); setMessage(""); setIsSubmitting(true);
     try {
       const response = await requestOtp(phoneNumber);
-      const suffix = response.development_otp ? ` Development OTP: ${response.development_otp}` : "";
+      // Dev OTP hint only shown in local development builds — never in production
+      const suffix = (import.meta.env.DEV && response.development_otp)
+        ? ` Development OTP: ${response.development_otp}`
+        : "";
       setMessage(`${response.message}${suffix}`);
       setPhase("verify");
       setTouched({});
@@ -60,6 +68,11 @@ export function LoginPage() {
       </section>
 
       <form className="panel form-grid" onSubmit={phase === "request" ? requestLoginOtp : verifyLoginOtp}>
+        {sessionExpired && (
+          <div className="session-expired-banner" role="alert">
+            Your session has expired. Please login again.
+          </div>
+        )}
         <div className="brand-row">
           <span className="brand-mark"><ShieldCheck size={22} aria-hidden="true" /></span>
           <strong>Thean Super Admin</strong>
@@ -73,6 +86,7 @@ export function LoginPage() {
             onBlur={touch(setTouched, "phone")}
             className={inputClass(touched.phone, phoneErr)}
             inputMode="tel"
+            placeholder="e.g. 9876543210"
             disabled={phase === "verify"}
             required
           />
@@ -109,7 +123,9 @@ export function LoginPage() {
               setIsSubmitting(true);
               try {
                 const r = await requestOtp(phoneNumber);
-                const s = r.development_otp ? ` Development OTP: ${r.development_otp}` : "";
+                const s = (import.meta.env.DEV && r.development_otp)
+                  ? ` Development OTP: ${r.development_otp}`
+                  : "";
                 setMessage(`OTP resent.${s}`);
               } catch (e) { setError(e.message); } finally { setIsSubmitting(false); }
             }}
@@ -122,6 +138,22 @@ export function LoginPage() {
           <KeyRound size={18} aria-hidden="true" />
           {isSubmitting ? "Working" : phase === "request" ? "Send OTP" : "Verify OTP"}
         </button>
+
+        {phase === "verify" && (
+          <button
+            className="text-button"
+            type="button"
+            onClick={() => {
+              setPhase("request");
+              setOtp("");
+              setMessage("");
+              setError("");
+              setTouched({});
+            }}
+          >
+            Change phone number
+          </button>
+        )}
       </form>
     </main>
   );

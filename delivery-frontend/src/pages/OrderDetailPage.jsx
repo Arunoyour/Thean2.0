@@ -8,6 +8,7 @@ import {
   Navigation,
   Package,
   Phone,
+  RefreshCw,
   Truck,
 } from "lucide-react";
 import { advanceDeliveryStatus, getDeliveryOrders } from "../lib/api.js";
@@ -29,7 +30,6 @@ const STEPS = [
   { key: "DELIVERED", label: "Delivered" },
 ];
 
-const PIN_STEP = { ORDER_PICKED_UP: "pickup", ARRIVED_AT_CUSTOMER: "delivery" };
 const NEXT_TRANSITIONS = {
   DELIVERY_ACCEPTED: { next: "ARRIVED_AT_STORE", label: "Mark Arrived at Pharmacy", pin: false },
   ARRIVED_AT_STORE: { next: "ORDER_PICKED_UP", label: "Enter Pickup PIN to Confirm", pin: true, pinLabel: "Pickup PIN" },
@@ -49,14 +49,26 @@ export function OrderDetailPage() {
 
   useEffect(() => {
     loadOrder();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deliveryOrderId]);
 
   async function loadOrder() {
+    setIsLoading(true);
+    setError("");
     try {
       const orders = await getDeliveryOrders();
       const found = orders.find((o) => o.delivery_order_id === deliveryOrderId);
-      if (found) setOrder(found);
-    } catch (e) { setError(e.message); } finally { setIsLoading(false); }
+      if (found) {
+        setOrder(found);
+      } else {
+        // Order exists but isn't in the list (e.g. wrong ID)
+        setOrder(null);
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   async function handleAdvance() {
@@ -75,8 +87,31 @@ export function OrderDetailPage() {
 
   const currentStepIndex = STEPS.findIndex((s) => s.key === order?.status);
 
-  if (isLoading) return <div className="dl-page dl-loading"><p>Loading…</p></div>;
-  if (!order) return <div className="dl-page dl-loading"><p>Order not found.</p></div>;
+  if (isLoading) {
+    return (
+      <div className="dl-page dl-loading">
+        <RefreshCw size={28} className="dl-spin" />
+        <p>Loading…</p>
+      </div>
+    );
+  }
+
+  // Order not found — allow retry and back navigation
+  if (!order) {
+    return (
+      <div className="dl-page dl-loading" style={{ gap: "1rem" }}>
+        {error
+          ? <div className="dl-error">{error}</div>
+          : <p>Order not found.</p>}
+        <button type="button" className="dl-btn" onClick={loadOrder}>
+          <RefreshCw size={16} /> Retry
+        </button>
+        <button type="button" className="dl-text-btn" onClick={() => navigate(-1)}>
+          ← Go back
+        </button>
+      </div>
+    );
+  }
 
   const transition = NEXT_TRANSITIONS[order.status];
 
@@ -125,7 +160,7 @@ export function OrderDetailPage() {
         <div><Truck size={16} /> {order.vehicle_type || ""}</div>
       </div>
 
-      {/* Pickup PIN (shown after ARRIVED_AT_STORE) */}
+      {/* Pickup PIN (shown while at pharmacy or after picking up — needed until delivery) */}
       {(order.status === "ARRIVED_AT_STORE" || order.status === "ORDER_PICKED_UP") && order.pickup_pin ? (
         <div className="dl-pin-display dl-pickup-pin">
           <Package size={16} />

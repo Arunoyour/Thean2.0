@@ -8,6 +8,19 @@ export function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const isAuthenticated = Boolean(window.localStorage.getItem("thean_access_token"));
+
+  // Network status — shows a fixed bottom bar when the device goes offline
+  const [offline, setOffline] = useState(!navigator.onLine);
+  useEffect(() => {
+    const goOff = () => setOffline(true);
+    const goOn  = () => setOffline(false);
+    window.addEventListener("offline", goOff);
+    window.addEventListener("online",  goOn);
+    return () => {
+      window.removeEventListener("offline", goOff);
+      window.removeEventListener("online",  goOn);
+    };
+  }, []);
   const [cancelledOrder, setCancelledOrder] = useState(null);
   const [popupError, setPopupError] = useState("");
   const [priceEstimateNotice, setPriceEstimateNotice] = useState(null);
@@ -102,6 +115,12 @@ export function AppShell() {
       <main>
         <Outlet />
       </main>
+
+      {offline && (
+        <div className="offline-banner" role="alert" aria-live="polite">
+          ⚠ You're offline — some features may not work until your connection is restored.
+        </div>
+      )}
 
       {cancelledOrder ? (
         <div className="customer-takeover">

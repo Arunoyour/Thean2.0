@@ -67,6 +67,8 @@ export function HomePage() {
     }
   }
 
+  const profileUpdatedAt = pharmacy.profile.updated_at || pharmacy.updated_at;
+
   return (
     <PharmacyPageShell>
       <header className="portal-header">
@@ -98,12 +100,18 @@ export function HomePage() {
               ? "Your pharmacy can receive new medicine orders from nearby customers."
               : "Your pharmacy is hidden from recommendations and cannot receive new customer orders."}
           </p>
+          {!isActive && !isUpdatingAvailability && (
+            <p className="field-help" style={{ color: "#b45309", marginTop: "0.35rem" }}>
+              Availability cannot be changed until super admin approval is granted.
+            </p>
+          )}
           {availabilityError ? <div className="error">{availabilityError}</div> : null}
         </div>
         <button
           className={isOnline ? "danger-button" : "button"}
           disabled={!isActive || isUpdatingAvailability}
           type="button"
+          title={!isActive ? "Requires super admin approval before you can go online" : undefined}
           onClick={toggleAvailability}
         >
           <Power size={18} aria-hidden="true" />
@@ -120,6 +128,11 @@ export function HomePage() {
             <li>Listing status: {pharmacy.profile.is_listed ? "Listed" : "Not listed"}</li>
             <li>Order availability: {pharmacy.profile.is_online ? "Online" : "Offline"}</li>
           </ul>
+          {profileUpdatedAt && (
+            <p style={{ fontSize: "0.8em", color: "#9ca3af", marginTop: "0.5rem" }}>
+              Profile last updated: {new Date(profileUpdatedAt).toLocaleString()}
+            </p>
+          )}
         </article>
         <article className="panel">
           <h2>Next controls</h2>

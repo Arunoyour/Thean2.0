@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bike, Building2, LogOut, Percent, Pill, RefreshCw, Users } from "lucide-react";
 
@@ -11,10 +11,12 @@ export function DashboardPage() {
   const [customers, setCustomers] = useState([]);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  async function loadData() {
+  async function loadData({ silent = false } = {}) {
     setError("");
-    setIsLoading(true);
+    if (silent) setIsRefreshing(true);
+    else setIsLoading(true);
 
     try {
       const [adminProfile, pharmacyList, customerList] = await Promise.all([
@@ -29,6 +31,7 @@ export function DashboardPage() {
       setError(requestError.message);
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   }
 
@@ -41,13 +44,25 @@ export function DashboardPage() {
     navigate("/login");
   }
 
+  // Memoised so it doesn't recompute on every render unrelated to customers
+  const totalPharmacyOrders = useMemo(
+    () => customers.reduce((sum, customer) => sum + customer.pharmacy_order_count, 0),
+    [customers],
+  );
+
   if (isLoading) {
     return (
-      <main className="page">
-        <section className="panel loading-panel">
-          <RefreshCw size={20} aria-hidden="true" />
-          Loading sectors
-        </section>
+      <main className="page" aria-busy="true" aria-label="Loading dashboard">
+        <div className="dashboard-skeleton-header">
+          <span className="skeleton skeleton-text-sm" style={{ width: "80px", display: "inline-block" }} />
+          <span className="skeleton skeleton-text-lg" style={{ width: "220px", marginTop: "0.4rem" }} />
+          <span className="skeleton skeleton-text" style={{ width: "340px", marginTop: "0.4rem" }} />
+        </div>
+        <div className="dashboard-skeleton-grid">
+          {[1, 2, 3, 4].map((i) => (
+            <span key={i} className="skeleton skeleton-card" />
+          ))}
+        </div>
       </main>
     );
   }
@@ -57,7 +72,10 @@ export function DashboardPage() {
       <main className="page">
         <section className="panel">
           <div className="error">{error}</div>
-          <button className="button" type="button" onClick={() => navigate("/login")}>
+          <button className="button" type="button" onClick={() => loadData()}>
+            Retry
+          </button>
+          <button className="outline-button" type="button" onClick={() => navigate("/login")}>
             Login again
           </button>
         </section>
@@ -81,9 +99,14 @@ export function DashboardPage() {
           <p>Choose a sector to manage approvals, listings, and operational controls.</p>
         </div>
         <div className="header-actions">
-          <button className="outline-button" type="button" onClick={loadData}>
-            <RefreshCw size={18} aria-hidden="true" />
-            Refresh
+          <button
+            className="outline-button"
+            type="button"
+            onClick={() => loadData({ silent: true })}
+            disabled={isRefreshing}
+          >
+            <RefreshCw size={18} aria-hidden="true" className={isRefreshing ? "spin" : undefined} />
+            {isRefreshing ? "Refreshing…" : "Refresh"}
           </button>
           <button className="outline-button" type="button" onClick={logout}>
             <LogOut size={18} aria-hidden="true" />
@@ -110,7 +133,7 @@ export function DashboardPage() {
               <p>Total</p>
             </div>
             <div>
-              <span>{customers.reduce((sum, customer) => sum + customer.pharmacy_order_count, 0)}</span>
+              <span>{totalPharmacyOrders}</span>
               <p>Pharmacy orders</p>
             </div>
           </div>

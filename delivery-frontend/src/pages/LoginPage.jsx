@@ -6,11 +6,17 @@ import { validatePhone, validateOtp, inputClass, touch } from "../lib/validation
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const [sessionExpired] = useState(() => {
+    const flag = window.sessionStorage.getItem("thean:session_expired");
+    if (flag) window.sessionStorage.removeItem("thean:session_expired");
+    return flag === "1";
+  });
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState(1); // 1=phone, 2=otp
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  // Only surfaced in development builds — never shown in production
   const [otpHint, setOtpHint] = useState("");
   const [touched, setTouched] = useState({});
 
@@ -21,10 +27,11 @@ export function LoginPage() {
     e.preventDefault();
     setTouched((t) => ({ ...t, phone: true }));
     if (validatePhone(phone)) return;
-    setError(""); setIsLoading(true);
+    setError(""); setOtpHint(""); setIsLoading(true);
     try {
       const resp = await requestDeliveryOtp(phone);
-      if (resp.otp) setOtpHint(`Dev OTP: ${resp.otp}`);
+      // Dev OTP hint is only shown in local development builds
+      if (import.meta.env.DEV && resp.otp) setOtpHint(`Dev OTP: ${resp.otp}`);
       setStep(2);
       setTouched({});
     } catch (err) { setError(err.message); } finally { setIsLoading(false); }
@@ -49,7 +56,13 @@ export function LoginPage() {
           <h1>Thean Delivery</h1>
         </div>
 
+        {sessionExpired && (
+          <div className="session-expired-banner" role="alert">
+            Your session has expired. Please login again.
+          </div>
+        )}
         {error ? <div className="dl-error">{error}</div> : null}
+        {/* otpHint is only populated in import.meta.env.DEV builds */}
         {otpHint ? <div className="dl-otp-hint">{otpHint}</div> : null}
 
         {step === 1 ? (
@@ -76,7 +89,7 @@ export function LoginPage() {
         ) : (
           <form onSubmit={verifyOtp} className="dl-form">
             <h2>Enter OTP</h2>
-            <p className="dl-hint">Sent to <strong>{phone}</strong>. <button type="button" className="dl-text-btn" onClick={() => { setStep(1); setTouched({}); }}>Change</button></p>
+            <p className="dl-hint">Sent to <strong>{phone}</strong>. <button type="button" className="dl-text-btn" onClick={() => { setStep(1); setTouched({}); setOtpHint(""); }}>Change</button></p>
             <label>
               6-digit OTP
               <input
@@ -103,7 +116,7 @@ export function LoginPage() {
                   setIsLoading(true);
                   try {
                     const r = await requestDeliveryOtp(phone);
-                    if (r.otp) setOtpHint(`Dev OTP: ${r.otp}`);
+                    if (import.meta.env.DEV && r.otp) setOtpHint(`Dev OTP: ${r.otp}`);
                   } catch (err) { setError(err.message); } finally { setIsLoading(false); }
                 }}
               >

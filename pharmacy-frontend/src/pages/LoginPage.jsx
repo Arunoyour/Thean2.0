@@ -7,6 +7,12 @@ import { validatePhone, validateOtp, inputClass, touch } from "../lib/validation
 
 export function LoginPage() {
   const navigate = useNavigate();
+  // Show a banner if the user was redirected here because their session expired
+  const [sessionExpired] = useState(() => {
+    const flag = window.sessionStorage.getItem("thean:session_expired");
+    if (flag) window.sessionStorage.removeItem("thean:session_expired");
+    return flag === "1";
+  });
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState("");
   const [phase, setPhase] = useState("request");
@@ -26,9 +32,11 @@ export function LoginPage() {
     try {
       const response = await requestPharmacyOtp(phoneNumber);
       const suffix = response.development_otp ? ` Development OTP: ${response.development_otp}` : "";
+      // Clear state before entering verify phase so nothing stale persists
+      setOtp("");
+      setTouched({});
       setMessage(`${response.message}${suffix}`);
       setPhase("verify");
-      setTouched({});
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -60,6 +68,11 @@ export function LoginPage() {
       </section>
 
       <form className="panel form-grid" onSubmit={phase === "request" ? requestOtp : verifyOtp}>
+        {sessionExpired && (
+          <div className="session-expired-banner" role="alert">
+            Your session has expired. Please login again.
+          </div>
+        )}
         <label>
           Phone number
           <input
@@ -68,6 +81,7 @@ export function LoginPage() {
             onBlur={touch(setTouched, "phone")}
             className={inputClass(touched.phone, phoneErr)}
             inputMode="tel"
+            placeholder="e.g. 9876543210"
             disabled={phase === "verify"}
             required
           />
@@ -117,6 +131,22 @@ export function LoginPage() {
           {phase === "request" ? <Send size={18} /> : <KeyRound size={18} />}
           {isSubmitting ? "Working" : phase === "request" ? "Send OTP" : "Verify OTP"}
         </button>
+
+        {phase === "verify" && (
+          <button
+            className="text-button"
+            type="button"
+            onClick={() => {
+              setPhase("request");
+              setOtp("");
+              setMessage("");
+              setError("");
+              setTouched({});
+            }}
+          >
+            Change phone number
+          </button>
+        )}
 
         <p className="footnote">
           New pharmacy? <Link to="/register">Register now</Link>
