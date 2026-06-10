@@ -77,12 +77,12 @@ async def super_admin_notifications(websocket: WebSocket):
         await websocket.close(code=1008)
         return
 
-    await manager.connect_super_admin(websocket)
+    await manager.connect_super_admin(admin.admin_id, websocket)
     try:
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect_super_admin(websocket)
+        manager.disconnect_super_admin(admin.admin_id, websocket)
 
 
 @router.websocket("/customer")

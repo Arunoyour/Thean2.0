@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bike, Building2, LogOut, Percent, Pill, RefreshCw, Users } from "lucide-react";
+import { Bike, Building2, ClipboardList, LogOut, Percent, Pill, RefreshCw, ScrollText, ShieldCheck, Users } from "lucide-react";
 
 import { getCurrentAdmin, listCustomers, listPharmacies, logoutAdmin } from "../lib/api.js";
+import { canManageAdmins, canSeeAuditLog, canApprove } from "../lib/role.js";
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -216,6 +217,63 @@ export function DashboardPage() {
             </button>
           </div>
         </article>
+
+        {/* Approval queue — all roles that can approve/view */}
+        {canApprove() && (
+          <article className="sector-card">
+            <header className="sector-card-header">
+              <ClipboardList size={26} aria-hidden="true" />
+              <div>
+                <h2>Approvals</h2>
+                <p className="eyebrow">Maker-Checker queue</p>
+              </div>
+            </header>
+            <div className="sector-card-actions">
+              <button className="button" type="button" onClick={() => navigate("/dashboard/approvals")}>
+                <ClipboardList size={18} aria-hidden="true" />
+                Open Approval Queue
+              </button>
+            </div>
+          </article>
+        )}
+
+        {/* Audit log — SUPER + SUPERVISOR only */}
+        {canSeeAuditLog() && (
+          <article className="sector-card">
+            <header className="sector-card-header">
+              <ScrollText size={26} aria-hidden="true" />
+              <div>
+                <h2>Audit Log</h2>
+                <p className="eyebrow">All admin activity</p>
+              </div>
+            </header>
+            <div className="sector-card-actions">
+              <button className="button" type="button" onClick={() => navigate("/dashboard/audit-log")}>
+                <ScrollText size={18} aria-hidden="true" />
+                View Audit Log
+              </button>
+            </div>
+          </article>
+        )}
+
+        {/* Admin management — SUPER only */}
+        {canManageAdmins() && (
+          <article className="sector-card">
+            <header className="sector-card-header">
+              <ShieldCheck size={26} aria-hidden="true" />
+              <div>
+                <h2>Admin Management</h2>
+                <p className="eyebrow">User accounts & roles</p>
+              </div>
+            </header>
+            <div className="sector-card-actions">
+              <button className="button" type="button" onClick={() => navigate("/dashboard/admins")}>
+                <ShieldCheck size={18} aria-hidden="true" />
+                Manage Admins
+              </button>
+            </div>
+          </article>
+        )}
       </section>
     </main>
   );

@@ -10,7 +10,10 @@ from app.models.base import Base
 
 class SuperAdmin(Base):
     __tablename__ = "super_admins"
-    __table_args__ = (Index("idx_super_admins_phone_active", "phone_number", "is_active"),)
+    __table_args__ = (
+        Index("idx_super_admins_phone_active", "phone_number", "is_active"),
+        Index("idx_super_admins_role", "role"),
+    )
 
     admin_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -20,6 +23,15 @@ class SuperAdmin(Base):
     full_name: Mapped[str] = mapped_column(String(120), nullable=False)
     email: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
     phone_number: Mapped[str] = mapped_column(String(15), unique=True, nullable=False)
+
+    # Role controls portal access.
+    # SUPER       — full access including admin management (one account only: +919539536943)
+    # SUPERVISOR  — full access except admin management
+    # CHECKER     — approves / rejects / corrects system-generated requests
+    # AUDITOR     — read-only + CSV/Excel export; no write access
+    # TEAM_LEAD   — delivery operations view only
+    role: Mapped[str] = mapped_column(String(20), nullable=False, server_default="CHECKER")
+
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -52,4 +64,3 @@ class SuperAdminOtpChallenge(Base):
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-

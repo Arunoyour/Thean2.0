@@ -38,6 +38,8 @@ class DeliveryAccount(Base):
     # Fraud-prevention unique fields
     license_number: Mapped[str | None] = mapped_column(String(50))
     id_number: Mapped[str | None] = mapped_column(String(50))
+    # Role — DELIVERY_BOY (field agent) | TEAM_LEAD (supervisor, logs in via super-admin portal)
+    role: Mapped[str] = mapped_column(String(20), nullable=False, server_default="DELIVERY_BOY")
     # Status
     account_status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="pending")
     is_online: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")

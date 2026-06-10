@@ -12,16 +12,19 @@ class RealtimeConnectionManager:
     def __init__(self) -> None:
         self._pharmacy: dict[str, set[WebSocket]] = defaultdict(set)
         self._customer: dict[str, set[WebSocket]] = defaultdict(set)
+        # Super-admin: tracked both by admin_id (targeted) and as a flat set (broadcast)
         self._super_admin: set[WebSocket] = set()
+        self._super_admin_by_id: dict[str, set[WebSocket]] = defaultdict(set)
         self._delivery: dict[str, set[WebSocket]] = defaultdict(set)
 
     async def connect_pharmacy(self, account_id: UUID, websocket: WebSocket) -> None:
         await websocket.accept()
         self._pharmacy[str(account_id)].add(websocket)
 
-    async def connect_super_admin(self, websocket: WebSocket) -> None:
+    async def connect_super_admin(self, admin_id: UUID, websocket: WebSocket) -> None:
         await websocket.accept()
         self._super_admin.add(websocket)
+        self._super_admin_by_id[str(admin_id)].add(websocket)
 
     async def connect_customer(self, user_id: UUID, websocket: WebSocket) -> None:
         await websocket.accept()
@@ -30,8 +33,9 @@ class RealtimeConnectionManager:
     def disconnect_pharmacy(self, account_id: UUID, websocket: WebSocket) -> None:
         self._pharmacy[str(account_id)].discard(websocket)
 
-    def disconnect_super_admin(self, websocket: WebSocket) -> None:
+    def disconnect_super_admin(self, admin_id: UUID, websocket: WebSocket) -> None:
         self._super_admin.discard(websocket)
+        self._super_admin_by_id[str(admin_id)].discard(websocket)
 
     def disconnect_customer(self, user_id: UUID, websocket: WebSocket) -> None:
         self._customer[str(user_id)].discard(websocket)
@@ -44,11 +48,20 @@ class RealtimeConnectionManager:
                 self.disconnect_pharmacy(account_id, websocket)
 
     async def send_super_admin(self, payload: dict[str, Any]) -> None:
+        """Broadcast to ALL connected super-admin sessions."""
         for websocket in list(self._super_admin):
             try:
                 await websocket.send_json(payload)
             except RuntimeError:
-                self.disconnect_super_admin(websocket)
+                self._super_admin.discard(websocket)
+
+    async def send_super_admin_targeted(self, admin_id: UUID, payload: dict[str, Any]) -> None:
+        """Send to a specific admin's connected sessions only."""
+        for websocket in list(self._super_admin_by_id[str(admin_id)]):
+            try:
+                await websocket.send_json(payload)
+            except RuntimeError:
+                self._super_admin_by_id[str(admin_id)].discard(websocket)
 
     async def send_customer(self, user_id: UUID, payload: dict[str, Any]) -> None:
         for websocket in list(self._customer[str(user_id)]):

@@ -74,6 +74,10 @@ export async function verifyOtp(phoneNumber, otp) {
     body: JSON.stringify({ phone_number: phoneNumber, otp }),
   });
   window.localStorage.setItem(TOKEN_KEY, response.access_token);
+  // Persist role so all pages can read it without an extra /me call
+  if (response.admin?.role) {
+    window.localStorage.setItem("thean_super_admin_role", response.admin.role);
+  }
   return response;
 }
 
@@ -395,4 +399,112 @@ export function triggerAutoAssign(payload) {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+// ── Admin management (SUPER only) ─────────────────────────────────────────────
+
+export function listAdmins() {
+  const token = getToken();
+  return request("/super-admin/admins", { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function createAdmin(payload) {
+  const token = getToken();
+  return request("/super-admin/admins", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function changeAdminRole(adminId, role) {
+  const token = getToken();
+  return request(`/super-admin/admins/${adminId}/role`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ role }),
+  });
+}
+
+export function deactivateAdmin(adminId, reason) {
+  const token = getToken();
+  return request(`/super-admin/admins/${adminId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ reason }),
+  });
+}
+
+// ── Approvals ──────────────────────────────────────────────────────────────────
+
+export function listApprovals({ status, request_type, limit = 50, offset = 0 } = {}) {
+  const token = getToken();
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  if (request_type) params.set("request_type", request_type);
+  params.set("limit", limit);
+  params.set("offset", offset);
+  return request(`/approvals?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function getApproval(requestId) {
+  const token = getToken();
+  return request(`/approvals/${requestId}`, { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function reviewApprovalLine(requestId, lineId, decision, rejectionReason) {
+  const token = getToken();
+  return request(`/approvals/${requestId}/lines/${lineId}/review`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ decision, rejection_reason: rejectionReason || null }),
+  });
+}
+
+export function correctApproval(requestId, correctedPayload, correctionComment) {
+  const token = getToken();
+  return request(`/approvals/${requestId}/correct`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ corrected_payload: correctedPayload, correction_comment: correctionComment }),
+  });
+}
+
+export function cancelApproval(requestId, reason) {
+  const token = getToken();
+  return request(`/approvals/${requestId}/cancel`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export function getMyNotifications({ unreadOnly = false, limit = 30 } = {}) {
+  const token = getToken();
+  const params = new URLSearchParams({ limit });
+  if (unreadOnly) params.set("unread_only", "true");
+  return request(`/approvals/notifications/me?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function markNotificationRead(notificationId) {
+  const token = getToken();
+  return request(`/approvals/notifications/${notificationId}/read`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// ── Audit log (SUPER + SUPERVISOR only) ────────────────────────────────────────
+
+export function getAuditLogs({ dateFrom, dateTo, role, actionType, success, limit = 100, offset = 0 } = {}) {
+  const token = getToken();
+  const params = new URLSearchParams();
+  if (dateFrom)    params.set("date_from", dateFrom);
+  if (dateTo)      params.set("date_to", dateTo);
+  if (role)        params.set("role", role);
+  if (actionType)  params.set("action_type", actionType);
+  if (success !== undefined && success !== "") params.set("success", success);
+  params.set("limit", limit);
+  params.set("offset", offset);
+  return request(`/super-admin/audit-logs?${params}`, { headers: { Authorization: `Bearer ${token}` } });
 }

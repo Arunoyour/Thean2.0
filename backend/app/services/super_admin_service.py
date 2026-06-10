@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, status
@@ -7,7 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.security import create_access_token, generate_otp, hash_secret, verify_secret
 from app.models.super_admin import SuperAdmin, SuperAdminOtpChallenge
-from app.schemas.super_admin import SuperAdminAuthResponse, SuperAdminOtpResponse, SuperAdminResponse
+from app.schemas.super_admin import (
+    CreateAdminRequest,
+    SuperAdminAuthResponse,
+    SuperAdminOtpResponse,
+    SuperAdminResponse,
+)
 from app.services.phone import normalize_phone_number
 
 OTP_TTL_SECONDS = 300
@@ -20,6 +26,8 @@ def serialize_super_admin(admin: SuperAdmin) -> SuperAdminResponse:
         full_name=admin.full_name,
         email=admin.email,
         phone_number=admin.phone_number,
+        role=admin.role,
+        is_active=admin.is_active,
     )
 
 
@@ -93,7 +101,90 @@ async def verify_super_admin_otp(
     await session.commit()
 
     return SuperAdminAuthResponse(
-        access_token=create_access_token(str(admin.admin_id)),
+        access_token=create_access_token(
+            str(admin.admin_id),
+            extra_claims={"role": admin.role},
+        ),
         admin=serialize_super_admin(admin),
     )
+
+
+# ── Admin management (SUPER only) ─────────────────────────────────────────────
+
+async def list_admins(session: AsyncSession) -> list[SuperAdmin]:
+    result = await session.execute(
+        select(SuperAdmin).order_by(SuperAdmin.created_at)
+    )
+    return list(result.scalars().all())
+
+
+async def create_admin(session: AsyncSession, payload: CreateAdminRequest) -> SuperAdmin:
+    normalized_phone = normalize_phone_number(payload.phone_number)
+
+    existing = await session.scalar(
+        select(SuperAdmin).where(SuperAdmin.phone_number == normalized_phone)
+    )
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Phone number already registered.")
+
+    existing_email = await session.scalar(
+        select(SuperAdmin).where(SuperAdmin.email == payload.email)
+    )
+    if existing_email:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered.")
+
+    admin = SuperAdmin(
+        full_name=payload.full_name,
+        email=payload.email,
+        phone_number=normalized_phone,
+        role=payload.role,
+        is_active=True,
+    )
+    session.add(admin)
+    await session.commit()
+    await session.refresh(admin)
+    return admin
+
+
+async def update_admin_role(
+    session: AsyncSession, target_admin_id: uuid.UUID, new_role: str
+) -> SuperAdmin:
+    admin = await session.scalar(
+        select(SuperAdmin).where(SuperAdmin.admin_id == target_admin_id)
+    )
+    if admin is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin not found.")
+    if admin.role == "SUPER":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot change the role of the SUPER account.",
+        )
+    admin.role = new_role
+    await session.commit()
+    await session.refresh(admin)
+    return admin
+
+
+async def deactivate_admin(
+    session: AsyncSession, target_admin_id: uuid.UUID, requesting_admin_id: uuid.UUID
+) -> SuperAdmin:
+    if target_admin_id == requesting_admin_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot deactivate your own account.",
+        )
+    admin = await session.scalar(
+        select(SuperAdmin).where(SuperAdmin.admin_id == target_admin_id)
+    )
+    if admin is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin not found.")
+    if admin.role == "SUPER":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot deactivate the SUPER account.",
+        )
+    admin.is_active = False
+    await session.commit()
+    await session.refresh(admin)
+    return admin
 

@@ -22,11 +22,18 @@ def verify_secret(value: str, hashed_value: str) -> bool:
     return bcrypt.checkpw(value.encode("utf-8"), hashed_value.encode("utf-8"))
 
 
-def create_access_token(subject: str) -> str:
+def create_access_token(subject: str, extra_claims: dict | None = None) -> str:
+    """Create a signed JWT.
+
+    Args:
+        subject:      The primary identity claim (user_id / admin_id as string).
+        extra_claims: Optional dict of additional claims to embed (e.g. {"role": "CHECKER"}).
+                      Standard claims (sub, iat, exp) always take precedence.
+    """
     settings = get_settings()
     now = datetime.now(UTC)
     expires_at = now + timedelta(minutes=settings.access_token_expire_minutes)
-    payload = {"sub": subject, "iat": int(now.timestamp()), "exp": int(expires_at.timestamp())}
+    payload: dict = {**(extra_claims or {}), "sub": subject, "iat": int(now.timestamp()), "exp": int(expires_at.timestamp())}
     return jwt.encode(payload, settings.app_secret_key, algorithm=ALGORITHM)
 
 

@@ -3,6 +3,9 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { ErrorBoundary } from "./components/ErrorBoundary.jsx";
+import { AdminManagementPage } from "./pages/AdminManagementPage.jsx";
+import { ApprovalsPage } from "./pages/ApprovalsPage.jsx";
+import { AuditLogPage } from "./pages/AuditLogPage.jsx";
 import { AutoAssignPage } from "./pages/AutoAssignPage.jsx";
 import { CustomerDashboardPage } from "./pages/CustomerDashboardPage.jsx";
 import { CustomerDetailPage } from "./pages/CustomerDetailPage.jsx";
@@ -19,7 +22,13 @@ import { PharmacyDashboardPage } from "./pages/PharmacyDashboardPage.jsx";
 import { ProductReviewPage } from "./pages/ProductReviewPage.jsx";
 import { PharmacyOrderManagementPage } from "./pages/PharmacyOrderManagementPage.jsx";
 import { SubstitutionAuditPage } from "./pages/SubstitutionAuditPage.jsx";
+import { canManageAdmins, canSeeAuditLog } from "./lib/role.js";
 import "./styles/global.css";
+
+/** Redirects to /dashboard when the required role check fails. */
+function RequireRole({ check, children }) {
+  return check() ? children : <Navigate to="/dashboard" replace />;
+}
 
 /** Redirects unauthenticated users to /login before they can reach a protected page. */
 function RequireAuth({ children }) {
@@ -72,6 +81,11 @@ function App() {
         <Route path="/dashboard/delivery/rate" element={<RequireAuth><DeliveryRateConfigPage /></RequireAuth>} />
         <Route path="/dashboard/delivery/auto-assign" element={<RequireAuth><AutoAssignPage /></RequireAuth>} />
         <Route path="/dashboard/fee-config" element={<RequireAuth><FeeConfigPage /></RequireAuth>} />
+
+        {/* Role-gated */}
+        <Route path="/dashboard/admins" element={<RequireAuth><RequireRole check={canManageAdmins}><AdminManagementPage /></RequireRole></RequireAuth>} />
+        <Route path="/dashboard/approvals" element={<RequireAuth><ApprovalsPage /></RequireAuth>} />
+        <Route path="/dashboard/audit-log" element={<RequireAuth><RequireRole check={canSeeAuditLog}><AuditLogPage /></RequireRole></RequireAuth>} />
       </Routes>
     </ErrorBoundary>
   );
