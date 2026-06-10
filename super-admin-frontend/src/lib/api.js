@@ -494,6 +494,109 @@ export function markNotificationRead(notificationId) {
   });
 }
 
+// ── Settlement ─────────────────────────────────────────────────────────────────
+
+export function listSettlementCycles({ status, limit = 30, offset = 0 } = {}) {
+  const token = getToken();
+  const params = new URLSearchParams({ limit, offset });
+  if (status) params.set("status", status);
+  return request(`/settlement/cycles?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function createSettlementCycle({ cycle_date, cycle_type = "DAILY", notes }) {
+  const token = getToken();
+  const params = new URLSearchParams({ cycle_date, cycle_type });
+  if (notes) params.set("notes", notes);
+  return request(`/settlement/cycles?${params}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function getSettlementCycle(cycleId) {
+  const token = getToken();
+  return request(`/settlement/cycles/${cycleId}`, { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function listSettlementBatches({ cycleId, stakeholderType, status, limit = 50, offset = 0 } = {}) {
+  const token = getToken();
+  const params = new URLSearchParams({ limit, offset });
+  if (cycleId)         params.set("cycle_id", cycleId);
+  if (stakeholderType) params.set("stakeholder_type", stakeholderType);
+  if (status)          params.set("status", status);
+  return request(`/settlement/batches?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function getSettlementBatch(batchId) {
+  const token = getToken();
+  return request(`/settlement/batches/${batchId}`, { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function submitSettlementBatch(batchId) {
+  const token = getToken();
+  return request(`/settlement/batches/${batchId}/submit`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function executeSettlementBatch(batchId) {
+  const token = getToken();
+  return request(`/settlement/batches/${batchId}/execute`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function getStakeholderLedger(stakeholderType, stakeholderId, { dateFrom, dateTo, limit = 100, offset = 0 } = {}) {
+  const token = getToken();
+  const params = new URLSearchParams({ limit, offset });
+  if (dateFrom) params.set("date_from", dateFrom);
+  if (dateTo)   params.set("date_to", dateTo);
+  return request(`/settlement/ledger/${stakeholderType}/${stakeholderId}?${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function listPaymentProofs(batchId) {
+  const token = getToken();
+  return request(`/settlement/batches/${batchId}/proofs`, { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export async function uploadPaymentProof(batchId, { proof_type, amount, payment_method, notes, file }) {
+  const token = getToken();
+  const form  = new FormData();
+  form.append("proof_type",     proof_type);
+  form.append("amount",         amount);
+  form.append("payment_method", payment_method);
+  if (notes) form.append("notes", notes);
+  if (file)  form.append("file", file);
+
+  const controller = new AbortController();
+  const timerId    = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const response = await fetch(`${API_BASE_URL}/settlement/batches/${batchId}/proofs`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.detail || "Upload failed.");
+    return payload;
+  } finally {
+    clearTimeout(timerId);
+  }
+}
+
+export function verifyPaymentProof(proofId) {
+  const token = getToken();
+  return request(`/settlement/proofs/${proofId}/verify`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 // ── Audit log (SUPER + SUPERVISOR only) ────────────────────────────────────────
 
 export function getAuditLogs({ dateFrom, dateTo, role, actionType, success, limit = 100, offset = 0 } = {}) {

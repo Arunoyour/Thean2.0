@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bike, Building2, ClipboardList, LogOut, Percent, Pill, RefreshCw, ScrollText, ShieldCheck, Users } from "lucide-react";
+import { Bike, Building2, ClipboardList, CreditCard, LogOut, Percent, Pill, RefreshCw, ScrollText, ShieldCheck, Users } from "lucide-react";
 
 import { getCurrentAdmin, listCustomers, listPharmacies, logoutAdmin } from "../lib/api.js";
 import { canManageAdmins, canSeeAuditLog, canApprove } from "../lib/role.js";
@@ -214,6 +214,23 @@ export function DashboardPage() {
             </button>
             <button className="outline-button" type="button" onClick={() => navigate("/dashboard/delivery/cod")}>
               COD & Cash
+            </button>
+          </div>
+        </article>
+
+        {/* Settlement */}
+        <article className="sector-card">
+          <header className="sector-card-header">
+            <CreditCard size={26} aria-hidden="true" />
+            <div>
+              <h2>Settlement</h2>
+              <p className="eyebrow">Cycles, batches & ledger</p>
+            </div>
+          </header>
+          <div className="sector-card-actions">
+            <button className="button" type="button" onClick={() => navigate("/dashboard/settlement")}>
+              <CreditCard size={18} aria-hidden="true" />
+              Open Settlement
             </button>
           </div>
         </article>

@@ -6,6 +6,10 @@ import { ErrorBoundary } from "./components/ErrorBoundary.jsx";
 import { AdminManagementPage } from "./pages/AdminManagementPage.jsx";
 import { ApprovalsPage } from "./pages/ApprovalsPage.jsx";
 import { AuditLogPage } from "./pages/AuditLogPage.jsx";
+import { PaymentProofsPage } from "./pages/PaymentProofsPage.jsx";
+import { SettlementBatchDetailPage } from "./pages/SettlementBatchDetailPage.jsx";
+import { SettlementCycleDetailPage } from "./pages/SettlementCycleDetailPage.jsx";
+import { SettlementDashboardPage } from "./pages/SettlementDashboardPage.jsx";
 import { AutoAssignPage } from "./pages/AutoAssignPage.jsx";
 import { CustomerDashboardPage } from "./pages/CustomerDashboardPage.jsx";
 import { CustomerDetailPage } from "./pages/CustomerDetailPage.jsx";
@@ -81,6 +85,12 @@ function App() {
         <Route path="/dashboard/delivery/rate" element={<RequireAuth><DeliveryRateConfigPage /></RequireAuth>} />
         <Route path="/dashboard/delivery/auto-assign" element={<RequireAuth><AutoAssignPage /></RequireAuth>} />
         <Route path="/dashboard/fee-config" element={<RequireAuth><FeeConfigPage /></RequireAuth>} />
+
+        {/* Settlement */}
+        <Route path="/dashboard/settlement" element={<RequireAuth><SettlementDashboardPage /></RequireAuth>} />
+        <Route path="/dashboard/settlement/:cycleId" element={<RequireAuth><SettlementCycleDetailPage /></RequireAuth>} />
+        <Route path="/dashboard/settlement/:cycleId/batch/:batchId" element={<RequireAuth><SettlementBatchDetailPage /></RequireAuth>} />
+        <Route path="/dashboard/settlement/batch/:batchId/proofs" element={<RequireAuth><PaymentProofsPage /></RequireAuth>} />
 
         {/* Role-gated */}
         <Route path="/dashboard/admins" element={<RequireAuth><RequireRole check={canManageAdmins}><AdminManagementPage /></RequireRole></RequireAuth>} />
