@@ -2,7 +2,10 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, Request
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.approvals import AuditLog
 
 from app.api.dependencies import get_current_super_admin, require_role
 from app.db.session import get_pharmacy_session, get_session
@@ -433,3 +436,56 @@ async def update_sector_fee(
         request=request,
     )
     return result
+
+
+# ── Audit log (SUPER + SUPERVISOR only) ───────────────────────────────────────
+
+@router.get("/audit-logs")
+async def list_audit_logs(
+    date_from: datetime | None = Query(default=None),
+    date_to:   datetime | None = Query(default=None),
+    role:        str | None = Query(default=None),
+    action_type: str | None = Query(default=None),
+    success:     bool | None = Query(default=None),
+    limit:  int = Query(default=100, le=500),
+    offset: int = Query(default=0, ge=0),
+    _: SuperAdmin = Depends(require_role("SUPER", "SUPERVISOR")),
+    session: AsyncSession = Depends(get_session),
+):
+    """Return audit log entries. SUPER and SUPERVISOR only."""
+    query = select(AuditLog).order_by(AuditLog.created_at.desc())
+
+    if date_from:
+        query = query.where(AuditLog.created_at >= date_from)
+    if date_to:
+        query = query.where(AuditLog.created_at <= date_to)
+    if role:
+        query = query.where(AuditLog.actor_role == role)
+    if action_type:
+        query = query.where(AuditLog.action_type == action_type)
+    if success is not None:
+        query = query.where(AuditLog.success == success)
+
+    query = query.limit(limit).offset(offset)
+    result = await session.execute(query)
+    logs = result.scalars().all()
+
+    return [
+        {
+            "log_id":      str(l.log_id),
+            "actor_id":    str(l.actor_id) if l.actor_id else None,
+            "actor_name":  l.actor_name,
+            "actor_role":  l.actor_role,
+            "action_type": l.action_type,
+            "description": l.description,
+            "target_type": l.target_type,
+            "target_id":   str(l.target_id) if l.target_id else None,
+            "ip_address":  l.ip_address,
+            "success":     l.success,
+            "http_method": l.http_method,
+            "http_path":   l.http_path,
+            "http_status": l.http_status,
+            "created_at":  l.created_at.isoformat() if l.created_at else None,
+        }
+        for l in logs
+    ]
