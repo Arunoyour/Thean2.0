@@ -7,6 +7,8 @@ import { AdminManagementPage } from "./pages/AdminManagementPage.jsx";
 import { ApprovalsPage } from "./pages/ApprovalsPage.jsx";
 import { AuditLogPage } from "./pages/AuditLogPage.jsx";
 import { PaymentProofsPage } from "./pages/PaymentProofsPage.jsx";
+import { ReconciliationExceptionDetailPage } from "./pages/ReconciliationExceptionDetailPage.jsx";
+import { ReconciliationOverviewPage } from "./pages/ReconciliationOverviewPage.jsx";
 import { SettlementBatchDetailPage } from "./pages/SettlementBatchDetailPage.jsx";
 import { SettlementCycleDetailPage } from "./pages/SettlementCycleDetailPage.jsx";
 import { SettlementDashboardPage } from "./pages/SettlementDashboardPage.jsx";
@@ -91,6 +93,10 @@ function App() {
         <Route path="/dashboard/settlement/:cycleId" element={<RequireAuth><SettlementCycleDetailPage /></RequireAuth>} />
         <Route path="/dashboard/settlement/:cycleId/batch/:batchId" element={<RequireAuth><SettlementBatchDetailPage /></RequireAuth>} />
         <Route path="/dashboard/settlement/batch/:batchId/proofs" element={<RequireAuth><PaymentProofsPage /></RequireAuth>} />
+
+        {/* Reconciliation */}
+        <Route path="/dashboard/reconciliation" element={<RequireAuth><ReconciliationOverviewPage /></RequireAuth>} />
+        <Route path="/dashboard/reconciliation/exceptions/:exceptionId" element={<RequireAuth><ReconciliationExceptionDetailPage /></RequireAuth>} />
 
         {/* Role-gated */}
         <Route path="/dashboard/admins" element={<RequireAuth><RequireRole check={canManageAdmins}><AdminManagementPage /></RequireRole></RequireAuth>} />

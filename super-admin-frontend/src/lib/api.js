@@ -597,6 +597,70 @@ export function verifyPaymentProof(proofId) {
   });
 }
 
+// ── Reconciliation ─────────────────────────────────────────────────────────────
+
+export function getReconciliationOverview() {
+  const token = getToken();
+  return request("/reconciliation/overview", { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function listReconciliationExceptions({ status, severity, exception_type, limit = 50, offset = 0 } = {}) {
+  const token = getToken();
+  const params = new URLSearchParams({ limit, offset });
+  if (status)         params.set("status", status);
+  if (severity)       params.set("severity", severity);
+  if (exception_type) params.set("exception_type", exception_type);
+  return request(`/reconciliation/exceptions?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function getReconciliationException(exceptionId) {
+  const token = getToken();
+  return request(`/reconciliation/exceptions/${exceptionId}`, { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function assignReconciliationException(exceptionId, assigneeId) {
+  const token = getToken();
+  return request(`/reconciliation/exceptions/${exceptionId}/assign`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ assignee_id: assigneeId }),
+  });
+}
+
+export function escalateReconciliationException(exceptionId) {
+  const token = getToken();
+  return request(`/reconciliation/exceptions/${exceptionId}/escalate`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function resolveReconciliationException(exceptionId, resolutionNotes) {
+  const token = getToken();
+  return request(`/reconciliation/exceptions/${exceptionId}/resolve`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ resolution_notes: resolutionNotes }),
+  });
+}
+
+export function listReconciliationMatches({ batchId, status, matchType, limit = 50, offset = 0 } = {}) {
+  const token = getToken();
+  const params = new URLSearchParams({ limit, offset });
+  if (batchId)   params.set("batch_id", batchId);
+  if (status)    params.set("status", status);
+  if (matchType) params.set("match_type", matchType);
+  return request(`/reconciliation/matches?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function runReconciliationMatch(batchId) {
+  const token = getToken();
+  return request(`/reconciliation/match/${batchId}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 // ── Audit log (SUPER + SUPERVISOR only) ────────────────────────────────────────
 
 export function getAuditLogs({ dateFrom, dateTo, role, actionType, success, limit = 100, offset = 0 } = {}) {
