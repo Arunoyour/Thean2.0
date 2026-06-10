@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, RefreshCw, Send, Upload } from "lucide-react";
+import { ArrowLeft, BookOpen, CheckCircle2, RefreshCw, Send, Upload } from "lucide-react";
 import {
   getSettlementCycle,
   getSettlementBatch,
@@ -135,6 +135,12 @@ export function SettlementBatchDetailPage() {
               <Upload size={15} /> Payment Proofs
             </button>
           )}
+          <button className="outline-button"
+            onClick={() => navigate(
+              `/dashboard/ledger?type=${batch.stakeholder_type}&id=${batch.stakeholder_id}`
+            )}>
+            <BookOpen size={15} /> View Ledger
+          </button>
         </div>
       </div>
 
