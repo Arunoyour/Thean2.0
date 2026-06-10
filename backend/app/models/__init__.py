@@ -1,5 +1,6 @@
 from app.models.approvals import ApprovalRequest, ApprovalRequestLine, AuditLog, Notification
 from app.models.auth import OtpChallenge
+from app.models.dispute import Dispute, DisputeMessage, DisputeStatusHistory
 from app.models.reconciliation import BankStatementLine, GatewayEvent, ReconciliationException, ReconciliationMatch
 from app.models.sector import PharmacyStore, PrintShop, VegetableStore
 from app.models.settlement import PaymentProof, SettlementBatch, SettlementCycle, SettlementLine, StakeholderLedger
@@ -11,6 +12,9 @@ __all__ = [
     "ApprovalRequestLine",
     "AuditLog",
     "BankStatementLine",
+    "Dispute",
+    "DisputeMessage",
+    "DisputeStatusHistory",
     "GatewayEvent",
     "Notification",
     "OtpChallenge",

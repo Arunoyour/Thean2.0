@@ -7,6 +7,8 @@ import { AdminManagementPage } from "./pages/AdminManagementPage.jsx";
 import { ApprovalsPage } from "./pages/ApprovalsPage.jsx";
 import { AuditLogPage } from "./pages/AuditLogPage.jsx";
 import { PaymentProofsPage } from "./pages/PaymentProofsPage.jsx";
+import { DisputeDetailPage } from "./pages/DisputeDetailPage.jsx";
+import { DisputeManagementPage } from "./pages/DisputeManagementPage.jsx";
 import { ReconciliationExceptionDetailPage } from "./pages/ReconciliationExceptionDetailPage.jsx";
 import { ReconciliationOverviewPage } from "./pages/ReconciliationOverviewPage.jsx";
 import { SettlementBatchDetailPage } from "./pages/SettlementBatchDetailPage.jsx";
@@ -93,6 +95,10 @@ function App() {
         <Route path="/dashboard/settlement/:cycleId" element={<RequireAuth><SettlementCycleDetailPage /></RequireAuth>} />
         <Route path="/dashboard/settlement/:cycleId/batch/:batchId" element={<RequireAuth><SettlementBatchDetailPage /></RequireAuth>} />
         <Route path="/dashboard/settlement/batch/:batchId/proofs" element={<RequireAuth><PaymentProofsPage /></RequireAuth>} />
+
+        {/* Disputes */}
+        <Route path="/dashboard/disputes" element={<RequireAuth><DisputeManagementPage /></RequireAuth>} />
+        <Route path="/dashboard/disputes/:disputeId" element={<RequireAuth><DisputeDetailPage /></RequireAuth>} />
 
         {/* Reconciliation */}
         <Route path="/dashboard/reconciliation" element={<RequireAuth><ReconciliationOverviewPage /></RequireAuth>} />

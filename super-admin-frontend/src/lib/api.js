@@ -597,6 +597,71 @@ export function verifyPaymentProof(proofId) {
   });
 }
 
+// ── Disputes ───────────────────────────────────────────────────────────────────
+
+export function getDisputeOverview() {
+  const token = getToken();
+  return request("/disputes/overview", { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function listDisputes({ status, raised_by_app, dispute_type, limit = 50, offset = 0 } = {}) {
+  const token = getToken();
+  const params = new URLSearchParams({ limit, offset });
+  if (status)        params.set("status", status);
+  if (raised_by_app) params.set("raised_by_app", raised_by_app);
+  if (dispute_type)  params.set("dispute_type", dispute_type);
+  return request(`/disputes?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function getDispute(disputeId) {
+  const token = getToken();
+  return request(`/disputes/${disputeId}`, { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function resolveDispute(disputeId, resolutionNotes) {
+  const token = getToken();
+  return request(`/disputes/${disputeId}/resolve`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ resolution_notes: resolutionNotes }),
+  });
+}
+
+export function assignDisputeAdmin(disputeId, assigneeId) {
+  const token = getToken();
+  return request(`/disputes/${disputeId}/assign`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ assignee_id: assigneeId }),
+  });
+}
+
+export async function addDisputeReply(disputeId, { text_content, voice_file, image_file, attachment_file, is_internal = false }) {
+  const token = getToken();
+  const form  = new FormData();
+  if (text_content)    form.append("text_content", text_content);
+  if (is_internal)     form.append("is_internal", "true");
+  if (voice_file)      form.append("voice_file", voice_file);
+  if (image_file)      form.append("image_file", image_file);
+  if (attachment_file) form.append("attachment_file", attachment_file);
+
+  const controller = new AbortController();
+  const timerId    = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const response = await fetch(`${API_BASE_URL}/disputes/${disputeId}/reply`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.detail || "Failed to send reply.");
+    return payload;
+  } finally {
+    clearTimeout(timerId);
+  }
+}
+
 // ── Reconciliation ─────────────────────────────────────────────────────────────
 
 export function getReconciliationOverview() {

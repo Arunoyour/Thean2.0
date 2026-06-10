@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1 import approvals, auth, customer, delivery, health, pharmacy, reconciliation, settlement, super_admin, ws
+from app.api.v1 import approvals, auth, customer, delivery, disputes, health, pharmacy, reconciliation, settlement, super_admin, ws
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(health.router)
@@ -12,4 +12,5 @@ api_router.include_router(delivery.router)
 api_router.include_router(approvals.router)
 api_router.include_router(settlement.router)
 api_router.include_router(reconciliation.router)
+api_router.include_router(disputes.router)
 api_router.include_router(ws.router)
