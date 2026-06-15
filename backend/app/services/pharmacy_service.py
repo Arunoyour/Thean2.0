@@ -278,7 +278,7 @@ async def verify_pharmacy_otp(
     await session.commit()
 
     return PharmacyAuthResponse(
-        access_token=create_access_token(str(account.account_id)),
+        access_token=create_access_token(str(account.account_id), expire_minutes=43_200),  # 30 days
         pharmacy=serialize_pharmacy(account, profile),
     )
 

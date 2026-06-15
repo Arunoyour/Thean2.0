@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     cors_origins: list[AnyHttpUrl] | list[str] = ["http://localhost:5173"]
     media_root: str = "storage"
     media_url: str = "/media"
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_mailto: str = "mailto:admin@thean.app"
 
     @field_validator("cors_origins", mode="before")
     @classmethod

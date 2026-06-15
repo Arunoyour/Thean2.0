@@ -30,6 +30,7 @@ import { LoginPage } from "./pages/LoginPage.jsx";
 import { PharmacyDashboardPage } from "./pages/PharmacyDashboardPage.jsx";
 import { ProductReviewPage } from "./pages/ProductReviewPage.jsx";
 import { PharmacyOrderManagementPage } from "./pages/PharmacyOrderManagementPage.jsx";
+import { PharmacyOrderStatusPage } from "./pages/PharmacyOrderStatusPage.jsx";
 import { SubstitutionAuditPage } from "./pages/SubstitutionAuditPage.jsx";
 import { canManageAdmins, canSeeAuditLog } from "./lib/role.js";
 import "./styles/global.css";
@@ -79,6 +80,7 @@ function App() {
         <Route path="/dashboard/pharmacy" element={<RequireAuth><PharmacyDashboardPage /></RequireAuth>} />
         <Route path="/dashboard/pharmacy/products" element={<RequireAuth><ProductReviewPage /></RequireAuth>} />
         <Route path="/dashboard/pharmacy/orders" element={<RequireAuth><PharmacyOrderManagementPage /></RequireAuth>} />
+        <Route path="/dashboard/pharmacy/order-status" element={<RequireAuth><PharmacyOrderStatusPage /></RequireAuth>} />
         <Route path="/dashboard/pharmacy/substitution-audit" element={<RequireAuth><SubstitutionAuditPage /></RequireAuth>} />
 
         {/* Delivery */}

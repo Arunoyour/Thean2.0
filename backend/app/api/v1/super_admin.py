@@ -374,6 +374,38 @@ async def all_pharmacy_orders(
     return await list_all_pharmacy_orders(session)
 
 
+@router.get("/pharmacy/orders/status-buckets")
+async def pharmacy_orders_status_buckets(
+    _: SuperAdmin = Depends(require_role("SUPER", "SUPERVISOR", "CHECKER", "AUDITOR")),
+    session: AsyncSession = Depends(get_pharmacy_session),
+):
+    """Return three live buckets for the admin pharmacy operations board:
+    - unaccepted: assigned to a pharmacy but not yet accepted
+    - pending_from_pharmacy: accepted but not yet marked ready for delivery
+    - pending_pickup: marked ready for delivery but no delivery boy assigned yet
+    """
+    from app.models.pharmacy_merchant import CustomerPharmacyOrder as CPO
+    from sqlalchemy import select as sa_select
+    result = await session.execute(
+        sa_select(CPO).where(CPO.status.in_([
+            "ASSIGNED_TO_PHARMACY",
+            "PHARMACY_ACCEPTED",
+            "READY_FOR_DELIVERY",
+        ])).order_by(CPO.created_at.asc())
+    )
+    orders = result.scalars().all()
+    buckets = {"unaccepted": [], "pending_from_pharmacy": [], "pending_pickup": []}
+    for order in orders:
+        row = serialize_order(order).model_dump(mode="json")
+        if order.status == "ASSIGNED_TO_PHARMACY":
+            buckets["unaccepted"].append(row)
+        elif order.status == "PHARMACY_ACCEPTED":
+            buckets["pending_from_pharmacy"].append(row)
+        elif order.status == "READY_FOR_DELIVERY":
+            buckets["pending_pickup"].append(row)
+    return buckets
+
+
 @router.get("/pharmacy/orders/{order_id}", response_model=CustomerPharmacyOrderResponse)
 async def pharmacy_order_detail(
     order_id: uuid.UUID,

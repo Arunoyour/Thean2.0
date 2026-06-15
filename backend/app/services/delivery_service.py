@@ -580,18 +580,107 @@ async def set_delivery_availability(
     return serialize_account(account)
 
 
+_ACTIVE_DELIVERY_STATUSES = {
+    "DELIVERY_ACCEPTED", "ARRIVED_AT_STORE", "ORDER_PICKED_UP", "ARRIVED_AT_CUSTOMER",
+}
+
 async def update_delivery_location(
     session: AsyncSession,
     account_id: UUID,
     lat: float,
     lng: float,
 ) -> None:
+    from app.models.delivery import DeliveryLocationLog
     account = await _get_account(session, account_id)
     account.current_lat = lat
     account.current_lng = lng
     account.location_updated_at = datetime.now(UTC)
     account.updated_at = datetime.now(UTC)
+
+    # Write heartbeat row if account has an active delivery order
+    active = await session.execute(
+        select(DeliveryOrder)
+        .where(DeliveryOrder.account_id == account_id)
+        .where(DeliveryOrder.status.in_(_ACTIVE_DELIVERY_STATUSES))
+        .order_by(DeliveryOrder.created_at.desc())
+        .limit(1)
+    )
+    active_order = active.scalar_one_or_none()
+    if active_order:
+        session.add(DeliveryLocationLog(
+            delivery_order_id=active_order.delivery_order_id,
+            account_id=account_id,
+            lat=lat,
+            lng=lng,
+        ))
+
     await session.commit()
+
+
+async def get_location_trail(
+    session: AsyncSession,
+    delivery_order_id: UUID,
+) -> list[dict]:
+    """Return the full GPS trail for a delivery order, oldest-first (for replay)."""
+    from app.models.delivery import DeliveryLocationLog
+    result = await session.execute(
+        select(DeliveryLocationLog)
+        .where(DeliveryLocationLog.delivery_order_id == delivery_order_id)
+        .order_by(DeliveryLocationLog.recorded_at.asc())
+    )
+    return [
+        {"lat": float(r.lat), "lng": float(r.lng), "recorded_at": r.recorded_at.isoformat()}
+        for r in result.scalars().all()
+    ]
+
+
+async def get_all_active_locations(session: AsyncSession) -> list[dict]:
+    """Return current position of every delivery boy with an active order (for admin live map).
+    Includes OSRM road distance + ETA from each driver to their customer dropoff."""
+    import asyncio
+    from app.services.customer_order_service import _osrm_road_distance_km
+
+    result = await session.execute(
+        select(DeliveryOrder, DeliveryAccount)
+        .join(DeliveryAccount, DeliveryAccount.account_id == DeliveryOrder.account_id)
+        .where(DeliveryOrder.status.in_(_ACTIVE_DELIVERY_STATUSES))
+    )
+    rows = result.all()
+    loop = asyncio.get_event_loop()
+
+    out = []
+    for order, account in rows:
+        if account.current_lat is None:
+            continue
+        drv_lat = float(account.current_lat)
+        drv_lng = float(account.current_lng)
+        road_km = None
+        eta_min = None
+        if order.dropoff_lat and order.dropoff_lng:
+            try:
+                road_km = await loop.run_in_executor(
+                    None, _osrm_road_distance_km,
+                    drv_lat, drv_lng,
+                    float(order.dropoff_lat), float(order.dropoff_lng),
+                )
+                eta_min = max(1, round(road_km / 30 * 60))
+            except Exception:
+                pass
+        out.append({
+            "delivery_order_id": str(order.delivery_order_id),
+            "account_id": str(order.account_id),
+            "driver_name": account.full_name,
+            "status": order.status,
+            "lat": drv_lat,
+            "lng": drv_lng,
+            "location_updated_at": account.location_updated_at.isoformat() if account.location_updated_at else None,
+            "source_order_id": str(order.source_order_id),
+            "dropoff_lat": float(order.dropoff_lat) if order.dropoff_lat else None,
+            "dropoff_lng": float(order.dropoff_lng) if order.dropoff_lng else None,
+            "road_km_to_customer": road_km,
+            "eta_minutes": eta_min,
+        })
+    return out
 
 
 # ── Admin: assign order ────────────────────────────────────────────────────
@@ -1610,6 +1699,24 @@ async def get_delivery_tracking(
     _PIN_VISIBLE_STATUSES = {"OUT_FOR_DELIVERY", "ORDER_PICKED_UP", "ARRIVED_AT_CUSTOMER"}
     delivery_pin = d.delivery_pin if d.status in _PIN_VISIBLE_STATUSES else None
 
+    # Live OSRM road distance + ETA from driver's current position to customer dropoff
+    road_km_to_customer: float | None = None
+    eta_minutes: int | None = None
+    if driver_lat and driver_lng and d.dropoff_lat and d.dropoff_lng:
+        try:
+            from app.services.customer_order_service import _osrm_road_distance_km
+            import asyncio
+            road_km_to_customer = await asyncio.get_event_loop().run_in_executor(
+                None,
+                _osrm_road_distance_km,
+                driver_lat, driver_lng,
+                float(d.dropoff_lat), float(d.dropoff_lng),
+            )
+            # Assume average speed of 30 km/h in city traffic
+            eta_minutes = max(1, round(road_km_to_customer / 30 * 60))
+        except Exception:
+            pass
+
     return DeliveryTrackingResponse(
         delivery_order_id=d.delivery_order_id,
         status=d.status,
@@ -1619,4 +1726,6 @@ async def get_delivery_tracking(
         driver_name=acct.full_name if acct else None,
         distance_km=float(d.distance_km) if d.distance_km else None,
         delivery_pin=delivery_pin,
+        road_km_to_customer=road_km_to_customer,
+        eta_minutes=eta_minutes,
     )

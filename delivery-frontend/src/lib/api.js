@@ -160,3 +160,88 @@ export function requestDeliveryCashout(amount, upiId) {
 export function getDeliveryRateConfig() {
   return request("/delivery/config/rate");
 }
+
+// ── Settlement ────────────────────────────────────────────────────────────
+export function listMyDeliverySettlementBatches() {
+  return request("/delivery/settlement/batches", { headers: authHeaders() });
+}
+
+export function getMyDeliverySettlementBatch(batchId) {
+  return request(`/delivery/settlement/batches/${batchId}`, { headers: authHeaders() });
+}
+
+export function getMyDeliverySettlementProofs(batchId) {
+  return request(`/delivery/settlement/batches/${batchId}/proofs`, { headers: authHeaders() });
+}
+
+// ── Disputes (delivery boy) ───────────────────────────────────────────────
+export function listMyDeliveryDisputes() {
+  return request("/delivery/disputes", { headers: authHeaders() });
+}
+
+export function getMyDeliveryDispute(disputeId) {
+  return request(`/delivery/disputes/${disputeId}`, { headers: authHeaders() });
+}
+
+export async function raiseDeliveryDispute(formData) {
+  const token = getToken();
+  if (!token) throw new Error("Please login to continue.");
+  const controller = new AbortController();
+  const timerId = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const resp = await fetch(`${API_BASE_URL}/delivery/disputes`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+      signal: controller.signal,
+    });
+    if (resp.status === 401) { window.location.href = "/login"; throw new Error("Session expired."); }
+    const payload = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(payload.detail || "Failed to raise dispute.");
+    return payload;
+  } finally { clearTimeout(timerId); }
+}
+
+export async function reopenDeliveryDispute(disputeId, formData) {
+  const token = getToken();
+  if (!token) throw new Error("Please login to continue.");
+  const controller = new AbortController();
+  const timerId = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const resp = await fetch(`${API_BASE_URL}/delivery/disputes/${disputeId}/reopen`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+      signal: controller.signal,
+    });
+    if (resp.status === 401) { window.location.href = "/login"; throw new Error("Session expired."); }
+    const payload = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(payload.detail || "Failed to reopen dispute.");
+    return payload;
+  } finally { clearTimeout(timerId); }
+}
+
+// ── Team Lead ─────────────────────────────────────────────────────────────
+export function getTeamMembers() {
+  return request("/delivery/team/members", { headers: authHeaders() });
+}
+
+export function getTeamMemberDetail(memberId) {
+  return request(`/delivery/team/members/${memberId}`, { headers: authHeaders() });
+}
+
+export function getTeamEarnings() {
+  return request("/delivery/team/earnings", { headers: authHeaders() });
+}
+
+export function getTeamCod() {
+  return request("/delivery/team/cod", { headers: authHeaders() });
+}
+
+export function adminClearCod(memberId, amount, note) {
+  return request("/delivery/admin/cod/clear", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ account_id: memberId, amount, note }),
+  });
+}

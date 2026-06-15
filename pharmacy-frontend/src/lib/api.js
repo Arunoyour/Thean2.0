@@ -274,3 +274,169 @@ export function markOrderReadyForDelivery(orderId) {
 export function logoutPharmacy() {
   window.localStorage.removeItem(TOKEN_KEY);
 }
+
+// ── Settlement (pharmacy-facing) ──────────────────────────────────────────
+
+export function listMySettlementBatches({ statusFilter, limit = 30, offset = 0 } = {}) {
+  const token = window.localStorage.getItem(TOKEN_KEY);
+  if (!token) return Promise.reject(new Error("Please login to continue."));
+  const params = new URLSearchParams({ limit, offset });
+  if (statusFilter) params.set("status_filter", statusFilter);
+  return request(`/pharmacy/settlement/batches?${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function getMySettlementBatch(batchId) {
+  const token = window.localStorage.getItem(TOKEN_KEY);
+  if (!token) return Promise.reject(new Error("Please login to continue."));
+  return request(`/pharmacy/settlement/batches/${batchId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function getMySettlementProofs(batchId) {
+  const token = window.localStorage.getItem(TOKEN_KEY);
+  if (!token) return Promise.reject(new Error("Please login to continue."));
+  return request(`/pharmacy/settlement/batches/${batchId}/proofs`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// ── Disputes (pharmacy-facing) ────────────────────────────────────────────
+
+export function listMyDisputes({ statusFilter, disputeType, limit = 30, offset = 0 } = {}) {
+  const token = window.localStorage.getItem(TOKEN_KEY);
+  if (!token) return Promise.reject(new Error("Please login to continue."));
+  const params = new URLSearchParams({ limit, offset });
+  if (statusFilter) params.set("status_filter", statusFilter);
+  if (disputeType) params.set("dispute_type", disputeType);
+  return request(`/pharmacy/disputes?${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function getMyDispute(disputeId) {
+  const token = window.localStorage.getItem(TOKEN_KEY);
+  if (!token) return Promise.reject(new Error("Please login to continue."));
+  return request(`/pharmacy/disputes/${disputeId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function raisePharmacyDispute({
+  dispute_type,
+  reference_type,
+  reference_id,
+  reference_detail,
+  text_content,
+  voice_file,
+  voice_duration_secs,
+  image_file,
+  attachment_file,
+}) {
+  const token = window.localStorage.getItem(TOKEN_KEY);
+  if (!token) throw new Error("Please login to continue.");
+
+  const form = new FormData();
+  form.append("dispute_type", dispute_type);
+  form.append("reference_type", reference_type);
+  if (reference_id) form.append("reference_id", reference_id);
+  form.append("reference_detail", JSON.stringify(reference_detail ?? {}));
+  if (text_content) form.append("text_content", text_content);
+  if (voice_duration_secs != null) form.append("voice_duration_secs", voice_duration_secs);
+  if (voice_file) form.append("voice_file", voice_file);
+  if (image_file) form.append("image_file", image_file);
+  if (attachment_file) form.append("attachment_file", attachment_file);
+
+  const controller = new AbortController();
+  const timerId = setTimeout(() => controller.abort(), 30_000);
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}/pharmacy/disputes`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+      signal: controller.signal,
+    });
+  } catch (e) {
+    if (e.name === "AbortError") throw new Error("Request timed out.");
+    throw new Error("Network error.");
+  } finally {
+    clearTimeout(timerId);
+  }
+  if (response.status === 401) {
+    window.sessionStorage.setItem("thean:session_expired", "1");
+    window.location.href = "/login";
+    throw new Error("Session expired.");
+  }
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.detail || "Request failed.");
+  return payload;
+}
+
+export async function reopenPharmacyDispute(disputeId, {
+  text_content,
+  voice_file,
+  voice_duration_secs,
+  image_file,
+  attachment_file,
+} = {}) {
+  const token = window.localStorage.getItem(TOKEN_KEY);
+  if (!token) throw new Error("Please login to continue.");
+
+  const form = new FormData();
+  if (text_content) form.append("text_content", text_content);
+  if (voice_duration_secs != null) form.append("voice_duration_secs", voice_duration_secs);
+  if (voice_file) form.append("voice_file", voice_file);
+  if (image_file) form.append("image_file", image_file);
+  if (attachment_file) form.append("attachment_file", attachment_file);
+
+  const controller = new AbortController();
+  const timerId = setTimeout(() => controller.abort(), 30_000);
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}/pharmacy/disputes/${disputeId}/reopen`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+      signal: controller.signal,
+    });
+  } catch (e) {
+    if (e.name === "AbortError") throw new Error("Request timed out.");
+    throw new Error("Network error.");
+  } finally {
+    clearTimeout(timerId);
+  }
+  if (response.status === 401) {
+    window.sessionStorage.setItem("thean:session_expired", "1");
+    window.location.href = "/login";
+    throw new Error("Session expired.");
+  }
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.detail || "Request failed.");
+  return payload;
+}
+
+export async function getVapidPublicKey() {
+  const r = await apiFetch("/pharmacy/push/vapid-public-key", { method: "GET" });
+  return r.key;
+}
+
+export async function savePushSubscription(sub) {
+  const { endpoint, keys } = sub.toJSON();
+  return apiFetch("/pharmacy/push/subscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint, p256dh: keys.p256dh, auth: keys.auth }),
+  });
+}
+
+export async function removePushSubscription(sub) {
+  const { endpoint, keys } = sub.toJSON();
+  return apiFetch("/pharmacy/push/subscribe", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint, p256dh: keys.p256dh, auth: keys.auth }),
+  });
+}

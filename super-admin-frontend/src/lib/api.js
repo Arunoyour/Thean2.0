@@ -275,6 +275,14 @@ export function listAllPharmacyOrders() {
   });
 }
 
+export function getPharmacyOrderStatusBuckets() {
+  const token = getToken();
+  if (!token) return Promise.reject(new Error("Please login to continue."));
+  return request("/super-admin/pharmacy/orders/status-buckets", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export function getPharmacyOrderDetail(orderId) {
   const token = getToken();
   if (!token) return Promise.reject(new Error("Please login to continue."));
@@ -392,6 +400,14 @@ const _ST = () => SUPER_ADMIN_TOKEN;
 
 export function listUnassignedOrders() {
   return deliveryRequest(`/delivery/admin/unassigned-orders?x_super_admin_token=${encodeURIComponent(_ST())}`);
+}
+
+export function getActiveDeliveryLocations() {
+  return deliveryRequest(`/delivery/admin/active-locations?x_super_admin_token=${encodeURIComponent(_ST())}`);
+}
+
+export function getDeliveryLocationTrail(deliveryOrderId) {
+  return deliveryRequest(`/delivery/orders/${deliveryOrderId}/location-trail?x_super_admin_token=${encodeURIComponent(_ST())}`);
 }
 
 export function triggerAutoAssign(payload) {

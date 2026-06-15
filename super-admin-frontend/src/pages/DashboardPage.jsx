@@ -175,6 +175,9 @@ export function DashboardPage() {
             <Pill size={18} aria-hidden="true" />
             Review Pharmacy Products
           </button>
+          <button className="outline-button" type="button" onClick={() => navigate("/dashboard/pharmacy/order-status")}>
+            Live Order Status Board
+          </button>
         </article>
 
         {/* Fee & Tax Config */}

@@ -387,3 +387,22 @@ class PharmacyOrderRevenueSettlementLedger(Base):
         server_default=func.now(),
     )
     settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PushSubscription(Base):
+    """Web Push subscriptions for pharmacy accounts — one row per device/browser."""
+    __tablename__ = "push_subscriptions"
+    __table_args__ = (
+        Index("idx_push_subs_account", "account_id"),
+    )
+
+    subscription_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    endpoint: Mapped[str] = mapped_column(Text, nullable=False)
+    p256dh: Mapped[str] = mapped_column(Text, nullable=False)
+    auth: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC), server_default=func.now()
+    )

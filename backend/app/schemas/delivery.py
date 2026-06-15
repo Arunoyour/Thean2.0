@@ -154,6 +154,8 @@ class DeliveryTrackingResponse(BaseModel):
     driver_name: str | None      # shown on customer app
     distance_km: float | None    # total delivery route distance
     delivery_pin: str | None     # shown to customer once status is OUT_FOR_DELIVERY — share with driver
+    road_km_to_customer: float | None = None   # live OSRM road km from driver to customer
+    eta_minutes: int | None = None             # live ETA in minutes (road_km / avg 30 km/h)
 
 
 class DeliveryStatusUpdateRequest(BaseModel):
