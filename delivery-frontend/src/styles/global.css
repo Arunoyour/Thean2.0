@@ -948,6 +948,145 @@ select.input-valid {
   z-index: 9999;
 }
 
+/* ── Today summary strip ─────────────────────────────────────────────── */
+.dl-today-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 16px;
+}
+.dl-today-card {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 14px;
+  border: 1px solid #334155;
+}
+.dl-today-card p {
+  font-size: 0.72rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.dl-today-card strong {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #f1f5f9;
+}
+
+/* ── Rate inline (inside wallet card) ───────────────────────────────── */
+.dl-rate-inline {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin: 8px 0 4px;
+}
+
+/* ── Period tabs ─────────────────────────────────────────────────────── */
+.dl-period-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+.dl-period-tab {
+  flex: 1;
+  padding: 8px 4px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.dl-period-tab-active {
+  background: #6366f1;
+  border-color: #6366f1;
+  color: #fff;
+}
+
+/* ── Order earn list ─────────────────────────────────────────────────── */
+.dl-order-earn-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 16px 100px;
+}
+.dl-order-earn-card {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 14px;
+}
+.dl-order-earn-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.dl-order-earn-date {
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+.dl-order-earn-km {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #a78bfa;
+}
+.dl-order-earn-locations {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+.dl-order-earn-loc {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+.dl-order-earn-money {
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.dl-order-earn-money-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.82rem;
+  color: #94a3b8;
+  padding: 3px 0;
+}
+.dl-order-earn-money-row strong {
+  font-weight: 700;
+  color: inherit;
+}
+.dl-order-earn-times {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.dl-order-earn-times > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dl-order-earn-times label {
+  font-size: 0.68rem;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.dl-order-earn-times span {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
 /* ── Session expired banner ───────────────────────────────────────────── */
 .session-expired-banner {
   background: #fef9c3;

@@ -98,16 +98,30 @@ function DeliveryMap({ tracking, dropLat, dropLng }) {
         attribution: "© OpenStreetMap",
       }).addTo(map);
 
-      // Driver pin
+      // Driver pin — bike icon
+      const bikeSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="32" height="32">
+        <ellipse cx="18" cy="17" rx="5" ry="6" fill="#6366f1"/>
+        <circle cx="18" cy="9" r="4" fill="#6366f1"/>
+        <path d="M14.5 8.5 Q18 6.5 21.5 8.5 Q21.5 11 18 11 Q14.5 11 14.5 8.5Z" fill="rgba(0,0,0,0.25)"/>
+        <circle cx="9" cy="26" r="5" fill="none" stroke="#6366f1" stroke-width="2.5"/>
+        <circle cx="9" cy="26" r="1.5" fill="#6366f1"/>
+        <circle cx="27" cy="26" r="5" fill="none" stroke="#6366f1" stroke-width="2.5"/>
+        <circle cx="27" cy="26" r="1.5" fill="#6366f1"/>
+        <line x1="9" y1="26" x2="18" y2="18" stroke="#6366f1" stroke-width="2" stroke-linecap="round"/>
+        <line x1="27" y1="26" x2="18" y2="18" stroke="#6366f1" stroke-width="2" stroke-linecap="round"/>
+        <line x1="9" y1="26" x2="27" y2="26" stroke="#6366f1" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="24" y1="19" x2="29" y2="17" stroke="#6366f1" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="18" cy="18" r="17" fill="none" stroke="#fff" stroke-width="2" opacity="0.8"/>
+      </svg>`;
       const driverIcon = L.divIcon({
         className: "",
-        html: '<div style="background:#6366f1;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4)"></div>',
-        iconSize: [16, 16],
-        iconAnchor: [8, 8],
+        html: `<div style="filter:drop-shadow(0 2px 5px rgba(0,0,0,0.4));width:32px;height:32px">${bikeSvg}</div>`,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
       });
       const driverM = L.marker([tracking.driver_lat, tracking.driver_lng], { icon: driverIcon })
         .addTo(map)
-        .bindTooltip("🛵 Driver", { permanent: false });
+        .bindTooltip("Driver", { permanent: false });
       driverMarkerRef.current = driverM;
 
       // Destination pin

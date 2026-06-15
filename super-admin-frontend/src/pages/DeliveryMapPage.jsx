@@ -41,30 +41,47 @@ function elapsed(iso) {
   return `${Math.floor(m / 60)}h ${m % 60}m ago`;
 }
 
+function bikeSvg(color) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="36" height="36">
+    <!-- body/torso -->
+    <ellipse cx="18" cy="17" rx="5" ry="6" fill="${color}"/>
+    <!-- head -->
+    <circle cx="18" cy="9" r="4" fill="${color}"/>
+    <!-- helmet visor -->
+    <path d="M14.5 8.5 Q18 6.5 21.5 8.5 Q21.5 11 18 11 Q14.5 11 14.5 8.5Z" fill="rgba(0,0,0,0.25)"/>
+    <!-- rear wheel -->
+    <circle cx="9" cy="26" r="5" fill="none" stroke="${color}" stroke-width="2.5"/>
+    <circle cx="9" cy="26" r="1.5" fill="${color}"/>
+    <!-- front wheel -->
+    <circle cx="27" cy="26" r="5" fill="none" stroke="${color}" stroke-width="2.5"/>
+    <circle cx="27" cy="26" r="1.5" fill="${color}"/>
+    <!-- frame -->
+    <line x1="9" y1="26" x2="18" y2="18" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+    <line x1="27" y1="26" x2="18" y2="18" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+    <line x1="9" y1="26" x2="27" y2="26" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- handlebar -->
+    <line x1="24" y1="19" x2="29" y2="17" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+    <!-- white border ring -->
+    <circle cx="18" cy="18" r="17" fill="none" stroke="#fff" stroke-width="2" opacity="0.8"/>
+  </svg>`;
+}
+
 function makeDriverIcon(L, color) {
   return L.divIcon({
     className: "",
-    html: `<div style="
-      background:${color};width:20px;height:20px;border-radius:50%;
-      border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);
-      display:flex;align-items:center;justify-content:center;
-      font-size:10px;color:#fff;font-weight:700;
-    ">🛵</div>`,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
-    popupAnchor: [0, -14],
+    html: `<div style="filter:drop-shadow(0 2px 6px rgba(0,0,0,0.45));width:36px;height:36px">${bikeSvg(color)}</div>`,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+    popupAnchor: [0, -20],
   });
 }
 
 function makeReplayIcon(L, color) {
   return L.divIcon({
     className: "",
-    html: `<div style="
-      background:${color};width:14px;height:14px;border-radius:50%;
-      border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);
-    "></div>`,
-    iconSize: [14, 14],
-    iconAnchor: [7, 7],
+    html: `<div style="filter:drop-shadow(0 1px 3px rgba(0,0,0,0.3));width:24px;height:24px">${bikeSvg(color)}</div>`,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
   });
 }
 

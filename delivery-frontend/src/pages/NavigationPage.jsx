@@ -80,7 +80,8 @@ export function NavigationPage() {
       }).addTo(map);
 
       // Icons
-      const myIcon = L.default.divIcon({ className: "", html: '<div class="dl-map-marker dl-marker-me">📍</div>', iconSize: [32, 32], iconAnchor: [16, 32] });
+      const bikeSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="36" height="36"><ellipse cx="18" cy="17" rx="5" ry="6" fill="#3b82f6"/><circle cx="18" cy="9" r="4" fill="#3b82f6"/><path d="M14.5 8.5 Q18 6.5 21.5 8.5 Q21.5 11 18 11 Q14.5 11 14.5 8.5Z" fill="rgba(0,0,0,0.25)"/><circle cx="9" cy="26" r="5" fill="none" stroke="#3b82f6" stroke-width="2.5"/><circle cx="9" cy="26" r="1.5" fill="#3b82f6"/><circle cx="27" cy="26" r="5" fill="none" stroke="#3b82f6" stroke-width="2.5"/><circle cx="27" cy="26" r="1.5" fill="#3b82f6"/><line x1="9" y1="26" x2="18" y2="18" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/><line x1="27" y1="26" x2="18" y2="18" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/><line x1="9" y1="26" x2="27" y2="26" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round"/><line x1="24" y1="19" x2="29" y2="17" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/><circle cx="18" cy="18" r="17" fill="none" stroke="#fff" stroke-width="2" opacity="0.8"/></svg>`;
+      const myIcon = L.default.divIcon({ className: "", html: `<div style="filter:drop-shadow(0 2px 5px rgba(0,0,0,0.4));width:36px;height:36px">${bikeSvg}</div>`, iconSize: [36, 36], iconAnchor: [18, 18] });
       const pickupIcon = L.default.divIcon({ className: "", html: '<div class="dl-map-marker dl-marker-pickup">🏪</div>', iconSize: [32, 32], iconAnchor: [16, 32] });
       const dropIcon = L.default.divIcon({ className: "", html: '<div class="dl-map-marker dl-marker-drop">🏠</div>', iconSize: [32, 32], iconAnchor: [16, 32] });
 
