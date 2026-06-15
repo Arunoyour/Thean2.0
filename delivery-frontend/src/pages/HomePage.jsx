@@ -25,6 +25,7 @@ import {
 import {
   acceptDeliveryOrder,
   getActiveDeliveryOrder,
+  getDeliveryDisputeUnreadCount,
   getDeliveryMe,
   getDeliveryToken,
   logoutDelivery,
@@ -288,6 +289,7 @@ export function HomePage() {
   const [isToggling, setIsToggling] = useState(false);
   const [error, setError] = useState("");
   const [codWarning, setCodWarning] = useState(null); // WS-pushed warning message
+  const [disputeUnread, setDisputeUnread] = useState(0);
   // account_disabled: show explanation screen for 3 s then logout
   const [accountDisabled, setAccountDisabled] = useState(false);
   const watchIdRef = useRef(null);
@@ -369,9 +371,14 @@ export function HomePage() {
   async function loadData() {
     setIsLoading(true);
     try {
-      const [acc, active] = await Promise.all([getDeliveryMe(), getActiveDeliveryOrder()]);
+      const [acc, active, unreadData] = await Promise.all([
+        getDeliveryMe(),
+        getActiveDeliveryOrder(),
+        getDeliveryDisputeUnreadCount().catch(() => ({ unread: 0 })),
+      ]);
       setAccount(acc);
       setActiveOrder(active);
+      setDisputeUnread(unreadData?.unread || 0);
     } catch (e) {
       if (e.message.includes("login")) navigate("/login");
       else setError(e.message);
@@ -455,6 +462,13 @@ export function HomePage() {
           </button>
         </div>
       </header>
+
+      {/* Dispute unread indicator */}
+      {disputeUnread > 0 && (
+        <a href="/disputes" className="dispute-home-banner">
+          🔔 You have {disputeUnread} dispute{disputeUnread > 1 ? "s" : ""} with a new admin reply.
+        </a>
+      )}
 
       {/* COD warning banner (persistent, based on account balance) */}
       {showCodWarn && <CodWarningBanner balance={codBal} />}

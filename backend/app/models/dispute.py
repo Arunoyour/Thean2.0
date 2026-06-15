@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
+from sqlalchemy import ARRAY, Boolean, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -32,6 +32,12 @@ class Dispute(Base):
     resolved_at:      Mapped[datetime | None] = mapped_column()
     reopened_count:   Mapped[int]            = mapped_column(Integer, nullable=False, default=0)
     reopened_at:      Mapped[datetime | None] = mapped_column()
+    # Order-level dispute extensions
+    source_order_id:  Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    tagged_sectors:   Mapped[list[str]]       = mapped_column(ARRAY(String), nullable=False, default=list)
+    unread_by_raiser: Mapped[bool]            = mapped_column(Boolean, nullable=False, default=False)
+    unread_by_admin:  Mapped[bool]            = mapped_column(Boolean, nullable=False, default=True)
+    closed_by_raiser: Mapped[bool]            = mapped_column(Boolean, nullable=False, default=False)
     created_at:       Mapped[datetime]       = mapped_column(default=datetime.utcnow)
     updated_at:       Mapped[datetime]       = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
 

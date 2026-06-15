@@ -7,6 +7,7 @@ import {
   addDisputeReply,
   assignDisputeAdmin,
   listAdmins,
+  closeDispute,
 } from "../lib/api.js";
 import { canApprove, canWriteConfig } from "../lib/role.js";
 
@@ -32,6 +33,7 @@ const TYPE_LABELS = {
   REFUND_NOT_RECEIVED: "Refund not received",
   SETTLEMENT_DISPUTE:  "Settlement dispute",
   COD_DISPUTE:         "COD dispute",
+  ORDER_DISPUTE:       "Order dispute",
   OTHER:               "Other",
 };
 
@@ -111,6 +113,12 @@ export function DisputeDetailPage() {
   const [showResolve,    setShowResolve]    = useState(false);
   const [resolutionNote, setResolutionNote] = useState("");
   const [resolving,      setResolving]      = useState(false);
+
+  // Admin close (60-day)
+  const [showClose,    setShowClose]    = useState(false);
+  const [closeNote,    setCloseNote]    = useState("");
+  const [closing,      setClosing]      = useState(false);
+  const [closeError,   setCloseError]   = useState("");
 
   // Assign
   const [assignTo,       setAssignTo]       = useState("");
@@ -195,6 +203,21 @@ export function DisputeDetailPage() {
   if (error)     return <main className="page"><div className="error">{error}</div></main>;
   if (!dispute)  return null;
 
+  async function handleAdminClose(e) {
+    e.preventDefault();
+    setCloseError("");
+    setClosing(true);
+    try {
+      await closeDispute(disputeId, closeNote);
+      setShowClose(false);
+      load();
+    } catch (err) {
+      setCloseError(err.message);
+    } finally {
+      setClosing(false);
+    }
+  }
+
   const isResolved = ["RESOLVED", "CLOSED"].includes(dispute.status);
   const statColor  = STATUS_COLORS[dispute.status] ?? "#6b7280";
   const visibleMessages = dispute.messages ?? [];
@@ -219,6 +242,39 @@ export function DisputeDetailPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Admin close modal */}
+      {showClose && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
+          <div className="panel" style={{ width: "100%", maxWidth: 460, padding: "2rem" }}>
+            <h2 style={{ marginTop: 0 }}>Close Dispute</h2>
+            {!dispute.admin_can_close ? (
+              <>
+                <p style={{ color: "#d97706", margin: "0 0 1rem" }}>
+                  This dispute is only {dispute.age_days} day{dispute.age_days !== 1 ? "s" : ""} old. Admin can only close disputes after 60 days.<br />
+                  <strong>{60 - (dispute.age_days ?? 0)} day(s) remaining.</strong>
+                </p>
+                <button className="outline-button" onClick={() => setShowClose(false)}>Cancel</button>
+              </>
+            ) : (
+              <form onSubmit={handleAdminClose} style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+                <label>
+                  Closing notes <span style={{ color: "#dc2626" }}>*</span>
+                  <textarea value={closeNote} onChange={e => setCloseNote(e.target.value)}
+                    rows={4} placeholder="Explain why this dispute is being closed…" required />
+                </label>
+                {closeError && <div className="error">{closeError}</div>}
+                <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+                  <button type="button" className="outline-button" onClick={() => setShowClose(false)}>Cancel</button>
+                  <button type="submit" className="button" style={{ background: "#6b7280" }} disabled={closing || !closeNote.trim()}>
+                    {closing ? "Closing…" : "Close Dispute"}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
@@ -252,14 +308,29 @@ export function DisputeDetailPage() {
                 Reopened ×{dispute.reopened_count}
               </span>
             )}
+            {dispute.age_days != null && (
+              <span style={{ fontSize: "0.78rem", color: dispute.age_days >= 60 ? "#dc2626" : "#9ca3af" }}>
+                {dispute.age_days}d old
+              </span>
+            )}
+            {dispute.tagged_sectors?.length > 0 && dispute.tagged_sectors.map(s => (
+              <span key={s} style={{ fontSize: "0.72rem", padding: "1px 8px", borderRadius: 99, background: "#f3f4f6", color: "#6b7280", border: "1px solid #e5e7eb" }}>
+                {s}
+              </span>
+            ))}
           </div>
         </div>
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
           <button className="outline-button" onClick={load}><RefreshCw size={15} /></button>
           {!isResolved && canApprove() && (
-            <button className="button" style={{ background: "#16a34a" }} onClick={() => setShowResolve(true)}>
-              <CheckCircle2 size={15} /> Resolve
-            </button>
+            <>
+              <button className="button" style={{ background: "#16a34a" }} onClick={() => setShowResolve(true)}>
+                <CheckCircle2 size={15} /> Resolve
+              </button>
+              <button className="outline-button" style={{ borderColor: "#6b7280", color: "#6b7280" }} onClick={() => setShowClose(true)}>
+                Close {dispute.admin_can_close ? "" : `(${60 - (dispute.age_days ?? 0)}d left)`}
+              </button>
+            </>
           )}
         </div>
       </div>

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, Clock, Power, ShieldAlert } from "lucide-react";
 
 import { PharmacyPageShell } from "../components/PharmacyPageShell.jsx";
-import { getCurrentPharmacy, updatePharmacyAvailability } from "../lib/api.js";
+import { getCurrentPharmacy, getPharmacyDisputeUnreadCount, updatePharmacyAvailability } from "../lib/api.js";
 
 export function HomePage() {
   const [pharmacy, setPharmacy] = useState(null);
@@ -10,15 +10,20 @@ export function HomePage() {
   const [availabilityError, setAvailabilityError] = useState("");
   const [isUpdatingAvailability, setIsUpdatingAvailability] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [disputeUnread, setDisputeUnread] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadPharmacy() {
       try {
-        const profile = await getCurrentPharmacy();
+        const [profile, unreadData] = await Promise.all([
+          getCurrentPharmacy(),
+          getPharmacyDisputeUnreadCount().catch(() => ({ unread: 0 })),
+        ]);
         if (isMounted) {
           setPharmacy(profile);
+          setDisputeUnread(unreadData?.unread || 0);
         }
       } catch (requestError) {
         if (isMounted) {
@@ -71,6 +76,11 @@ export function HomePage() {
 
   return (
     <PharmacyPageShell>
+      {disputeUnread > 0 && (
+        <a href="/disputes" className="dispute-home-banner">
+          🔔 You have {disputeUnread} dispute{disputeUnread > 1 ? "s" : ""} with a new admin reply.
+        </a>
+      )}
       <header className="portal-header">
         <div>
           <p className="eyebrow">Merchant workstation</p>

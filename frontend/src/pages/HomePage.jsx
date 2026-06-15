@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 
 import { FormMessage } from "../components/FormMessage.jsx";
-import { getCurrentUser, listCustomerAddresses, getActiveOrderCount, logoutCustomer } from "../lib/api.js";
+import { getCurrentUser, getOrderDisputeUnreadCount, listCustomerAddresses, getActiveOrderCount, logoutCustomer } from "../lib/api.js";
 
 const sectors = [
   {
@@ -63,6 +63,7 @@ export function HomePage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false); // always closed by default
   const [addresses, setAddresses] = useState([]);
   const [activeOrders, setActiveOrders] = useState(null); // null = still loading
+  const [disputeUnread, setDisputeUnread] = useState(0);
 
   const firstName = useMemo(() => {
     if (!user?.full_name) return "Customer";
@@ -74,14 +75,16 @@ export function HomePage() {
 
     async function loadUser() {
       try {
-        const [profile, savedAddresses, countData] = await Promise.all([
+        const [profile, savedAddresses, countData, unreadData] = await Promise.all([
           getCurrentUser(),
           listCustomerAddresses(),
           getActiveOrderCount(),
+          getOrderDisputeUnreadCount().catch(() => ({ unread: 0 })),
         ]);
         if (isMounted) {
           setUser(profile);
           setAddresses(savedAddresses);
+          setDisputeUnread(unreadData?.unread || 0);
           setActiveOrders(countData.count);
           setError("");
         }
@@ -222,6 +225,12 @@ export function HomePage() {
               </p>
             </div>
           </div>
+
+          {disputeUnread > 0 && (
+            <a href="/home/disputes" className="dispute-home-banner">
+              🔔 You have {disputeUnread} dispute{disputeUnread > 1 ? "s" : ""} with a new admin reply. Tap to view.
+            </a>
+          )}
 
           <div className="home-section-header">
             <div>

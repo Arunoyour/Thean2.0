@@ -22,17 +22,24 @@ def verify_secret(value: str, hashed_value: str) -> bool:
     return bcrypt.checkpw(value.encode("utf-8"), hashed_value.encode("utf-8"))
 
 
-def create_access_token(subject: str, extra_claims: dict | None = None) -> str:
+def create_access_token(
+    subject: str,
+    extra_claims: dict | None = None,
+    expire_minutes: int | None = None,
+) -> str:
     """Create a signed JWT.
 
     Args:
-        subject:      The primary identity claim (user_id / admin_id as string).
-        extra_claims: Optional dict of additional claims to embed (e.g. {"role": "CHECKER"}).
-                      Standard claims (sub, iat, exp) always take precedence.
+        subject:        The primary identity claim (user_id / admin_id as string).
+        extra_claims:   Optional dict of additional claims to embed (e.g. {"role": "CHECKER"}).
+                        Standard claims (sub, iat, exp) always take precedence.
+        expire_minutes: Override the default expiry (from config). Pass 43200 for 30 days.
+                        If None, falls back to settings.access_token_expire_minutes.
     """
     settings = get_settings()
     now = datetime.now(UTC)
-    expires_at = now + timedelta(minutes=settings.access_token_expire_minutes)
+    minutes = expire_minutes if expire_minutes is not None else settings.access_token_expire_minutes
+    expires_at = now + timedelta(minutes=minutes)
     payload: dict = {**(extra_claims or {}), "sub": subject, "iat": int(now.timestamp()), "exp": int(expires_at.timestamp())}
     return jwt.encode(payload, settings.app_secret_key, algorithm=ALGORITHM)
 

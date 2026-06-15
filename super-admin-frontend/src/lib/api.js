@@ -756,3 +756,43 @@ export function getAuditLogs({ dateFrom, dateTo, role, actionType, success, limi
   params.set("offset", offset);
   return request(`/super-admin/audit-logs?${params}`, { headers: { Authorization: `Bearer ${token}` } });
 }
+
+// ── Order Disputes (admin board) ──────────────────────────────────────────────
+export function getDisputeSummary() {
+  const token = getToken();
+  return request("/disputes/summary", { headers: { Authorization: `Bearer ${token}` } });
+}
+export function listAdminDisputes({ raised_by_app, sector, status, limit = 100, offset = 0 } = {}) {
+  const token = getToken();
+  const params = new URLSearchParams({ limit, offset });
+  if (raised_by_app) params.set("raised_by_app", raised_by_app);
+  if (sector) params.set("sector", sector);
+  if (status) params.set("status", status);
+  return request(`/disputes?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+}
+export function closeDispute(disputeId, resolutionNotes) {
+  const token = getToken();
+  return request(`/disputes/${disputeId}/close`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ resolution_notes: resolutionNotes }),
+  });
+}
+export async function addAdminDisputeReply(disputeId, { text_content, voice_file, image_file, attachment_file, is_internal = false }) {
+  const token = getToken();
+  const fd = new FormData();
+  if (text_content) fd.append("text_content", text_content);
+  if (is_internal) fd.append("is_internal", "true");
+  if (voice_file) fd.append("voice_file", voice_file);
+  if (image_file) fd.append("image_file", image_file);
+  if (attachment_file) fd.append("attachment_file", attachment_file);
+  const resp = await fetch(`${API_BASE_URL}/disputes/${disputeId}/reply`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: fd,
+  });
+  if (resp.status === 401) { window.localStorage.removeItem(TOKEN_KEY); window.location.href = "/login"; throw new Error("Session expired."); }
+  const payload = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(payload.detail || "Failed to send reply.");
+  return payload;
+}

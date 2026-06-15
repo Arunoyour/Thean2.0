@@ -750,6 +750,17 @@ export function PharmacyOrdersPage() {
                 ) : null}
               </div>
 
+              {/* ── Raise Dispute ── */}
+              <div className="order-dispute-row">
+                <a
+                  href={`/home/disputes/raise?order_id=${order.order_id}&sectors=pharmacy,delivery`}
+                  className="order-dispute-link"
+                >
+                  ⚠️ Raise a dispute on this order
+                </a>
+                <a href="/home/disputes" className="order-dispute-view-link">My disputes</a>
+              </div>
+
               {/* ── Delivery rating banner (COMPLETED) ── */}
               {order.status === "COMPLETED" && order.delivery_order_id ? (() => {
                 const rs = ratingState[order.order_id] || {};

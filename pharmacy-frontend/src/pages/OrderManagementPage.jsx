@@ -696,6 +696,10 @@ export function OrderManagementPage() {
                     mediaUrls={mediaByOrderId[order.order_id] || { prescriptions: [], voice: null }}
                     loadMedia={loadOrderMedia}
                   />
+                  <div className="order-dispute-row">
+                    <a href={`/disputes/raise?order_id=${order.order_id}&sectors=pharmacy,delivery`} className="order-dispute-link">⚠️ Raise a dispute</a>
+                    <a href="/disputes" className="order-dispute-view-link">My disputes</a>
+                  </div>
                 </div>
               </article>
             );

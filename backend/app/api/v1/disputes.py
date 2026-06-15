@@ -26,16 +26,36 @@ async def get_overview(
     return await svc.get_overview(session)
 
 
+@router.get("/summary")
+async def dispute_summary(
+    actor: SuperAdmin = Depends(require_role("SUPER", "SUPERVISOR", "CHECKER", "AUDITOR")),
+    session: AsyncSession = Depends(get_session),
+):
+    """Admin board summary — counts per sector and app."""
+    return await svc.admin_dispute_summary(session)
+
+
 @router.get("")
 async def list_disputes(
     raised_by_app: Optional[str]      = None,
+    sector: Optional[str]             = None,
     status: Optional[str]             = None,
     dispute_type: Optional[str]       = None,
-    limit: int = 50,
+    limit: int = 100,
     offset: int = 0,
     actor: SuperAdmin = Depends(require_role("SUPER", "SUPERVISOR", "CHECKER", "AUDITOR")),
     session: AsyncSession = Depends(get_session),
 ):
+    # If sector filter is used, use the admin board function; otherwise fall back to old
+    if sector or (status is None and dispute_type is None):
+        return await svc.admin_list_disputes(
+            session,
+            raised_by_app=raised_by_app,
+            sector=sector,
+            status=status,
+            limit=limit,
+            offset=offset,
+        )
     return await svc.list_disputes(
         session,
         raised_by_app=raised_by_app,
@@ -122,6 +142,28 @@ async def add_reply(
     )
     await audit(session, actor=actor, action_type=AuditAction.DISPUTE_REPLY,
                 description=f"Admin reply on dispute {dispute_id}",
+                target_type="dispute", target_id=str(dispute_id))
+    await session.commit()
+    return result
+
+
+# ── Admin close (60-day rule) ──────────────────────────────────────────────────
+
+@router.post("/{dispute_id}/close")
+async def close_dispute(
+    dispute_id: uuid.UUID,
+    payload: dict,
+    actor: SuperAdmin = Depends(require_role("SUPER", "SUPERVISOR")),
+    session: AsyncSession = Depends(get_session),
+):
+    """Admin/supervisor close — enforces 60-day minimum age rule."""
+    resolution_notes = payload.get("resolution_notes", "").strip()
+    if not resolution_notes:
+        from fastapi import HTTPException
+        raise HTTPException(400, "resolution_notes is required.")
+    result = await svc.admin_close_dispute(session, dispute_id, actor, resolution_notes)
+    await audit(session, actor=actor, action_type=AuditAction.DISPUTE_RESOLVE,
+                description=f"Dispute {dispute_id} closed by admin (60-day rule)",
                 target_type="dispute", target_id=str(dispute_id))
     await session.commit()
     return result

@@ -105,7 +105,7 @@ async def verify_otp(session: AsyncSession, phone_number: str, otp: str) -> Auth
     await session.commit()
 
     return AuthResponse(
-        access_token=create_access_token(str(user.user_id)),
+        access_token=create_access_token(str(user.user_id), expire_minutes=43_200),  # 30 days
         user=serialize_user(user),
     )
 

@@ -212,6 +212,7 @@ async def create_cycle(
     )
     session.add(cycle)
     await session.flush()
+    await session.refresh(cycle)
     return _serialize_cycle(cycle)
 
 
@@ -250,6 +251,7 @@ async def list_batches(
     *,
     cycle_id: uuid.UUID | None = None,
     stakeholder_type: str | None = None,
+    stakeholder_id: uuid.UUID | None = None,
     status: str | None = None,
     limit: int = 50,
     offset: int = 0,
@@ -259,6 +261,8 @@ async def list_batches(
         q = q.where(SettlementBatch.cycle_id == cycle_id)
     if stakeholder_type:
         q = q.where(SettlementBatch.stakeholder_type == stakeholder_type)
+    if stakeholder_id:
+        q = q.where(SettlementBatch.stakeholder_id == stakeholder_id)
     if status:
         q = q.where(SettlementBatch.status == status)
     q = q.limit(limit).offset(offset)

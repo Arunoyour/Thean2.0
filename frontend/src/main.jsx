@@ -6,6 +6,10 @@ import { AppShell } from "./components/AppShell.jsx";
 import { RequireAuth } from "./components/RequireAuth.jsx";
 import { AddressListPage } from "./pages/AddressListPage.jsx";
 import { AddressPage } from "./pages/AddressPage.jsx";
+import { CustomerDisputeDetailPage } from "./pages/CustomerDisputeDetailPage.jsx";
+import { CustomerDisputeListPage } from "./pages/CustomerDisputeListPage.jsx";
+import { CustomerRaiseDisputePage } from "./pages/CustomerRaiseDisputePage.jsx";
+import { CustomerRefundStatusPage } from "./pages/CustomerRefundStatusPage.jsx";
 import { LandingPage } from "./pages/LandingPage.jsx";
 import { HomePage } from "./pages/HomePage.jsx";
 import { LoginPage } from "./pages/LoginPage.jsx";
@@ -34,6 +38,12 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route path="/home/pharmacy" element={<RequireAuth><PharmacyProductsPage /></RequireAuth>} />
           <Route path="/home/pharmacy/order" element={<RequireAuth><MedicineOrderPage /></RequireAuth>} />
           <Route path="/home/pharmacy/orders" element={<RequireAuth><PharmacyOrdersPage /></RequireAuth>} />
+
+          {/* ── Customer Disputes & Refunds ── */}
+          <Route path="/home/disputes" element={<RequireAuth><CustomerDisputeListPage /></RequireAuth>} />
+          <Route path="/home/disputes/raise" element={<RequireAuth><CustomerRaiseDisputePage /></RequireAuth>} />
+          <Route path="/home/disputes/:disputeId" element={<RequireAuth><CustomerDisputeDetailPage /></RequireAuth>} />
+          <Route path="/home/refunds" element={<RequireAuth><CustomerRefundStatusPage /></RequireAuth>} />
 
           {/* 404 catch-all */}
           <Route path="*" element={<NotFoundPage />} />

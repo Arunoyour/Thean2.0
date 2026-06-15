@@ -412,3 +412,101 @@ export function getDeliveryTracking(orderId) {
 export function logoutCustomer() {
   window.localStorage.removeItem("thean_access_token");
 }
+
+// ── Customer Disputes ─────────────────────────────────────────────────────
+
+export function listCustomerDisputes() {
+  const token = getToken();
+  if (!token) return Promise.reject(new Error("Not logged in."));
+  assertTokenNotExpired(token);
+  return request("/customer/disputes", { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function getCustomerDispute(disputeId) {
+  const token = getToken();
+  if (!token) return Promise.reject(new Error("Not logged in."));
+  assertTokenNotExpired(token);
+  return request(`/customer/disputes/${disputeId}`, { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export async function raiseCustomerDispute(formData) {
+  const token = getToken();
+  if (!token) throw new Error("Not logged in.");
+  assertTokenNotExpired(token);
+  const controller = new AbortController();
+  const timerId = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const resp = await fetch(`${API_BASE_URL}/customer/disputes`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+      signal: controller.signal,
+    });
+    if (resp.status === 401) {
+      window.localStorage.removeItem("thean_access_token");
+      window.location.href = "/login";
+      throw new Error("Session expired.");
+    }
+    const payload = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(payload.detail || "Failed to raise dispute.");
+    return payload;
+  } finally {
+    clearTimeout(timerId);
+  }
+}
+
+export async function reopenCustomerDispute(disputeId, formData) {
+  const token = getToken();
+  if (!token) throw new Error("Not logged in.");
+  assertTokenNotExpired(token);
+  const controller = new AbortController();
+  const timerId = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const resp = await fetch(`${API_BASE_URL}/customer/disputes/${disputeId}/reopen`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+      signal: controller.signal,
+    });
+    if (resp.status === 401) {
+      window.localStorage.removeItem("thean_access_token");
+      window.location.href = "/login";
+      throw new Error("Session expired.");
+    }
+    const payload = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(payload.detail || "Failed to reopen dispute.");
+    return payload;
+  } finally {
+    clearTimeout(timerId);
+  }
+}
+
+// ── Order Disputes (customer) ─────────────────────────────────────────────
+function _dAuthHdr() { return { Authorization: `Bearer ${getToken()}` }; }
+async function _dUpload(path, formData) {
+  const token = getToken();
+  const resp = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (resp.status === 401) { window.localStorage.removeItem("thean_access_token"); window.location.href = "/login"; throw new Error("Session expired."); }
+  const payload = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(payload.detail || "Request failed.");
+  return payload;
+}
+export function getOrderDisputeUnreadCount() {
+  return request("/customer/order-disputes/unread-count", { headers: _dAuthHdr() });
+}
+export function listOrderDisputes(status) {
+  const p = status ? `?status=${status}` : "";
+  return request(`/customer/order-disputes${p}`, { headers: _dAuthHdr() });
+}
+export function getOrderDispute(disputeId) {
+  return request(`/customer/order-disputes/${disputeId}`, { headers: _dAuthHdr() });
+}
+export function raiseOrderDispute(formData) { return _dUpload("/customer/order-disputes", formData); }
+export function replyOrderDispute(disputeId, formData) { return _dUpload(`/customer/order-disputes/${disputeId}/reply`, formData); }
+export function closeOrderDispute(disputeId) {
+  return request(`/customer/order-disputes/${disputeId}/close`, { method: "POST", headers: _dAuthHdr() });
+}
