@@ -28,6 +28,7 @@ import {
   getDeliveryAttention,
   getDeliveryDisputeUnreadCount,
   getDeliveryMe,
+  getDeliverySurgeConfig,
   getDeliveryToken,
   logoutDelivery,
   rejectDeliveryOrder,
@@ -35,6 +36,7 @@ import {
   updateDeliveryLocation,
   uploadDeliveryDocument,
 } from "../lib/api.js";
+import { validateFileSize } from "../lib/validation.js";
 
 const STATUS_LABELS = {
   ASSIGNED_TO_DELIVERY: "New Order",
@@ -178,6 +180,11 @@ function NewOrderPopup({ order, onAccept, onReject }) {
               <IndianRupee size={16} />
               <span>₹{order.earnings_amount ? Number(order.earnings_amount).toFixed(0) : "—"}</span>
               <small>earn</small>
+              {order.surge_multiplier > 1 && (
+                <span style={{ marginLeft: 4, background: "#f59e0b", color: "#fff", fontSize: "0.65rem", padding: "1px 5px", borderRadius: 99, fontWeight: 700 }}>
+                  ⚡ {order.surge_multiplier}× {order.surge_label ? `(${order.surge_label})` : ""}
+                </span>
+              )}
             </div>
             {order.cod_amount > 0 && (
               <div className="dl-popup-metric dl-metric-cod">
@@ -217,11 +224,12 @@ function DocUploadCard() {
 
   async function handleUpload(docType, file) {
     if (!file) return;
-    // Client-side MIME type check
     if (!ALLOWED_DOC_MIME.includes(file.type)) {
       setUploadError(`${file.name} is not allowed. Please upload a JPG, PNG, WebP, or PDF.`);
       return;
     }
+    const sizeErr = validateFileSize(file);
+    if (sizeErr) { setUploadError(sizeErr); return; }
     setUploadError("");
     setUploading(docType);
     try {
@@ -292,6 +300,8 @@ export function HomePage() {
   const [codWarning, setCodWarning] = useState(null); // WS-pushed warning message
   const [disputeUnread, setDisputeUnread] = useState(0);
   const [attentionCount, setAttentionCount] = useState(0);
+  const [surgeActive, setSurgeActive] = useState(false);
+  const [surgeInfo, setSurgeInfo] = useState({ multiplier: 1.0, label: "" });
   // account_disabled: show explanation screen for 3 s then logout
   const [accountDisabled, setAccountDisabled] = useState(false);
   const watchIdRef = useRef(null);
@@ -351,6 +361,8 @@ export function HomePage() {
           pickup_lng: msg.pickup_lng,
           dropoff_lat: msg.dropoff_lat,
           dropoff_lng: msg.dropoff_lng,
+          surge_multiplier: msg.surge_multiplier || 1.0,
+          surge_label: msg.surge_label || "",
           status: "ASSIGNED_TO_DELIVERY",
         });
       } else if (msg.type === "account_disabled") {
@@ -373,16 +385,18 @@ export function HomePage() {
   async function loadData() {
     setIsLoading(true);
     try {
-      const [acc, active, unreadData, attentionData] = await Promise.all([
+      const [acc, active, unreadData, attentionData, surgeData] = await Promise.all([
         getDeliveryMe(),
         getActiveDeliveryOrder(),
         getDeliveryDisputeUnreadCount().catch(() => ({ unread: 0 })),
         getDeliveryAttention().catch(() => ({ count: 0 })),
+        getDeliverySurgeConfig().catch(() => null),
       ]);
       setAccount(acc);
       setActiveOrder(active);
       setDisputeUnread(unreadData?.unread || 0);
       setAttentionCount(attentionData?.count || 0);
+      if (surgeData) { setSurgeActive(surgeData.is_active); setSurgeInfo({ multiplier: surgeData.multiplier, label: surgeData.label }); }
     } catch (e) {
       if (e.message.includes("login")) navigate("/login");
       else setError(e.message);
@@ -466,6 +480,13 @@ export function HomePage() {
           </button>
         </div>
       </header>
+
+      {/* Surge banner */}
+      {surgeActive && (
+        <div style={{ background: "#f59e0b", color: "#fff", padding: "0.6rem 1rem", textAlign: "center", fontWeight: 600, fontSize: "0.9rem" }}>
+          ⚡ Surge active — {surgeInfo.multiplier}× earnings{surgeInfo.label ? ` (${surgeInfo.label})` : ""}
+        </div>
+      )}
 
       {/* Attention banner */}
       {attentionCount > 0 && (

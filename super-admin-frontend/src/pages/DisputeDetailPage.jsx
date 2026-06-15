@@ -10,6 +10,7 @@ import {
   closeDispute,
 } from "../lib/api.js";
 import { canApprove, canWriteConfig } from "../lib/role.js";
+import { validateFileSize } from "../lib/validation.js";
 
 const STATUS_COLORS = {
   OPEN:      "#dc2626",
@@ -150,6 +151,10 @@ export function DisputeDetailPage() {
   async function handleSendReply(e) {
     e.preventDefault();
     if (!replyText.trim() && !replyVoice && !replyImage && !replyAttach) return;
+    for (const f of [replyVoice, replyImage, replyAttach]) {
+      const err = validateFileSize(f);
+      if (err) { alert(err); return; }
+    }
     setSending(true);
     try {
       await addDisputeReply(disputeId, {

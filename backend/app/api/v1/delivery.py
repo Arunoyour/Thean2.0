@@ -33,6 +33,12 @@ from app.schemas.delivery import (
     DeliveryTrackingResponse,
     RateConfigResponse,
     SetRateRequest,
+    SetSurgeConfigRequest,
+    SetTierRateRequest,
+    SetAccountTierRequest,
+    SetAccountCustomRateRequest,
+    SurgeConfigResponse,
+    TierRateResponse,
     SendChatMessageRequest,
     CashoutRequest,
     EarningsSummaryResponse,
@@ -52,18 +58,24 @@ from app.services.delivery_service import (
     get_delivery_tracking,
     get_earnings_summary,
     get_rate_history,
+    get_surge_config,
     list_all_delivery_accounts,
     list_all_delivery_orders_admin,
     list_chat_messages,
     list_delivery_orders,
+    list_tier_rates,
     list_unassigned_orders,
     register_delivery_account,
     reject_delivery_order,
     request_cashout,
     request_delivery_otp,
     send_chat_message,
+    set_account_custom_rate,
+    set_account_tier,
     set_delivery_availability,
     set_rate,
+    set_surge_config,
+    set_tier_rate,
     submit_delivery_rating,
     update_delivery_location,
     upload_delivery_document,
@@ -115,10 +127,43 @@ async def _check_admin(token: str | None) -> None:
 
 @router.post("/register", response_model=DeliveryAccountResponse, status_code=status.HTTP_201_CREATED)
 async def register(
-    payload: DeliveryRegisterRequest,
+    full_name:      str          = Form(...),
+    phone_number:   str          = Form(...),
+    email:          str | None   = Form(None),
+    vehicle_type:   str          = Form(...),
+    vehicle_number: str | None   = Form(None),
+    license_number: str | None   = Form(None),
+    id_number:      str | None   = Form(None),
+    rc_book_front:  UploadFile   = File(...),
+    rc_book_back:   UploadFile   = File(...),
+    insurance:      UploadFile   = File(...),
+    profile_photo:  UploadFile   = File(...),
     session: AsyncSession = Depends(get_delivery_session),
 ):
-    return await register_delivery_account(session, payload)
+    _MAX = 1 * 1024 * 1024  # 1 MB
+    for label, f in [("RC book front", rc_book_front), ("RC book back", rc_book_back), ("Insurance", insurance), ("Profile photo", profile_photo)]:
+        content = await f.read()
+        if len(content) > _MAX:
+            raise HTTPException(status_code=422, detail=f"{label} exceeds the 1 MB limit.")
+        await f.seek(0)
+
+    payload = DeliveryRegisterRequest(
+        full_name=full_name, phone_number=phone_number, email=email,
+        vehicle_type=vehicle_type, vehicle_number=vehicle_number,
+        license_number=license_number, id_number=id_number,
+    )
+    account_resp = await register_delivery_account(session, payload)
+
+    # Resolve the newly created account to save documents
+    from sqlalchemy import select
+    from app.models.delivery import DeliveryAccount as DA
+    result = await session.execute(select(DA).where(DA.phone_number == phone_number))
+    account_obj = result.scalar_one_or_none()
+    if account_obj:
+        for doc_type, file in [("rc_book_front", rc_book_front), ("rc_book_back", rc_book_back), ("insurance", insurance), ("profile_photo", profile_photo)]:
+            await upload_delivery_document(session, account_obj.account_id, doc_type, file)
+
+    return account_resp
 
 
 @router.post("/documents/{doc_type}", status_code=status.HTTP_204_NO_CONTENT)
@@ -128,8 +173,8 @@ async def upload_document(
     account: DeliveryAccount = Depends(get_current_delivery_account),
     session: AsyncSession = Depends(get_delivery_session),
 ):
-    if doc_type not in ("driving_license", "id_proof"):
-        raise HTTPException(status_code=422, detail="doc_type must be driving_license or id_proof")
+    if doc_type not in ("driving_license", "id_proof", "rc_book_front", "rc_book_back", "insurance", "profile_photo"):
+        raise HTTPException(status_code=422, detail="Invalid doc_type")
     await upload_delivery_document(session, account.account_id, doc_type, file)
 
 
@@ -378,6 +423,68 @@ async def update_rate(
     """Set a new rate. Previous rates are preserved as change log."""
     await _check_admin(x_super_admin_token)
     return await set_rate(session, payload)
+
+
+# ── Tier rates ────────────────────────────────────────────────────────────
+
+@router.get("/admin/config/tier-rates", response_model=list[TierRateResponse])
+async def get_tier_rates(
+    x_super_admin_token: str | None = None,
+    session: AsyncSession = Depends(get_delivery_session),
+):
+    await _check_admin(x_super_admin_token)
+    return await list_tier_rates(session)
+
+
+@router.put("/admin/config/tier-rates/{tier}", response_model=TierRateResponse)
+async def update_tier_rate(
+    tier: str,
+    payload: SetTierRateRequest,
+    x_super_admin_token: str | None = None,
+    session: AsyncSession = Depends(get_delivery_session),
+):
+    await _check_admin(x_super_admin_token)
+    return await set_tier_rate(session, tier, payload)
+
+
+@router.put("/admin/delivery-boys/{account_id}/tier", response_model=DeliveryAccountResponse)
+async def update_account_tier(
+    account_id: uuid.UUID,
+    payload: SetAccountTierRequest,
+    x_super_admin_token: str | None = None,
+    session: AsyncSession = Depends(get_delivery_session),
+):
+    await _check_admin(x_super_admin_token)
+    return await set_account_tier(session, account_id, payload.tier)
+
+
+@router.put("/admin/delivery-boys/{account_id}/custom-rate", response_model=DeliveryAccountResponse)
+async def update_account_custom_rate(
+    account_id: uuid.UUID,
+    payload: SetAccountCustomRateRequest,
+    x_super_admin_token: str | None = None,
+    session: AsyncSession = Depends(get_delivery_session),
+):
+    await _check_admin(x_super_admin_token)
+    return await set_account_custom_rate(session, account_id, payload.custom_rate_per_km)
+
+
+# ── Surge Config ─────────────────────────────────────────────────────────
+
+@router.get("/config/surge", response_model=SurgeConfigResponse)
+async def get_surge(session: AsyncSession = Depends(get_delivery_session)):
+    """Public — returns the current surge config so UIs can show the surge label and fee impact."""
+    return await get_surge_config(session)
+
+
+@router.put("/admin/config/surge", response_model=SurgeConfigResponse)
+async def update_surge(
+    payload: SetSurgeConfigRequest,
+    x_super_admin_token: str | None = None,
+    session: AsyncSession = Depends(get_delivery_session),
+):
+    await _check_admin(x_super_admin_token)
+    return await set_surge_config(session, payload)
 
 
 # ── Customer-facing tracking ─────────────────────────────────────────────

@@ -65,6 +65,11 @@ function OrderCard({ order }) {
       <div className="dl-order-earn-header">
         <span className="dl-order-earn-date">{fmtDateShort(order.accepted_at)}</span>
         <span className="dl-order-earn-km">{km} km · {timeTaken}</span>
+        {order.surge_multiplier > 1 && (
+          <span style={{ background: "#f59e0b", color: "#fff", fontSize: "0.65rem", padding: "1px 6px", borderRadius: 99, fontWeight: 700, marginLeft: 4 }}>
+            ⚡ {Number(order.surge_multiplier).toFixed(2)}× {order.surge_label ? `(${order.surge_label})` : "surge"}
+          </span>
+        )}
       </div>
       <div className="dl-order-earn-locations">
         <div className="dl-order-earn-loc">

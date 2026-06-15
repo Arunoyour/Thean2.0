@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Mic, MicOff, Paperclip, Send, X } from "lucide-react";
 import { closeOrderDispute, getOrderDispute, replyOrderDispute } from "../lib/api.js";
+import { MAX_FILE_SIZE_BYTES, validateFileSize } from "../lib/validation.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/v1";
 const STATUS_LABEL = { OPEN: "Open", IN_REVIEW: "In Review", REOPENED: "Replied", RESOLVED: "Resolved", CLOSED: "Closed" };
@@ -96,7 +97,7 @@ export function CustomerDisputeDetailPage() {
   function pickFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > MAX_FILE_BYTES) { setError("File must be under 10 MB."); return; }
+    const sizeErr = validateFileSize(file); if (sizeErr) { setError(sizeErr); return; }
     setAttachment(file);
   }
 

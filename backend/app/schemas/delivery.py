@@ -22,6 +22,51 @@ class SetRateRequest(BaseModel):
     reason: str = Field(min_length=5, max_length=500, description="Reason for the change")
 
 
+# ── Tier rates ────────────────────────────────────────────────────────────
+
+VALID_TIERS = {"JUNIOR", "STANDARD", "SENIOR", "EXPERT"}
+
+class TierRateResponse(BaseModel):
+    tier: str
+    rate_per_km: float
+    updated_by: str
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SetTierRateRequest(BaseModel):
+    rate_per_km: float = Field(gt=0, description="Rate in ₹ per km for this tier")
+    updated_by: str = Field(min_length=2, max_length=100)
+
+
+class SetAccountTierRequest(BaseModel):
+    tier: str = Field(description="One of JUNIOR, STANDARD, SENIOR, EXPERT")
+
+
+class SetAccountCustomRateRequest(BaseModel):
+    custom_rate_per_km: float | None = Field(default=None, gt=0, description="Set null to revert to tier rate")
+
+
+# ── Surge Config ─────────────────────────────────────────────────────────
+
+class SurgeConfigResponse(BaseModel):
+    is_active: bool
+    multiplier: float
+    label: str
+    updated_by: str
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SetSurgeConfigRequest(BaseModel):
+    is_active: bool
+    multiplier: float = Field(ge=1.0, le=2.0, description="Surge multiplier 1.0–2.0")
+    label: str = Field(max_length=100, description="Reason label shown to delivery boys and customers")
+    updated_by: str = Field(min_length=2, max_length=100)
+
+
 # ── Auth ──────────────────────────────────────────────────────────────────
 
 class DeliveryRegisterRequest(BaseModel):
@@ -65,6 +110,10 @@ class DeliveryAccountResponse(BaseModel):
     is_online: bool
     current_lat: float | None
     current_lng: float | None
+    # Rate
+    tier: str = "STANDARD"
+    custom_rate_per_km: float | None = None
+    effective_rate: float | None = None  # resolved at query time, not a DB column
     # COD
     cod_balance: float
     cod_blocked: bool
@@ -111,6 +160,8 @@ class DeliveryOrderResponse(BaseModel):
     distance_km: float | None
     earnings_amount: float | None
     rate_per_km: float
+    surge_multiplier: float = 1.0
+    surge_label: str = ""
     cod_amount: float | None
     pickup_pin: str | None
     delivery_pin: str | None

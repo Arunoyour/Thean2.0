@@ -277,6 +277,7 @@ export function DeliveryBoysPage() {
                 <th>Driver</th>
                 <th>Contact</th>
                 <th>Vehicle</th>
+                <th>Tier / Rate</th>
                 <th>Status</th>
                 <th>Online</th>
                 <th>COD</th>
@@ -311,6 +312,13 @@ export function DeliveryBoysPage() {
                     <td>
                       <div>{a.vehicle_type}</div>
                       {a.vehicle_number && <div className="dl-driver-sub">{a.vehicle_number}</div>}
+                    </td>
+                    <td>
+                      <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "#94a3b8" }}>{a.tier || "STANDARD"}</div>
+                      <div style={{ fontSize: "0.85rem", color: "#22c55e" }}>
+                        ₹{a.effective_rate != null ? Number(a.effective_rate).toFixed(2) : "—"}/km
+                        {a.custom_rate_per_km != null && <span title="Custom rate" style={{ marginLeft: 4, color: "#f59e0b" }}>★</span>}
+                      </div>
                     </td>
                     <td><StatusBadge status={a.account_status} /></td>
                     <td>

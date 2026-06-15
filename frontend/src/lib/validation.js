@@ -72,3 +72,12 @@ export function inputClass(touched, error, extra = "") {
   if (!touched) return extra;
   return `${extra} ${error ? "input-error" : "input-valid"}`.trim();
 }
+
+export const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024; // 1 MB
+
+/** Returns an error string if file exceeds 1 MB, null otherwise. */
+export function validateFileSize(file) {
+  if (!file) return null;
+  if (file.size > MAX_FILE_SIZE_BYTES) return `${file.name} exceeds the 1 MB limit (${(file.size / 1024 / 1024).toFixed(1)} MB).`;
+  return null;
+}

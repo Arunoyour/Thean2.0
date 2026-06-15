@@ -155,7 +155,14 @@ export function OrderDetailPage() {
 
       {/* Earnings */}
       <div className="dl-earnings-strip">
-        <div><IndianRupee size={16} /> ₹{order.earnings_amount ? Number(order.earnings_amount).toFixed(2) : "0"}</div>
+        <div>
+          <IndianRupee size={16} /> ₹{order.earnings_amount ? Number(order.earnings_amount).toFixed(2) : "0"}
+          {order.surge_multiplier > 1 && (
+            <span style={{ marginLeft: 6, background: "#f59e0b", color: "#fff", fontSize: "0.65rem", padding: "1px 6px", borderRadius: 99, fontWeight: 700 }}>
+              ⚡ {Number(order.surge_multiplier).toFixed(2)}×{order.surge_label ? ` ${order.surge_label}` : ""}
+            </span>
+          )}
+        </div>
         <div><Navigation size={16} /> {order.distance_km ? `${Number(order.distance_km).toFixed(1)} km` : "—"}</div>
         <div><Truck size={16} /> {order.vehicle_type || ""}</div>
       </div>

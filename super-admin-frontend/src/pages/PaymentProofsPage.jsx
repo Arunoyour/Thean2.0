@@ -7,6 +7,7 @@ import {
   verifyPaymentProof,
 } from "../lib/api.js";
 import { canWriteConfig } from "../lib/role.js";
+import { validateFileSize } from "../lib/validation.js";
 
 const PROOF_TYPE_COLORS = { INWARD: "#2563eb", OUTWARD: "#16a34a" };
 const METHOD_LABELS = {
@@ -57,6 +58,8 @@ export function PaymentProofsPage() {
       setFormError("Enter a valid amount.");
       return;
     }
+    const sizeErr = validateFileSize(selectedFile);
+    if (sizeErr) { setFormError(sizeErr); return; }
     setUploading(true);
     try {
       await uploadPaymentProof(batchId, {

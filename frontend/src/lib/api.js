@@ -514,3 +514,7 @@ export function closeOrderDispute(disputeId) {
 export function getCustomerAttention() {
   return request("/customer/attention", { headers: _dAuthHdr() });
 }
+
+export function getDeliverySurgeConfig() {
+  return request("/delivery/config/surge");
+}

@@ -49,8 +49,36 @@ function authHeaders() {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────
-export function registerDelivery(data) {
-  return request("/delivery/register", { method: "POST", body: JSON.stringify(data) });
+export async function registerDelivery(data) {
+  // Multipart — includes rc_book_front, rc_book_back, insurance files
+  const fd = new FormData();
+  const textFields = ["full_name", "phone_number", "email", "vehicle_type", "vehicle_number", "license_number", "id_number"];
+  textFields.forEach(k => { if (data[k] != null && data[k] !== "") fd.append(k, data[k]); });
+  fd.append("profile_photo", data.profile_photo);
+  fd.append("rc_book_front", data.rc_book_front);
+  fd.append("rc_book_back",  data.rc_book_back);
+  fd.append("insurance",     data.insurance);
+
+  const controller = new AbortController();
+  const timerId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+  try {
+    const resp = await fetch(`${API_BASE_URL}/delivery/register`, {
+      method: "POST", body: fd, signal: controller.signal,
+    });
+    if (!resp.ok) {
+      let detail;
+      try { detail = (await resp.json()).detail; } catch { detail = resp.statusText; }
+      const err = new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+      err.detail = detail;
+      throw err;
+    }
+    return resp.json();
+  } catch (fetchError) {
+    if (fetchError.name === "AbortError") throw new Error("Request timed out. Check your connection and try again.");
+    throw fetchError;
+  } finally {
+    clearTimeout(timerId);
+  }
 }
 
 export function requestDeliveryOtp(phoneNumber) {
@@ -272,3 +300,8 @@ export function getDeliveryAttention() {
       return d;
     });
 }
+
+export function getDeliverySurgeConfig() {
+  return request("/delivery/config/surge");
+}
+
