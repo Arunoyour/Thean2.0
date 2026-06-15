@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bike, Building2, ClipboardList, LogOut, Percent, Pill, RefreshCw, ScrollText, ShieldCheck, Users } from "lucide-react";
+import { Bike, BookOpen, Building2, ClipboardList, CreditCard, GitMerge, LogOut, MessageSquare, Percent, Pill, RefreshCw, ScrollText, ShieldCheck, Users } from "lucide-react";
 
 import { getCurrentAdmin, listCustomers, listPharmacies, logoutAdmin } from "../lib/api.js";
 import { canManageAdmins, canSeeAuditLog, canApprove } from "../lib/role.js";
@@ -175,6 +175,9 @@ export function DashboardPage() {
             <Pill size={18} aria-hidden="true" />
             Review Pharmacy Products
           </button>
+          <button className="outline-button" type="button" onClick={() => navigate("/dashboard/pharmacy/order-status")}>
+            Live Order Status Board
+          </button>
         </article>
 
         {/* Fee & Tax Config */}
@@ -214,6 +217,74 @@ export function DashboardPage() {
             </button>
             <button className="outline-button" type="button" onClick={() => navigate("/dashboard/delivery/cod")}>
               COD & Cash
+            </button>
+          </div>
+        </article>
+
+        {/* Settlement */}
+        <article className="sector-card">
+          <header className="sector-card-header">
+            <CreditCard size={26} aria-hidden="true" />
+            <div>
+              <h2>Settlement</h2>
+              <p className="eyebrow">Cycles, batches & ledger</p>
+            </div>
+          </header>
+          <div className="sector-card-actions">
+            <button className="button" type="button" onClick={() => navigate("/dashboard/settlement")}>
+              <CreditCard size={18} aria-hidden="true" />
+              Open Settlement
+            </button>
+          </div>
+        </article>
+
+        {/* Stakeholder Ledger */}
+        <article className="sector-card">
+          <header className="sector-card-header">
+            <BookOpen size={26} aria-hidden="true" />
+            <div>
+              <h2>Ledger</h2>
+              <p className="eyebrow">Running balance per stakeholder</p>
+            </div>
+          </header>
+          <div className="sector-card-actions">
+            <button className="button" type="button" onClick={() => navigate("/dashboard/ledger")}>
+              <BookOpen size={18} aria-hidden="true" />
+              View Ledger
+            </button>
+          </div>
+        </article>
+
+        {/* Disputes */}
+        <article className="sector-card">
+          <header className="sector-card-header">
+            <MessageSquare size={26} aria-hidden="true" />
+            <div>
+              <h2>Disputes</h2>
+              <p className="eyebrow">All apps — raise, review, resolve</p>
+            </div>
+          </header>
+          <div className="sector-card-actions">
+            <button className="button" type="button" onClick={() => navigate("/dashboard/disputes")}>
+              <MessageSquare size={18} aria-hidden="true" />
+              Open Dispute Management
+            </button>
+          </div>
+        </article>
+
+        {/* Reconciliation */}
+        <article className="sector-card">
+          <header className="sector-card-header">
+            <GitMerge size={26} aria-hidden="true" />
+            <div>
+              <h2>Reconciliation</h2>
+              <p className="eyebrow">Three-way match & exceptions</p>
+            </div>
+          </header>
+          <div className="sector-card-actions">
+            <button className="button" type="button" onClick={() => navigate("/dashboard/reconciliation")}>
+              <GitMerge size={18} aria-hidden="true" />
+              Open Reconciliation
             </button>
           </div>
         </article>

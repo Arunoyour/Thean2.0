@@ -2276,3 +2276,330 @@ select.input-valid {
 /* ── Dashboard skeleton ───────────────────────────────────────────────── */
 .dashboard-skeleton-header { margin-bottom: 2rem; }
 .dashboard-skeleton-grid   { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
+
+/* ── Pharmacy Order Status Board ─────────────────────────────────────── */
+.order-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.order-status-bucket {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.order-status-bucket-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-left: 4px solid;
+  background: #f9fafb;
+}
+
+.order-status-bucket-header h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.order-status-bucket-header p {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.order-status-bucket-count {
+  margin-left: auto;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  min-width: 2rem;
+  text-align: center;
+}
+
+.order-status-bucket-body {
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.order-status-empty {
+  color: #9ca3af;
+  font-size: 0.85rem;
+  padding: 1rem;
+  text-align: center;
+}
+
+.order-status-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.order-status-card:hover {
+  border-color: #6366f1;
+  box-shadow: 0 1px 4px rgba(99,102,241,0.15);
+}
+
+.order-status-card--urgent {
+  border-color: #ef4444;
+  background: #fff5f5;
+}
+
+.order-status-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+
+.order-status-card-id {
+  font-family: monospace;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.order-status-card-pharmacy {
+  font-size: 0.9rem;
+  color: #374151;
+  font-weight: 500;
+}
+
+.order-status-card-meta {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 0.25rem;
+}
+
+/* ── Admin Live Map + Replay (Phase 5) ───────────────────────────────── */
+.admin-map-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.admin-map-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 18px;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.admin-map-tab--active {
+  background: #0f766e;
+  color: #fff;
+  border-color: #0f766e;
+}
+
+.admin-map-panel {
+  display: flex;
+  gap: 0;
+  flex: 1;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #334155;
+  min-height: 560px;
+}
+
+.admin-map-sidebar {
+  width: 240px;
+  min-width: 240px;
+  background: #0f172a;
+  color: #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #1e293b;
+  overflow: hidden;
+}
+
+.admin-map-sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid #1e293b;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.admin-map-refresh-time {
+  font-size: 0.72rem;
+  color: #475569;
+  padding: 2px 14px 6px;
+  margin: 0;
+}
+
+.admin-map-driver-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-map-driver-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.1s;
+}
+
+.admin-map-driver-row:hover { background: #1e293b; }
+.admin-map-driver-row--selected { background: #134e4a !important; color: #5eead4; }
+
+.admin-map-driver-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.admin-map-driver-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-map-driver-meta {
+  font-size: 0.72rem;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.admin-map-detail {
+  padding: 12px 14px;
+  border-top: 1px solid #1e293b;
+  font-size: 0.82rem;
+  line-height: 1.7;
+  color: #cbd5e1;
+}
+
+.admin-map-error {
+  color: #f87171;
+  font-size: 0.8rem;
+  padding: 8px 14px;
+  margin: 0;
+}
+
+.admin-map-empty {
+  color: #475569;
+  font-size: 0.82rem;
+  padding: 16px;
+  text-align: center;
+}
+
+.admin-map-loading {
+  color: #64748b;
+  font-size: 0.82rem;
+  padding: 16px;
+  text-align: center;
+}
+
+.admin-map-canvas {
+  flex: 1;
+  min-height: 560px;
+  z-index: 0;
+}
+
+/* Replay panel */
+.admin-replay-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.admin-replay-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #475569;
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 2rem;
+  background: #0f172a;
+}
+
+.admin-replay-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #0f172a;
+  border-top: 1px solid #1e293b;
+}
+
+.admin-replay-scrubber {
+  flex: 1;
+  accent-color: #0f766e;
+}
+
+.admin-replay-time {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  min-width: 48px;
+  text-align: right;
+}
+
+.admin-replay-speed {
+  background: #1e293b;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  padding: 3px 6px;
+}
+
+.icon-btn-sm {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  border-radius: 6px;
+  padding: 5px 7px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s;
+}
+
+.icon-btn-sm:hover { background: #334155; color: #e2e8f0; }

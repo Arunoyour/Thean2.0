@@ -3289,3 +3289,35 @@ select.input-valid {
   font-weight: 500;
   z-index: 9999;
 }
+
+/* ── Inline delivery map ──────────────────────────────────────────────── */
+.delivery-map-card {
+  margin: 12px 0 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1.5px solid #c7d2fe;
+}
+
+.delivery-map-eta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #eef2ff;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  color: #3730a3;
+  font-weight: 500;
+}
+
+.delivery-map-eta-icon { font-size: 1.1rem; }
+
+.delivery-map-eta-time {
+  margin-left: auto;
+  font-weight: 700;
+  color: #4338ca;
+}
+
+.delivery-map-container {
+  height: 220px;
+  width: 100%;
+}

@@ -258,3 +258,25 @@ class DeliveryRating(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
+
+
+class DeliveryLocationLog(Base):
+    """Append-only GPS heartbeat log — one row per 15-second ping while a delivery is active."""
+    __tablename__ = "delivery_location_log"
+
+    log_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    delivery_order_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("delivery_orders.delivery_order_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("delivery_accounts.account_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    lat: Mapped[float] = mapped_column(Numeric(10, 7), nullable=False)
+    lng: Mapped[float] = mapped_column(Numeric(10, 7), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC), server_default=func.now()
+    )

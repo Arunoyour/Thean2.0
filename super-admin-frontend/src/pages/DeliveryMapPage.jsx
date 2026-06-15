@@ -1,197 +1,493 @@
-import { useEffect, useRef, useState } from "react";
-import { RefreshCw, Users } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowLeft, Pause, Play, RefreshCw, RotateCw, Users } from "lucide-react";
 import { DeliveryLayout } from "./DeliveryLayout.jsx";
-import { listDeliveryAccounts, listDeliveryOrders } from "../lib/api.js";
+import {
+  getActiveDeliveryLocations,
+  getDeliveryLocationTrail,
+  listDeliveryOrders,
+} from "../lib/api.js";
 
-// Marker colours keyed by driver state
-const MARKER_CONFIG = {
-  online_idle:        { color: "#22c55e", label: "Online · Idle",           emoji: "🟢" },
-  way_to_pickup:      { color: "#f59e0b", label: "En Route to Pickup",      emoji: "🟡" },
-  way_to_delivery:    { color: "#3b82f6", label: "En Route to Customer",    emoji: "🔵" },
-  waiting_customer:   { color: "#a855f7", label: "At Customer",             emoji: "🟣" },
-  at_store:           { color: "#fb923c", label: "At Store",                emoji: "🟠" },
-  cod_blocked:        { color: "#ef4444", label: "COD Blocked",             emoji: "🔴" },
-  offline:            { color: "#475569", label: "Offline",                 emoji: "⚫" },
+// ── constants ────────────────────────────────────────────────────────────────
+const STATUS_COLOR = {
+  DELIVERY_ACCEPTED:    "#f59e0b",
+  ARRIVED_AT_STORE:     "#fb923c",
+  ORDER_PICKED_UP:      "#3b82f6",
+  ARRIVED_AT_CUSTOMER:  "#a855f7",
 };
+const STATUS_LABEL = {
+  DELIVERY_ACCEPTED:    "Heading to pharmacy",
+  ARRIVED_AT_STORE:     "At pharmacy",
+  ORDER_PICKED_UP:      "En route to customer",
+  ARRIVED_AT_CUSTOMER:  "At customer",
+};
+const LIVE_POLL_MS  = 15_000;
+const REPLAY_STEP_MS = 600; // ms between frames in replay animation
 
-function driverState(account, activeOrders) {
-  if (account.cod_blocked) return "cod_blocked";
-  const order = activeOrders[account.account_id];
-  if (!order) return account.is_online ? "online_idle" : "offline";
-  const s = order.status;
-  if (s === "DELIVERY_ACCEPTED") return "way_to_pickup";
-  if (s === "ARRIVED_AT_STORE")  return "at_store";
-  if (s === "ORDER_PICKED_UP")   return "way_to_delivery";
-  if (s === "ARRIVED_AT_CUSTOMER") return "waiting_customer";
-  return account.is_online ? "online_idle" : "offline";
+// ── helpers ──────────────────────────────────────────────────────────────────
+function fmtTime(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+function fmtDate(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString();
+}
+function elapsed(iso) {
+  if (!iso) return "";
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  return `${Math.floor(m / 60)}h ${m % 60}m ago`;
 }
 
-export function DeliveryMapPage() {
-  const mapRef = useRef(null);
-  const leafletMapRef = useRef(null);
-  const markersRef = useRef({});
-  const [accounts, setAccounts] = useState([]);
-  const [activeOrderMap, setActiveOrderMap] = useState({});
+function makeDriverIcon(L, color) {
+  return L.divIcon({
+    className: "",
+    html: `<div style="
+      background:${color};width:20px;height:20px;border-radius:50%;
+      border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);
+      display:flex;align-items:center;justify-content:center;
+      font-size:10px;color:#fff;font-weight:700;
+    ">🛵</div>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+    popupAnchor: [0, -14],
+  });
+}
+
+function makeReplayIcon(L, color) {
+  return L.divIcon({
+    className: "",
+    html: `<div style="
+      background:${color};width:14px;height:14px;border-radius:50%;
+      border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);
+    "></div>`,
+    iconSize: [14, 14],
+    iconAnchor: [7, 7],
+  });
+}
+
+// ── Live tab ─────────────────────────────────────────────────────────────────
+function LiveMap({ mapRef, leafletMapRef, markersRef }) {
+  const [drivers, setDrivers] = useState([]);
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 30000); // auto-refresh every 30s
-    return () => clearInterval(interval);
+  const load = useCallback(async () => {
+    try {
+      const data = await getActiveDeliveryLocations();
+      setDrivers(data);
+      setLastRefresh(new Date());
+      setError("");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  async function loadData() {
-    try {
-      const [accs, orders] = await Promise.all([listDeliveryAccounts(), listDeliveryOrders()]);
-      const activeStatuses = ["ASSIGNED_TO_DELIVERY","DELIVERY_ACCEPTED","ARRIVED_AT_STORE","ORDER_PICKED_UP","ARRIVED_AT_CUSTOMER"];
-      const orderMap = {};
-      orders.forEach(o => {
-        if (activeStatuses.includes(o.status)) orderMap[o.account_id] = o;
-      });
-      setAccounts(accs);
-      setActiveOrderMap(orderMap);
-      setLastRefresh(new Date());
-      setLoading(false);
-    } catch (e) { setLoading(false); }
-  }
-
-  // Build / update Leaflet map once data arrives
   useEffect(() => {
-    if (loading || !mapRef.current) return;
-    initOrUpdateMap();
-  }, [accounts, activeOrderMap, loading]);
+    load();
+    const id = setInterval(load, LIVE_POLL_MS);
+    return () => clearInterval(id);
+  }, [load]);
 
-  function initOrUpdateMap() {
-    // Load Leaflet dynamically (already has CSS from index.html or CDN)
-    if (typeof window === "undefined") return;
+  // Build/update markers whenever drivers list changes
+  useEffect(() => {
     const L = window.L;
-    if (!L) return;
+    if (!L || !mapRef.current) return;
 
-    const locatedAccounts = accounts.filter(a => a.current_lat && a.current_lng);
-    const defaultCenter = locatedAccounts.length > 0
-      ? [Number(locatedAccounts[0].current_lat), Number(locatedAccounts[0].current_lng)]
-      : [11.0168, 76.9558]; // Coimbatore as fallback
-
+    // Init map once
     if (!leafletMapRef.current) {
-      leafletMapRef.current = L.map(mapRef.current, { zoomControl: true }).setView(defaultCenter, 13);
+      const center = drivers.length > 0
+        ? [drivers[0].lat, drivers[0].lng]
+        : [11.0168, 76.9558];
+      leafletMapRef.current = L.map(mapRef.current, { zoomControl: true })
+        .setView(center, 13);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "© OpenStreetMap contributors",
+        attribution: "© OpenStreetMap",
         maxZoom: 19,
       }).addTo(leafletMapRef.current);
     }
 
-    // Clear old markers
-    Object.values(markersRef.current).forEach(m => m.remove());
-    markersRef.current = {};
+    // Remove stale markers
+    const currentIds = new Set(drivers.map((d) => d.delivery_order_id));
+    Object.keys(markersRef.current).forEach((id) => {
+      if (!currentIds.has(id)) {
+        markersRef.current[id].remove();
+        delete markersRef.current[id];
+      }
+    });
 
-    locatedAccounts.forEach(account => {
-      const state = driverState(account, activeOrderMap);
-      const cfg = MARKER_CONFIG[state] || MARKER_CONFIG.offline;
-      const order = activeOrderMap[account.account_id];
-
-      const icon = L.divIcon({
-        className: "",
-        html: `<div class="dl-map-marker" style="background:${cfg.color};">${cfg.emoji}</div>`,
-        iconSize: [36, 36],
-        iconAnchor: [18, 18],
-        popupAnchor: [0, -20],
-      });
+    drivers.forEach((d) => {
+      const color = STATUS_COLOR[d.status] || "#6366f1";
+      const label = STATUS_LABEL[d.status] || d.status;
 
       const popup = `
-        <div class="dl-map-popup">
-          <strong>${account.full_name}</strong>
-          <div class="dl-map-popup-state" style="color:${cfg.color}">${cfg.label}</div>
-          <div>📱 ${account.phone_number}</div>
-          <div>🚗 ${account.vehicle_type}${account.vehicle_number ? " · " + account.vehicle_number : ""}</div>
-          ${account.cod_balance > 0 ? `<div class="dl-map-popup-cod ${account.cod_balance >= 1000 ? "warn" : ""}">💰 COD ₹${Number(account.cod_balance).toFixed(0)}</div>` : ""}
-          ${order ? `<div>📦 ${order.source_name || "Order"} → ${order.customer_name || "Customer"}</div>` : ""}
+        <div style="min-width:180px;font-size:0.82rem;line-height:1.6">
+          <strong style="font-size:0.9rem">${d.driver_name}</strong><br/>
+          <span style="color:${color};font-weight:600">${label}</span><br/>
+          ${d.road_km_to_customer != null
+            ? `📍 ${d.road_km_to_customer.toFixed(1)} km · ETA ${d.eta_minutes ?? "?"}min<br/>`
+            : ""}
+          🕒 Updated ${elapsed(d.location_updated_at)}
         </div>`;
 
-      const marker = L.marker(
-        [Number(account.current_lat), Number(account.current_lng)],
-        { icon }
-      ).addTo(leafletMapRef.current).bindPopup(popup);
-
-      marker.on("click", () => setSelected(account));
-      markersRef.current[account.account_id] = marker;
+      if (markersRef.current[d.delivery_order_id]) {
+        markersRef.current[d.delivery_order_id]
+          .setLatLng([d.lat, d.lng])
+          .setPopupContent(popup);
+      } else {
+        const marker = L.marker([d.lat, d.lng], {
+          icon: makeDriverIcon(L, color),
+        })
+          .addTo(leafletMapRef.current)
+          .bindPopup(popup);
+        marker.on("click", () => setSelected(d));
+        markersRef.current[d.delivery_order_id] = marker;
+      }
     });
+  }, [drivers]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="admin-map-panel">
+      {/* Side panel */}
+      <div className="admin-map-sidebar">
+        <div className="admin-map-sidebar-header">
+          <span>{drivers.length} active deliveries</span>
+          <button className="icon-btn-sm" onClick={load} title="Refresh now">
+            <RefreshCw size={14} className={loading ? "spin" : ""} />
+          </button>
+        </div>
+        {error && <p className="admin-map-error">{error}</p>}
+        {lastRefresh && (
+          <p className="admin-map-refresh-time">Updated {fmtTime(lastRefresh.toISOString())}</p>
+        )}
+
+        <div className="admin-map-driver-list">
+          {drivers.length === 0 && !loading && (
+            <p className="admin-map-empty">No active deliveries right now.</p>
+          )}
+          {drivers.map((d) => {
+            const color = STATUS_COLOR[d.status] || "#6366f1";
+            const isSelected = selected?.delivery_order_id === d.delivery_order_id;
+            return (
+              <button
+                key={d.delivery_order_id}
+                className={`admin-map-driver-row ${isSelected ? "admin-map-driver-row--selected" : ""}`}
+                onClick={() => {
+                  setSelected(d);
+                  if (leafletMapRef.current && markersRef.current[d.delivery_order_id]) {
+                    leafletMapRef.current.setView([d.lat, d.lng], 15);
+                    markersRef.current[d.delivery_order_id].openPopup();
+                  }
+                }}
+              >
+                <span className="admin-map-driver-dot" style={{ background: color }} />
+                <span className="admin-map-driver-name">{d.driver_name}</span>
+                <span className="admin-map-driver-meta">{STATUS_LABEL[d.status] || d.status}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {selected && (
+          <div className="admin-map-detail">
+            <strong>{selected.driver_name}</strong>
+            <div style={{ color: STATUS_COLOR[selected.status] || "#6366f1", fontWeight: 600 }}>
+              {STATUS_LABEL[selected.status] || selected.status}
+            </div>
+            {selected.road_km_to_customer != null && (
+              <div>📍 {selected.road_km_to_customer.toFixed(1)} km · ETA ~{selected.eta_minutes ?? "?"}min</div>
+            )}
+            <div>🕒 {elapsed(selected.location_updated_at)}</div>
+          </div>
+        )}
+      </div>
+
+      {/* Map */}
+      <div ref={mapRef} className="admin-map-canvas" />
+    </div>
+  );
+}
+
+// ── Replay tab ───────────────────────────────────────────────────────────────
+function ReplayMap({ replayMapRef, replayLeafletRef }) {
+  const [orders, setOrders] = useState([]);
+  const [loadingOrders, setLoadingOrders] = useState(true);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [trail, setTrail] = useState([]);
+  const [loadingTrail, setLoadingTrail] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [frameIdx, setFrameIdx] = useState(0);
+  const [speed, setSpeed] = useState(1);
+  const playRef = useRef(null);
+  const replayMarkerRef = useRef(null);
+  const polylineRef = useRef(null);
+
+  useEffect(() => {
+    listDeliveryOrders()
+      .then((data) => {
+        const completed = data.filter((o) => o.status === "DELIVERED" || o.delivered_at);
+        setOrders(completed.sort((a, b) => new Date(b.delivered_at || b.created_at) - new Date(a.delivered_at || a.created_at)));
+      })
+      .catch(() => {})
+      .finally(() => setLoadingOrders(false));
+  }, []);
+
+  async function loadTrail(order) {
+    setSelectedOrder(order);
+    setTrail([]);
+    setFrameIdx(0);
+    setPlaying(false);
+    clearInterval(playRef.current);
+    setLoadingTrail(true);
+    try {
+      const data = await getDeliveryLocationTrail(order.delivery_order_id);
+      setTrail(data);
+      initReplayMap(data, order);
+    } catch (e) {
+      console.warn("Trail load failed", e);
+    } finally {
+      setLoadingTrail(false);
+    }
   }
 
-  const counts = {};
-  Object.values(MARKER_CONFIG).forEach(v => counts[v.label] = 0);
-  accounts.forEach(a => {
-    const state = driverState(a, activeOrderMap);
-    const cfg = MARKER_CONFIG[state];
-    if (cfg) counts[cfg.label] = (counts[cfg.label] || 0) + 1;
-  });
+  function initReplayMap(trailData, order) {
+    const L = window.L;
+    if (!L || !replayMapRef.current) return;
 
-  const online = accounts.filter(a => a.is_online && !a.cod_blocked).length;
-  const blocked = accounts.filter(a => a.cod_blocked).length;
-  const active = Object.keys(activeOrderMap).length;
+    if (replayLeafletRef.current) {
+      replayLeafletRef.current.remove();
+      replayLeafletRef.current = null;
+      replayMarkerRef.current = null;
+      polylineRef.current = null;
+    }
+
+    if (trailData.length === 0) return;
+
+    const first = trailData[0];
+    const map = L.map(replayMapRef.current, { zoomControl: true })
+      .setView([first.lat, first.lng], 14);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap", maxZoom: 19,
+    }).addTo(map);
+
+    // Full trail as faint polyline
+    const latlngs = trailData.map((p) => [p.lat, p.lng]);
+    polylineRef.current = L.polyline(latlngs, { color: "#6366f1", weight: 2, opacity: 0.4 }).addTo(map);
+    map.fitBounds(polylineRef.current.getBounds(), { padding: [30, 30] });
+
+    // Pickup + dropoff pins
+    if (order.pickup_lat && order.pickup_lng) {
+      L.marker([order.pickup_lat, order.pickup_lng])
+        .addTo(map)
+        .bindTooltip("🏪 Pharmacy pickup", { permanent: false });
+    }
+    if (order.dropoff_lat && order.dropoff_lng) {
+      L.marker([order.dropoff_lat, order.dropoff_lng])
+        .addTo(map)
+        .bindTooltip("📍 Customer", { permanent: false });
+    }
+
+    // Replay marker at start
+    replayMarkerRef.current = L.marker([first.lat, first.lng], {
+      icon: makeReplayIcon(L, "#6366f1"),
+    }).addTo(map);
+
+    replayLeafletRef.current = map;
+  }
+
+  // Animate replay
+  useEffect(() => {
+    clearInterval(playRef.current);
+    if (!playing || trail.length === 0) return;
+
+    playRef.current = setInterval(() => {
+      setFrameIdx((prev) => {
+        const next = prev + 1;
+        if (next >= trail.length) {
+          setPlaying(false);
+          return prev;
+        }
+        const point = trail[next];
+        if (replayMarkerRef.current) {
+          replayMarkerRef.current.setLatLng([point.lat, point.lng]);
+          if (replayLeafletRef.current) {
+            replayLeafletRef.current.panTo([point.lat, point.lng], { animate: true, duration: 0.5 });
+          }
+        }
+        return next;
+      });
+    }, REPLAY_STEP_MS / speed);
+
+    return () => clearInterval(playRef.current);
+  }, [playing, trail, speed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleSeek(idx) {
+    setFrameIdx(idx);
+    if (replayMarkerRef.current && trail[idx]) {
+      replayMarkerRef.current.setLatLng([trail[idx].lat, trail[idx].lng]);
+    }
+  }
+
+  const currentPoint = trail[frameIdx];
+
+  return (
+    <div className="admin-map-panel">
+      {/* Order picker */}
+      <div className="admin-map-sidebar">
+        <div className="admin-map-sidebar-header">
+          <span>Completed orders</span>
+        </div>
+        {loadingOrders && <p className="admin-map-empty">Loading…</p>}
+        <div className="admin-map-driver-list">
+          {orders.map((o) => (
+            <button
+              key={o.delivery_order_id}
+              className={`admin-map-driver-row ${selectedOrder?.delivery_order_id === o.delivery_order_id ? "admin-map-driver-row--selected" : ""}`}
+              onClick={() => loadTrail(o)}
+            >
+              <span className="admin-map-driver-name">#{String(o.delivery_order_id).slice(0, 8).toUpperCase()}</span>
+              <span className="admin-map-driver-meta">{fmtDate(o.delivered_at || o.created_at)}</span>
+            </button>
+          ))}
+          {!loadingOrders && orders.length === 0 && (
+            <p className="admin-map-empty">No completed deliveries yet.</p>
+          )}
+        </div>
+
+        {selectedOrder && (
+          <div className="admin-map-detail">
+            <strong>Order #{String(selectedOrder.delivery_order_id).slice(0, 8).toUpperCase()}</strong>
+            <div>{trail.length} location points</div>
+            <div>Delivered {fmtDate(selectedOrder.delivered_at)}</div>
+          </div>
+        )}
+      </div>
+
+      {/* Replay map + controls */}
+      <div className="admin-replay-panel">
+        {loadingTrail && <p className="admin-map-loading">Loading trail…</p>}
+        {!selectedOrder && !loadingTrail && (
+          <div className="admin-replay-placeholder">
+            ← Pick a completed order to replay its GPS trail
+          </div>
+        )}
+
+        <div ref={replayMapRef} className="admin-map-canvas" style={{ display: selectedOrder && trail.length > 0 ? "block" : "none" }} />
+
+        {trail.length > 0 && (
+          <div className="admin-replay-controls">
+            <button
+              className="icon-btn-sm"
+              onClick={() => { setFrameIdx(0); handleSeek(0); setPlaying(false); }}
+              title="Reset"
+            >
+              <RotateCw size={14} />
+            </button>
+            <button
+              className="icon-btn-sm"
+              onClick={() => setPlaying((p) => !p)}
+              title={playing ? "Pause" : "Play"}
+            >
+              {playing ? <Pause size={14} /> : <Play size={14} />}
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={trail.length - 1}
+              value={frameIdx}
+              onChange={(e) => { setPlaying(false); handleSeek(Number(e.target.value)); }}
+              className="admin-replay-scrubber"
+            />
+            <span className="admin-replay-time">
+              {currentPoint ? fmtTime(currentPoint.recorded_at) : "—"}
+            </span>
+            <select
+              className="admin-replay-speed"
+              value={speed}
+              onChange={(e) => setSpeed(Number(e.target.value))}
+            >
+              <option value={0.5}>0.5×</option>
+              <option value={1}>1×</option>
+              <option value={2}>2×</option>
+              <option value={4}>4×</option>
+            </select>
+          </div>
+        )}
+
+        {selectedOrder && trail.length === 0 && !loadingTrail && (
+          <div className="admin-replay-placeholder">
+            No GPS trail recorded for this order.<br />
+            <small>Trail recording started after Phase 3 deployment.</small>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+export function DeliveryMapPage() {
+  const [tab, setTab] = useState("live");
+
+  // Live map refs (shared so map persists during sidebar interactions)
+  const liveMapRef   = useRef(null);
+  const liveLeaflet  = useRef(null);
+  const liveMarkers  = useRef({});
+
+  // Replay map refs
+  const replayMapRef    = useRef(null);
+  const replayLeaflet   = useRef(null);
+
+  // Destroy live map when switching away, rebuild on return
+  useEffect(() => {
+    if (tab !== "live" && liveLeaflet.current) {
+      Object.values(liveMarkers.current).forEach((m) => m.remove());
+      liveMarkers.current = {};
+      liveLeaflet.current.remove();
+      liveLeaflet.current = null;
+    }
+    if (tab !== "replay" && replayLeaflet.current) {
+      replayLeaflet.current.remove();
+      replayLeaflet.current = null;
+    }
+  }, [tab]);
 
   return (
     <DeliveryLayout>
-      {/* Top KPI strip */}
-      <div className="dl-map-kpis">
-        <div className="dl-map-kpi"><span className="dl-kpi-val">{accounts.length}</span><span>Total Drivers</span></div>
-        <div className="dl-map-kpi dl-kpi-green"><span className="dl-kpi-val">{online}</span><span>Online</span></div>
-        <div className="dl-map-kpi dl-kpi-blue"><span className="dl-kpi-val">{active}</span><span>On Delivery</span></div>
-        <div className="dl-map-kpi dl-kpi-red"><span className="dl-kpi-val">{blocked}</span><span>COD Blocked</span></div>
-        <div className="dl-map-kpi-refresh">
-          <button className="dl-admin-btn-icon" onClick={loadData} title="Refresh">
-            <RefreshCw size={16} className={loading ? "dl-spin" : ""} />
-          </button>
-          {lastRefresh && <span className="dl-map-refresh-time">{lastRefresh.toLocaleTimeString()}</span>}
-        </div>
+      <div className="admin-map-tabs">
+        <button
+          className={`admin-map-tab ${tab === "live" ? "admin-map-tab--active" : ""}`}
+          onClick={() => setTab("live")}
+        >
+          <Users size={15} /> Live Orders
+        </button>
+        <button
+          className={`admin-map-tab ${tab === "replay" ? "admin-map-tab--active" : ""}`}
+          onClick={() => setTab("replay")}
+        >
+          <Play size={15} /> Replay Trail
+        </button>
       </div>
 
-      {/* Map + legend side-by-side */}
-      <div className="dl-map-wrapper">
-        <div ref={mapRef} className="dl-admin-map" />
-
-        {/* Legend */}
-        <div className="dl-map-legend">
-          <div className="dl-legend-title"><Users size={14} /> Legend</div>
-          {Object.entries(MARKER_CONFIG).map(([key, cfg]) => (
-            <div key={key} className="dl-legend-row">
-              <span className="dl-legend-dot" style={{ background: cfg.color }} />
-              <span>{cfg.label}</span>
-              <span className="dl-legend-count">{counts[cfg.label] || 0}</span>
-            </div>
-          ))}
-
-          {/* Driver list panel */}
-          <div className="dl-legend-divider" />
-          <div className="dl-legend-title">Drivers with GPS</div>
-          <div className="dl-map-driver-list">
-            {accounts.filter(a => a.current_lat).map(a => {
-              const st = driverState(a, activeOrderMap);
-              const cfg = MARKER_CONFIG[st];
-              return (
-                <button
-                  key={a.account_id}
-                  className={`dl-map-driver-row ${selected?.account_id === a.account_id ? "dl-map-driver-selected" : ""}`}
-                  onClick={() => {
-                    setSelected(a);
-                    if (leafletMapRef.current && markersRef.current[a.account_id]) {
-                      leafletMapRef.current.setView(
-                        [Number(a.current_lat), Number(a.current_lng)], 15
-                      );
-                      markersRef.current[a.account_id].openPopup();
-                    }
-                  }}
-                >
-                  <span className="dl-legend-dot" style={{ background: cfg?.color }} />
-                  <span className="dl-map-driver-name">{a.full_name}</span>
-                  {a.cod_balance >= 1000 && <span className="dl-cod-badge-sm">₹{Number(a.cod_balance).toFixed(0)}</span>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      {tab === "live" && (
+        <LiveMap
+          mapRef={liveMapRef}
+          leafletMapRef={liveLeaflet}
+          markersRef={liveMarkers}
+        />
+      )}
+      {tab === "replay" && (
+        <ReplayMap
+          replayMapRef={replayMapRef}
+          replayLeafletRef={replayLeaflet}
+        />
+      )}
     </DeliveryLayout>
   );
 }

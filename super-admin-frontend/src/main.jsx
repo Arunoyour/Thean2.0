@@ -6,6 +6,15 @@ import { ErrorBoundary } from "./components/ErrorBoundary.jsx";
 import { AdminManagementPage } from "./pages/AdminManagementPage.jsx";
 import { ApprovalsPage } from "./pages/ApprovalsPage.jsx";
 import { AuditLogPage } from "./pages/AuditLogPage.jsx";
+import { PaymentProofsPage } from "./pages/PaymentProofsPage.jsx";
+import { DisputeDetailPage } from "./pages/DisputeDetailPage.jsx";
+import { StakeholderLedgerPage } from "./pages/StakeholderLedgerPage.jsx";
+import { DisputeManagementPage } from "./pages/DisputeManagementPage.jsx";
+import { ReconciliationExceptionDetailPage } from "./pages/ReconciliationExceptionDetailPage.jsx";
+import { ReconciliationOverviewPage } from "./pages/ReconciliationOverviewPage.jsx";
+import { SettlementBatchDetailPage } from "./pages/SettlementBatchDetailPage.jsx";
+import { SettlementCycleDetailPage } from "./pages/SettlementCycleDetailPage.jsx";
+import { SettlementDashboardPage } from "./pages/SettlementDashboardPage.jsx";
 import { AutoAssignPage } from "./pages/AutoAssignPage.jsx";
 import { CustomerDashboardPage } from "./pages/CustomerDashboardPage.jsx";
 import { CustomerDetailPage } from "./pages/CustomerDetailPage.jsx";
@@ -21,6 +30,7 @@ import { LoginPage } from "./pages/LoginPage.jsx";
 import { PharmacyDashboardPage } from "./pages/PharmacyDashboardPage.jsx";
 import { ProductReviewPage } from "./pages/ProductReviewPage.jsx";
 import { PharmacyOrderManagementPage } from "./pages/PharmacyOrderManagementPage.jsx";
+import { PharmacyOrderStatusPage } from "./pages/PharmacyOrderStatusPage.jsx";
 import { SubstitutionAuditPage } from "./pages/SubstitutionAuditPage.jsx";
 import { canManageAdmins, canSeeAuditLog } from "./lib/role.js";
 import "./styles/global.css";
@@ -70,6 +80,7 @@ function App() {
         <Route path="/dashboard/pharmacy" element={<RequireAuth><PharmacyDashboardPage /></RequireAuth>} />
         <Route path="/dashboard/pharmacy/products" element={<RequireAuth><ProductReviewPage /></RequireAuth>} />
         <Route path="/dashboard/pharmacy/orders" element={<RequireAuth><PharmacyOrderManagementPage /></RequireAuth>} />
+        <Route path="/dashboard/pharmacy/order-status" element={<RequireAuth><PharmacyOrderStatusPage /></RequireAuth>} />
         <Route path="/dashboard/pharmacy/substitution-audit" element={<RequireAuth><SubstitutionAuditPage /></RequireAuth>} />
 
         {/* Delivery */}
@@ -81,6 +92,23 @@ function App() {
         <Route path="/dashboard/delivery/rate" element={<RequireAuth><DeliveryRateConfigPage /></RequireAuth>} />
         <Route path="/dashboard/delivery/auto-assign" element={<RequireAuth><AutoAssignPage /></RequireAuth>} />
         <Route path="/dashboard/fee-config" element={<RequireAuth><FeeConfigPage /></RequireAuth>} />
+
+        {/* Settlement */}
+        <Route path="/dashboard/settlement" element={<RequireAuth><SettlementDashboardPage /></RequireAuth>} />
+        <Route path="/dashboard/settlement/:cycleId" element={<RequireAuth><SettlementCycleDetailPage /></RequireAuth>} />
+        <Route path="/dashboard/settlement/:cycleId/batch/:batchId" element={<RequireAuth><SettlementBatchDetailPage /></RequireAuth>} />
+        <Route path="/dashboard/settlement/batch/:batchId/proofs" element={<RequireAuth><PaymentProofsPage /></RequireAuth>} />
+
+        {/* Stakeholder Ledger */}
+        <Route path="/dashboard/ledger" element={<RequireAuth><StakeholderLedgerPage /></RequireAuth>} />
+
+        {/* Disputes */}
+        <Route path="/dashboard/disputes" element={<RequireAuth><DisputeManagementPage /></RequireAuth>} />
+        <Route path="/dashboard/disputes/:disputeId" element={<RequireAuth><DisputeDetailPage /></RequireAuth>} />
+
+        {/* Reconciliation */}
+        <Route path="/dashboard/reconciliation" element={<RequireAuth><ReconciliationOverviewPage /></RequireAuth>} />
+        <Route path="/dashboard/reconciliation/exceptions/:exceptionId" element={<RequireAuth><ReconciliationExceptionDetailPage /></RequireAuth>} />
 
         {/* Role-gated */}
         <Route path="/dashboard/admins" element={<RequireAuth><RequireRole check={canManageAdmins}><AdminManagementPage /></RequireRole></RequireAuth>} />

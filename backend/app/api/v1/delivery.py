@@ -1,8 +1,9 @@
 """Delivery Boy API endpoints — all sessions use the delivery DB (schema D)."""
 import uuid
 from pathlib import Path
+from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +11,7 @@ from starlette.responses import FileResponse
 
 from app.core.config import get_settings
 from app.db.session import get_delivery_session
+from app.db.session import get_session as get_main_session
 from app.models.delivery import DeliveryAccount
 from app.schemas.delivery import (
     AdminCodClearRequest,
@@ -66,6 +68,8 @@ from app.services.delivery_service import (
     update_delivery_location,
     upload_delivery_document,
     verify_delivery_otp,
+    get_location_trail,
+    get_all_active_locations,
 )
 
 router = APIRouter(prefix="/delivery", tags=["delivery"])
@@ -445,3 +449,342 @@ async def rate_delivery(
     except ValueError:
         raise HTTPException(status_code=422, detail="Invalid X-Customer-Id.")
     return await submit_delivery_rating(session, delivery_order_id, customer_id, payload)
+
+
+# ── Settlement endpoints (delivery boy views own settlement batches) ────────
+
+@router.get("/settlement/batches")
+async def my_settlement_batches(
+    account: DeliveryAccount = Depends(get_current_delivery_account),
+    main_session: AsyncSession = Depends(get_main_session),
+):
+    """List settlement batches for the logged-in delivery boy."""
+    from app.services.settlement_service import list_batches
+    return await list_batches(
+        main_session,
+        stakeholder_type="DELIVERY",
+        stakeholder_id=account.account_id,
+    )
+
+
+@router.get("/settlement/batches/{batch_id}")
+async def my_settlement_batch_detail(
+    batch_id: uuid.UUID,
+    account: DeliveryAccount = Depends(get_current_delivery_account),
+    main_session: AsyncSession = Depends(get_main_session),
+):
+    """Get a specific settlement batch for the logged-in delivery boy."""
+    from app.services.settlement_service import get_batch_detail
+    detail = await get_batch_detail(main_session, batch_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Batch not found.")
+    if str(detail.get("stakeholder_id")) != str(account.account_id):
+        raise HTTPException(status_code=403, detail="Not your settlement batch.")
+    return detail
+
+
+@router.get("/settlement/batches/{batch_id}/proofs")
+async def my_settlement_proofs(
+    batch_id: uuid.UUID,
+    account: DeliveryAccount = Depends(get_current_delivery_account),
+    main_session: AsyncSession = Depends(get_main_session),
+):
+    """List payment proofs for a settlement batch."""
+    from app.services.settlement_service import get_batch_detail, list_payment_proofs
+    detail = await get_batch_detail(main_session, batch_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Batch not found.")
+    if str(detail.get("stakeholder_id")) != str(account.account_id):
+        raise HTTPException(status_code=403, detail="Not your settlement batch.")
+    return await list_payment_proofs(main_session, batch_id)
+
+
+# ── Dispute endpoints (delivery boy raises/views own disputes) ──────────────
+
+@router.get("/disputes")
+async def my_disputes(
+    account: DeliveryAccount = Depends(get_current_delivery_account),
+    main_session: AsyncSession = Depends(get_main_session),
+):
+    """List disputes raised by the logged-in delivery boy."""
+    from app.services import dispute_service as dsvc
+    return await dsvc.list_disputes(main_session, raised_by_id=account.account_id)
+
+
+@router.get("/disputes/{dispute_id}")
+async def my_dispute_detail(
+    dispute_id: uuid.UUID,
+    account: DeliveryAccount = Depends(get_current_delivery_account),
+    main_session: AsyncSession = Depends(get_main_session),
+):
+    """Get a specific dispute for the logged-in delivery boy."""
+    from app.services import dispute_service as dsvc
+    detail = await dsvc.get_dispute(main_session, dispute_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Dispute not found.")
+    if str(detail.get("raised_by_id")) != str(account.account_id):
+        raise HTTPException(status_code=403, detail="Not your dispute.")
+    return detail
+
+
+@router.post("/disputes")
+async def raise_delivery_dispute(
+    dispute_type: str = Form(...),
+    reference_type: Optional[str] = Form(None),
+    reference_id: Optional[str] = Form(None),
+    description: str = Form(...),
+    image: Optional[UploadFile] = File(None),
+    voice_note: Optional[UploadFile] = File(None),
+    attachment: Optional[UploadFile] = File(None),
+    account: DeliveryAccount = Depends(get_current_delivery_account),
+    main_session: AsyncSession = Depends(get_main_session),
+):
+    """Raise a new dispute as a delivery boy."""
+    from app.services import dispute_service as dsvc
+    raised_by_app = "TEAM_LEAD" if account.role == "TEAM_LEAD" else "DELIVERY_BOY"
+    ref_id = uuid.UUID(reference_id) if reference_id else None
+    result = await dsvc.raise_dispute(
+        main_session,
+        raised_by_app=raised_by_app,
+        raised_by_id=account.account_id,
+        raised_by_name=account.full_name,
+        dispute_type=dispute_type,
+        reference_type=reference_type or "OTHER",
+        reference_id=ref_id,
+        reference_detail={},
+        text_content=description,
+        voice_file=voice_note,
+        voice_duration_secs=None,
+        image_file=image,
+        attachment_file=attachment,
+    )
+    await main_session.commit()
+    return result
+
+
+@router.post("/disputes/{dispute_id}/reopen")
+async def reopen_delivery_dispute(
+    dispute_id: uuid.UUID,
+    description: str = Form(...),
+    image: Optional[UploadFile] = File(None),
+    voice_note: Optional[UploadFile] = File(None),
+    attachment: Optional[UploadFile] = File(None),
+    account: DeliveryAccount = Depends(get_current_delivery_account),
+    main_session: AsyncSession = Depends(get_main_session),
+):
+    """Reopen a resolved dispute as a delivery boy."""
+    from app.services import dispute_service as dsvc
+    raised_by_app = "TEAM_LEAD" if account.role == "TEAM_LEAD" else "DELIVERY_BOY"
+    result = await dsvc.reopen_dispute(
+        main_session,
+        dispute_id,
+        raised_by_id=account.account_id,
+        raised_by_name=account.full_name,
+        raised_by_app=raised_by_app,
+        text_content=description,
+        voice_file=voice_note,
+        voice_duration_secs=None,
+        image_file=image,
+        attachment_file=attachment,
+    )
+    await main_session.commit()
+    return result
+
+
+# ── Team Lead endpoints ─────────────────────────────────────────────────────
+
+def _require_team_lead(account: DeliveryAccount) -> DeliveryAccount:
+    if account.role != "TEAM_LEAD":
+        raise HTTPException(status_code=403, detail="Team lead access required.")
+    return account
+
+
+@router.get("/team/members")
+async def team_members(
+    account: DeliveryAccount = Depends(get_current_delivery_account),
+    session: AsyncSession = Depends(get_delivery_session),
+):
+    """TEAM_LEAD: list all delivery accounts with live status."""
+    _require_team_lead(account)
+    from sqlalchemy import select
+    from app.models.delivery import DeliveryAccount as DA
+    result = await session.execute(
+        select(DA).where(DA.role == "DELIVERY_BOY").order_by(DA.full_name)
+    )
+    members = result.scalars().all()
+    return [
+        {
+            "account_id": str(m.account_id),
+            "full_name": m.full_name,
+            "phone_number": m.phone_number,
+            "vehicle_type": m.vehicle_type,
+            "account_status": m.account_status,
+            "is_online": m.is_online,
+            "current_lat": float(m.current_lat) if m.current_lat else None,
+            "current_lng": float(m.current_lng) if m.current_lng else None,
+            "location_updated_at": m.location_updated_at.isoformat() if m.location_updated_at else None,
+            "cod_balance": float(m.cod_balance),
+            "cod_blocked": m.cod_blocked,
+            "avg_rating": float(m.avg_rating),
+            "rating_count": m.rating_count,
+            "total_assigned": m.total_assigned,
+            "total_accepted": m.total_accepted,
+            "total_cancelled": m.total_cancelled,
+        }
+        for m in members
+    ]
+
+
+@router.get("/team/members/{member_id}")
+async def team_member_detail(
+    member_id: uuid.UUID,
+    account: DeliveryAccount = Depends(get_current_delivery_account),
+    session: AsyncSession = Depends(get_delivery_session),
+):
+    """TEAM_LEAD: get full details for a specific delivery boy."""
+    _require_team_lead(account)
+    from sqlalchemy import select
+    from app.models.delivery import DeliveryAccount as DA, DeliveryDocument
+    result = await session.execute(select(DA).where(DA.account_id == member_id))
+    member = result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found.")
+    docs_result = await session.execute(
+        select(DeliveryDocument).where(DeliveryDocument.account_id == member_id)
+    )
+    docs = docs_result.scalars().all()
+    return {
+        "account_id": str(member.account_id),
+        "full_name": member.full_name,
+        "phone_number": member.phone_number,
+        "email": member.email,
+        "vehicle_type": member.vehicle_type,
+        "vehicle_number": member.vehicle_number,
+        "account_status": member.account_status,
+        "is_online": member.is_online,
+        "current_lat": float(member.current_lat) if member.current_lat else None,
+        "current_lng": float(member.current_lng) if member.current_lng else None,
+        "location_updated_at": member.location_updated_at.isoformat() if member.location_updated_at else None,
+        "cod_balance": float(member.cod_balance),
+        "cod_blocked": member.cod_blocked,
+        "avg_rating": float(member.avg_rating),
+        "rating_count": member.rating_count,
+        "total_assigned": member.total_assigned,
+        "total_accepted": member.total_accepted,
+        "total_cancelled": member.total_cancelled,
+        "created_at": member.created_at.isoformat(),
+        "documents": [
+            {"doc_type": d.doc_type, "verified": d.verified, "uploaded_at": d.uploaded_at.isoformat()}
+            for d in docs
+        ],
+    }
+
+
+@router.get("/team/earnings")
+async def team_earnings(
+    account: DeliveryAccount = Depends(get_current_delivery_account),
+    session: AsyncSession = Depends(get_delivery_session),
+):
+    """TEAM_LEAD: earnings summary for every delivery boy on the team."""
+    _require_team_lead(account)
+    from sqlalchemy import select, func as sqlfunc
+    from app.models.delivery import DeliveryAccount as DA, DeliveryEarning
+    from datetime import date, timedelta
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())
+    month_start = today.replace(day=1)
+
+    members_result = await session.execute(
+        select(DA).where(DA.role == "DELIVERY_BOY").order_by(DA.full_name)
+    )
+    members = members_result.scalars().all()
+
+    rows = []
+    for m in members:
+        earn_result = await session.execute(
+            select(
+                sqlfunc.coalesce(sqlfunc.sum(DeliveryEarning.amount), 0).label("total"),
+            ).where(DeliveryEarning.account_id == m.account_id)
+        )
+        total = float(earn_result.scalar() or 0)
+
+        earn_today = await session.execute(
+            select(sqlfunc.coalesce(sqlfunc.sum(DeliveryEarning.amount), 0)).where(
+                DeliveryEarning.account_id == m.account_id,
+                sqlfunc.date(DeliveryEarning.earned_at) == today,
+            )
+        )
+        today_amt = float(earn_today.scalar() or 0)
+
+        earn_week = await session.execute(
+            select(sqlfunc.coalesce(sqlfunc.sum(DeliveryEarning.amount), 0)).where(
+                DeliveryEarning.account_id == m.account_id,
+                sqlfunc.date(DeliveryEarning.earned_at) >= week_start,
+            )
+        )
+        week_amt = float(earn_week.scalar() or 0)
+
+        rows.append({
+            "account_id": str(m.account_id),
+            "full_name": m.full_name,
+            "is_online": m.is_online,
+            "total_assigned": m.total_assigned,
+            "total_accepted": m.total_accepted,
+            "avg_rating": float(m.avg_rating),
+            "today": today_amt,
+            "this_week": week_amt,
+            "all_time": total,
+            "cod_balance": float(m.cod_balance),
+            "cod_blocked": m.cod_blocked,
+        })
+    return rows
+
+
+@router.get("/team/cod")
+async def team_cod(
+    account: DeliveryAccount = Depends(get_current_delivery_account),
+    session: AsyncSession = Depends(get_delivery_session),
+):
+    """TEAM_LEAD: COD balance for all delivery boys (for reconciliation view)."""
+    _require_team_lead(account)
+    from sqlalchemy import select
+    from app.models.delivery import DeliveryAccount as DA
+    result = await session.execute(
+        select(DA).where(DA.role == "DELIVERY_BOY", DA.cod_balance > 0).order_by(DA.cod_blocked.desc(), DA.cod_balance.desc())
+    )
+    members = result.scalars().all()
+    return [
+        {
+            "account_id": str(m.account_id),
+            "full_name": m.full_name,
+            "phone_number": m.phone_number,
+            "cod_balance": float(m.cod_balance),
+            "cod_blocked": m.cod_blocked,
+            "is_online": m.is_online,
+        }
+        for m in members
+    ]
+
+
+# ── Live location & trail ──────────────────────────────────────────────────
+
+@router.get("/orders/{delivery_order_id}/location-trail")
+async def location_trail(
+    delivery_order_id: uuid.UUID,
+    x_super_admin_token: str | None = None,
+    session: AsyncSession = Depends(get_delivery_session),
+):
+    """Full GPS trail for a delivery order — for admin replay."""
+    await _check_admin(x_super_admin_token)
+    return await get_location_trail(session, delivery_order_id)
+
+
+@router.get("/admin/active-locations")
+async def active_locations(
+    x_super_admin_token: str | None = None,
+    session: AsyncSession = Depends(get_delivery_session),
+):
+    """Admin: current position of every delivery boy with an active delivery order.
+    Used by the live map."""
+    await _check_admin(x_super_admin_token)
+    return await get_all_active_locations(session)

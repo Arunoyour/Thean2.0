@@ -18,6 +18,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 
+import "leaflet/dist/leaflet.css";
 import { FormMessage } from "../components/FormMessage.jsx";
 import {
   approvePriceEstimate,
@@ -67,6 +68,102 @@ function haversineMetres(lat1, lng1, lat2, lng2) {
 }
 
 const CALL_VISIBLE_METRES = 150; // show call button when driver is this close
+
+// ── Inline delivery map ────────────────────────────────────────────────────
+function DeliveryMap({ tracking, dropLat, dropLng }) {
+  const mapRef = useRef(null);
+  const leafletMapRef = useRef(null);
+  const driverMarkerRef = useRef(null);
+
+  // Initialise map once
+  useEffect(() => {
+    if (!mapRef.current || leafletMapRef.current) return;
+    if (!tracking?.driver_lat) return;
+
+    import("leaflet").then((mod) => {
+      const L = mod.default;
+
+      // Fix default icon paths broken by Vite bundling
+      delete L.Icon.Default.prototype._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+      });
+
+      const map = L.map(mapRef.current, { zoomControl: true, attributionControl: false })
+        .setView([tracking.driver_lat, tracking.driver_lng], 14);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap",
+      }).addTo(map);
+
+      // Driver pin
+      const driverIcon = L.divIcon({
+        className: "",
+        html: '<div style="background:#6366f1;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4)"></div>',
+        iconSize: [16, 16],
+        iconAnchor: [8, 8],
+      });
+      const driverM = L.marker([tracking.driver_lat, tracking.driver_lng], { icon: driverIcon })
+        .addTo(map)
+        .bindTooltip("🛵 Driver", { permanent: false });
+      driverMarkerRef.current = driverM;
+
+      // Destination pin
+      if (dropLat && dropLng) {
+        const destIcon = L.divIcon({
+          className: "",
+          html: '<div style="background:#ef4444;width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4)"></div>',
+          iconSize: [16, 16],
+          iconAnchor: [8, 8],
+        });
+        L.marker([dropLat, dropLng], { icon: destIcon })
+          .addTo(map)
+          .bindTooltip("📍 You", { permanent: false });
+
+        // Fit both pins in view
+        map.fitBounds([[tracking.driver_lat, tracking.driver_lng], [dropLat, dropLng]], { padding: [30, 30] });
+      }
+
+      leafletMapRef.current = map;
+    });
+
+    return () => {
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+        driverMarkerRef.current = null;
+      }
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update driver marker position when tracking changes
+  useEffect(() => {
+    if (!driverMarkerRef.current || !tracking?.driver_lat) return;
+    driverMarkerRef.current.setLatLng([tracking.driver_lat, tracking.driver_lng]);
+  }, [tracking?.driver_lat, tracking?.driver_lng]);
+
+  const etaText = tracking?.eta_minutes != null
+    ? `~${tracking.eta_minutes} min`
+    : null;
+  const kmText = tracking?.road_km_to_customer != null
+    ? `${tracking.road_km_to_customer.toFixed(1)} km`
+    : null;
+
+  return (
+    <div className="delivery-map-card">
+      {(etaText || kmText) && (
+        <div className="delivery-map-eta">
+          <span className="delivery-map-eta-icon">🛵</span>
+          {kmText && <span>{kmText} away</span>}
+          {etaText && <span className="delivery-map-eta-time">ETA {etaText}</span>}
+        </div>
+      )}
+      <div ref={mapRef} className="delivery-map-container" />
+    </div>
+  );
+}
 
 const AUTO_APPROVAL_SECONDS = 120;
 const MANUAL_REVIEW_SECONDS = 300;
@@ -378,7 +475,7 @@ export function PharmacyOrdersPage() {
     if (trackingIntervalRef.current) clearInterval(trackingIntervalRef.current);
     // Immediate first poll
     pollTracking(orders);
-    trackingIntervalRef.current = setInterval(() => pollTracking(orders), 5000);
+    trackingIntervalRef.current = setInterval(() => pollTracking(orders), 15000);
     return () => clearInterval(trackingIntervalRef.current);
   }, [orders, pollTracking]);
 
@@ -873,54 +970,48 @@ export function PharmacyOrdersPage() {
                 </div>
               ) : null}
 
-              {/* ── Delivery tracking & call button ── */}
+              {/* ── Live delivery map + call button ── */}
               {(() => {
                 if (!DELIVERY_IN_TRANSIT_STATUSES.has(order.status)) return null;
                 const tracking = trackingMap[order.order_id];
                 if (!tracking) return null;
 
-                // Calculate distance from driver to customer dropoff
                 const dropLat = order.order_notes?.address_latitude;
                 const dropLng = order.order_notes?.address_longitude;
                 const distToCustomer =
                   tracking.driver_lat && tracking.driver_lng && dropLat && dropLng
                     ? haversineMetres(tracking.driver_lat, tracking.driver_lng, dropLat, dropLng)
                     : null;
-
                 const isNear = distToCustomer !== null && distToCustomer <= CALL_VISIBLE_METRES;
-                // Phone is available after pickup AND when driver is nearby
                 const canCall = isNear && tracking.driver_phone;
 
                 return (
-                  <div className="delivery-tracking-banner">
-                    <div className="delivery-tracking-info">
-                      <span className="delivery-tracking-icon">🛵</span>
-                      <div>
-                        <strong>{tracking.driver_name || "Driver"}</strong>
-                        <span className="delivery-tracking-status">
-                          {tracking.status.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase())}
-                        </span>
-                        {distToCustomer !== null && (
-                          <span className="delivery-tracking-distance">
-                            {distToCustomer < 1000
-                              ? `${Math.round(distToCustomer)} m away`
-                              : `${(distToCustomer / 1000).toFixed(1)} km away`}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {canCall && (
-                      <a
-                        href={`tel:${tracking.driver_phone}`}
-                        className="delivery-call-button"
-                        aria-label={`Call delivery driver ${tracking.driver_name}`}
-                      >
-                        <Phone size={18} />
-                        Call Driver
-                      </a>
+                  <>
+                    {tracking.driver_lat && (
+                      <DeliveryMap tracking={tracking} dropLat={dropLat} dropLng={dropLng} />
                     )}
-                  </div>
-
+                    <div className="delivery-tracking-banner">
+                      <div className="delivery-tracking-info">
+                        <span className="delivery-tracking-icon">🛵</span>
+                        <div>
+                          <strong>{tracking.driver_name || "Driver"}</strong>
+                          <span className="delivery-tracking-status">
+                            {tracking.status.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase())}
+                          </span>
+                        </div>
+                      </div>
+                      {canCall && (
+                        <a
+                          href={`tel:${tracking.driver_phone}`}
+                          className="delivery-call-button"
+                          aria-label={`Call delivery driver ${tracking.driver_name}`}
+                        >
+                          <Phone size={18} />
+                          Call Driver
+                        </a>
+                      )}
+                    </div>
+                  </>
                 );
               })()}
 

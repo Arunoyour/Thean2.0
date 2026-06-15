@@ -29,18 +29,34 @@ export function NavigationPage() {
     } catch (e) { setError(e.message); }
   }
 
-  // Get current position once
+  // 15-second GPS heartbeat — runs while this page is open
   useEffect(() => {
     if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        setMyPos({ lat: latitude, lng: longitude });
-        updateDeliveryLocation(latitude, longitude).catch(() => {});
-      },
-      () => {},
-      { enableHighAccuracy: true },
-    );
+
+    function sendPosition(pos) {
+      const { latitude, longitude } = pos.coords;
+      setMyPos({ lat: latitude, lng: longitude });
+      updateDeliveryLocation(latitude, longitude).catch(() => {});
+    }
+
+    // Immediate first ping
+    navigator.geolocation.getCurrentPosition(sendPosition, () => {}, { enableHighAccuracy: true });
+
+    // Then every 15 seconds
+    const watchId = navigator.geolocation.watchPosition(sendPosition, () => {}, {
+      enableHighAccuracy: true,
+      maximumAge: 0,
+      timeout: 14000,
+    });
+
+    const intervalId = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(sendPosition, () => {}, { enableHighAccuracy: true });
+    }, 15000);
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      clearInterval(intervalId);
+    };
   }, []);
 
   // Init Leaflet map when order + myPos are ready
