@@ -180,7 +180,14 @@ export function DeliveryOrdersPage() {
                     </Link>
                   </td>
                   <td>{o.distance_km ? `${Number(o.distance_km).toFixed(1)} km` : "—"}</td>
-                  <td className="dl-earn-cell">{o.earnings_amount ? `₹${Number(o.earnings_amount).toFixed(0)}` : "—"}</td>
+                  <td className="dl-earn-cell">
+                    {o.earnings_amount ? `₹${Number(o.earnings_amount).toFixed(0)}` : "—"}
+                    {o.surge_multiplier > 1 && (
+                      <span title={o.surge_label || "Surge"} style={{ marginLeft: 4, background: "#f59e0b", color: "#fff", fontSize: "0.6rem", padding: "1px 5px", borderRadius: 99, fontWeight: 700 }}>
+                        ⚡{Number(o.surge_multiplier).toFixed(2)}×
+                      </span>
+                    )}
+                  </td>
                   <td>{o.cod_amount > 0 ? <span className="dl-cod-badge-sm">₹{Number(o.cod_amount).toFixed(0)}</span> : <span className="dl-driver-sub">Prepaid</span>}</td>
                   <td><StatusBadge status={o.status} /></td>
                   <td>

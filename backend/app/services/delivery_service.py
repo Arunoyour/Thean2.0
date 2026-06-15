@@ -38,6 +38,8 @@ from app.models.delivery import (
     DeliveryOrder,
     DeliveryRateConfig,
     DeliveryRating,
+    DeliverySurgeConfig,
+    DeliveryTierRate,
     DeliveryWallet,
 )
 from app.schemas.delivery import (
@@ -56,6 +58,11 @@ from app.schemas.delivery import (
     CodSummaryResponse,
     RateConfigResponse,
     SetRateRequest,
+    SetSurgeConfigRequest,
+    SetTierRateRequest,
+    SurgeConfigResponse,
+    TierRateResponse,
+    VALID_TIERS,
     UnassignedSourceOrder,
 )
 
@@ -197,6 +204,98 @@ async def set_rate(session: AsyncSession, payload: SetRateRequest) -> RateConfig
         reason=row.reason,
         effective_at=row.effective_at,
     )
+
+
+# ── Tier rates ─────────────────────────────────────────────────────────────
+
+async def list_tier_rates(session: AsyncSession) -> list[TierRateResponse]:
+    result = await session.execute(select(DeliveryTierRate).order_by(DeliveryTierRate.tier))
+    return [TierRateResponse.model_validate(r) for r in result.scalars().all()]
+
+
+async def set_tier_rate(session: AsyncSession, tier: str, payload: SetTierRateRequest) -> TierRateResponse:
+    tier = tier.upper()
+    if tier not in VALID_TIERS:
+        raise HTTPException(status_code=400, detail=f"Invalid tier. Must be one of: {', '.join(sorted(VALID_TIERS))}")
+    row = await session.get(DeliveryTierRate, tier)
+    if row is None:
+        row = DeliveryTierRate(tier=tier, rate_per_km=payload.rate_per_km, updated_by=payload.updated_by)
+        session.add(row)
+    else:
+        row.rate_per_km = payload.rate_per_km
+        row.updated_by = payload.updated_by
+        row.updated_at = datetime.now(UTC)
+    await session.commit()
+    await session.refresh(row)
+    return TierRateResponse.model_validate(row)
+
+
+async def resolve_effective_rate(account: DeliveryAccount, session: AsyncSession) -> float:
+    """Returns the rate per km for this account: custom > tier > global."""
+    if account.custom_rate_per_km is not None:
+        return float(account.custom_rate_per_km)
+    tier_row = await session.get(DeliveryTierRate, account.tier or "STANDARD")
+    if tier_row is not None:
+        return float(tier_row.rate_per_km)
+    global_cfg = await get_current_rate(session)
+    return global_cfg.rate_per_km
+
+
+async def get_surge_config(session: AsyncSession) -> SurgeConfigResponse:
+    """Returns the current surge config (singleton row id=1)."""
+    row = await session.get(DeliverySurgeConfig, 1)
+    if row is None:
+        return SurgeConfigResponse(is_active=False, multiplier=1.0, label="", updated_by="system", updated_at=datetime.now(UTC))
+    return SurgeConfigResponse.model_validate(row)
+
+
+async def set_surge_config(session: AsyncSession, payload: SetSurgeConfigRequest) -> SurgeConfigResponse:
+    """Upsert the singleton surge config row."""
+    multiplier = round(float(payload.multiplier), 2)
+    if multiplier < 1.0 or multiplier > 2.0:
+        raise HTTPException(status_code=400, detail="Surge multiplier must be between 1.0 and 2.0")
+    row = await session.get(DeliverySurgeConfig, 1)
+    if row is None:
+        row = DeliverySurgeConfig(id=1)
+        session.add(row)
+    row.is_active = payload.is_active
+    row.multiplier = multiplier
+    row.label = payload.label.strip()
+    row.updated_by = payload.updated_by
+    row.updated_at = datetime.now(UTC)
+    await session.commit()
+    await session.refresh(row)
+    return SurgeConfigResponse.model_validate(row)
+
+
+async def set_account_tier(session: AsyncSession, account_id: UUID, tier: str) -> DeliveryAccountResponse:
+    tier = tier.upper()
+    if tier not in VALID_TIERS:
+        raise HTTPException(status_code=400, detail=f"Invalid tier. Must be one of: {', '.join(sorted(VALID_TIERS))}")
+    account = await session.get(DeliveryAccount, account_id)
+    if account is None:
+        raise HTTPException(status_code=404, detail="Delivery account not found")
+    account.tier = tier
+    await session.commit()
+    await session.refresh(account)
+    return await _account_response(account, session)
+
+
+async def set_account_custom_rate(session: AsyncSession, account_id: UUID, custom_rate: float | None) -> DeliveryAccountResponse:
+    account = await session.get(DeliveryAccount, account_id)
+    if account is None:
+        raise HTTPException(status_code=404, detail="Delivery account not found")
+    account.custom_rate_per_km = custom_rate
+    await session.commit()
+    await session.refresh(account)
+    return await _account_response(account, session)
+
+
+async def _account_response(account: DeliveryAccount, session: AsyncSession) -> DeliveryAccountResponse:
+    effective = await resolve_effective_rate(account, session)
+    resp = DeliveryAccountResponse.model_validate(account)
+    resp.effective_rate = effective
+    return resp
 
 
 # ── Sector Router ──────────────────────────────────────────────────────────
@@ -344,7 +443,10 @@ def _doc_storage_path(account_id: UUID, doc_type: str, filename: str) -> Path:
     return p / filename
 
 
-def serialize_account(account: DeliveryAccount) -> DeliveryAccountResponse:
+def serialize_account(
+    account: DeliveryAccount,
+    effective_rate: float | None = None,
+) -> DeliveryAccountResponse:
     return DeliveryAccountResponse(
         account_id=account.account_id,
         full_name=account.full_name,
@@ -358,6 +460,9 @@ def serialize_account(account: DeliveryAccount) -> DeliveryAccountResponse:
         is_online=account.is_online,
         current_lat=float(account.current_lat) if account.current_lat is not None else None,
         current_lng=float(account.current_lng) if account.current_lng is not None else None,
+        tier=account.tier or "STANDARD",
+        custom_rate_per_km=float(account.custom_rate_per_km) if account.custom_rate_per_km is not None else None,
+        effective_rate=effective_rate,
         cod_balance=float(account.cod_balance),
         cod_blocked=account.cod_blocked,
         created_at=account.created_at,
@@ -375,6 +480,8 @@ def _enrich_order(d: DeliveryOrder, source_info: dict[str, Any] | None) -> Deliv
         distance_km=float(d.distance_km) if d.distance_km is not None else None,
         earnings_amount=float(d.earnings_amount) if d.earnings_amount is not None else None,
         rate_per_km=float(d.rate_per_km),
+        surge_multiplier=float(d.surge_multiplier) if d.surge_multiplier is not None else 1.0,
+        surge_label=d.surge_label or "",
         cod_amount=float(d.cod_amount) if d.cod_amount is not None else None,
         pickup_pin=d.pickup_pin,
         delivery_pin=d.delivery_pin,
@@ -557,7 +664,9 @@ async def _get_account(session: AsyncSession, account_id: UUID) -> DeliveryAccou
 
 
 async def get_delivery_account(session: AsyncSession, account_id: UUID) -> DeliveryAccountResponse:
-    return serialize_account(await _get_account(session, account_id))
+    account = await _get_account(session, account_id)
+    effective = await resolve_effective_rate(account, session)
+    return serialize_account(account, effective_rate=effective)
 
 
 async def set_delivery_availability(
@@ -702,12 +811,13 @@ async def admin_assign_delivery_order(
     if not source_info and payload.sector == "pharmacy":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source order not found.")
 
-    # ── Fetch live rate from DB ──────────────────────────────────────────
-    rate_config = await get_current_rate(session)
-    live_rate = rate_config.rate_per_km
+    # ── Resolve rate for this delivery boy (custom > tier > global) ──────
+    live_rate = await resolve_effective_rate(account, session)
+    surge = await get_surge_config(session)
+    surge_multiplier = float(surge.multiplier) if surge.is_active else 1.0
 
     distance_km = payload.distance_km or 0
-    earnings = round(distance_km * live_rate, 2)
+    earnings = round(distance_km * live_rate * surge_multiplier, 2)
     now = datetime.now(UTC)
 
     delivery_order = DeliveryOrder(
@@ -718,6 +828,8 @@ async def admin_assign_delivery_order(
         distance_km=distance_km,
         earnings_amount=earnings,
         rate_per_km=live_rate,
+        surge_multiplier=surge_multiplier,
+        surge_label=surge.label if surge.is_active else "",
         cod_amount=payload.cod_amount if payload.cod_amount > 0 else None,
         pickup_pin=_gen_pin(4),
         delivery_pin=_gen_pin(4),
@@ -742,6 +854,8 @@ async def admin_assign_delivery_order(
             "distance_km": float(distance_km),
             "estimated_earnings": earnings,
             "rate_per_km": live_rate,
+            "surge_multiplier": surge_multiplier,
+            "surge_label": surge.label if surge.is_active else "",
             "cod_amount": payload.cod_amount,
             "accept_deadline_at": delivery_order.accept_deadline_at.isoformat(),
             "pickup_lat": payload.pickup_lat,
@@ -1239,10 +1353,24 @@ async def request_cashout(
 # ── Admin helpers ─────────────────────────────────────────────────────────
 
 async def list_all_delivery_accounts(session: AsyncSession) -> list[DeliveryAccountResponse]:
+    from sqlalchemy import desc
     result = await session.execute(
         select(DeliveryAccount).order_by(DeliveryAccount.created_at.desc())
     )
-    return [serialize_account(a) for a in result.scalars().all()]
+    accounts = result.scalars().all()
+
+    # Batch-load all tier rates and global rate once
+    tier_result = await session.execute(select(DeliveryTierRate))
+    tier_map: dict[str, float] = {r.tier: float(r.rate_per_km) for r in tier_result.scalars().all()}
+    global_cfg = await get_current_rate(session)
+    global_rate = global_cfg.rate_per_km
+
+    def _effective(acc: DeliveryAccount) -> float:
+        if acc.custom_rate_per_km is not None:
+            return float(acc.custom_rate_per_km)
+        return tier_map.get(acc.tier or "STANDARD", global_rate)
+
+    return [serialize_account(a, effective_rate=_effective(a)) for a in accounts]
 
 
 async def admin_set_account_status(

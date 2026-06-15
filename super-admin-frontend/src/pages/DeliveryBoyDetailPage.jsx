@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ChevronLeft, Download, IndianRupee, MapPin, Package, RefreshCw, UserCheck, UserX } from "lucide-react";
 import { DeliveryLayout } from "./DeliveryLayout.jsx";
-import { clearDeliveryCod, listDeliveryAccounts, listDeliveryOrders, setDeliveryAccountStatus } from "../lib/api.js";
+import { clearDeliveryCod, listDeliveryAccounts, listDeliveryOrders, setDeliveryAccountStatus, setDeliveryBoyTier, setDeliveryBoyCustomRate } from "../lib/api.js";
 import { exportToExcel } from "../lib/exportExcel.js";
 
 const STATUS_COLOR = {
@@ -29,6 +29,9 @@ export function DeliveryBoyDetailPage() {
   const [codForm, setCodForm] = useState({ amount: "", cleared_by: "", note: "" });
   const [codLoading, setCodLoading] = useState(false);
   const [codError, setCodError] = useState("");
+  const [rateLoading, setRateLoading] = useState(false);
+  const [rateError, setRateError] = useState("");
+  const [customRateInput, setCustomRateInput] = useState("");
 
   useEffect(() => { load(); }, [accountId]);
 
@@ -101,6 +104,31 @@ export function DeliveryBoyDetailPage() {
       setCodForm({ amount: "", cleared_by: "", note: "" });
     } catch (e) { setCodError(e.message); }
     finally { setCodLoading(false); }
+  }
+
+  async function handleTierChange(tier) {
+    setRateLoading(true); setRateError("");
+    try {
+      const updated = await setDeliveryBoyTier(accountId, tier);
+      setAccount(updated);
+    } catch (e) { setRateError(e.message); }
+    finally { setRateLoading(false); }
+  }
+
+  async function handleSetCustomRate(e) {
+    e.preventDefault(); setRateLoading(true); setRateError("");
+    const val = customRateInput.trim() === "" ? null : parseFloat(customRateInput);
+    if (val !== null && (isNaN(val) || val <= 0)) {
+      setRateError("Enter a positive number or leave blank to revert to tier rate.");
+      setRateLoading(false);
+      return;
+    }
+    try {
+      const updated = await setDeliveryBoyCustomRate(accountId, val);
+      setAccount(updated);
+      setCustomRateInput("");
+    } catch (e) { setRateError(e.message); }
+    finally { setRateLoading(false); }
   }
 
   function handleExport() {
@@ -218,6 +246,58 @@ export function DeliveryBoyDetailPage() {
                "✅ Within Limit"}
             </span>
           </div>
+
+          <div className="dl-card-title" style={{ marginTop: 20 }}>Rate per km</div>
+          {rateError && <div className="dl-admin-error" style={{ marginBottom: 8 }}>{rateError}</div>}
+          <div className="dl-profile-row">
+            <span>Effective Rate</span>
+            <strong style={{ color: "#22c55e", fontSize: "1.1rem" }}>
+              ₹{account.effective_rate != null ? Number(account.effective_rate).toFixed(2) : "—"}/km
+            </strong>
+          </div>
+          <div className="dl-profile-row">
+            <span>Custom Rate</span>
+            <span>{account.custom_rate_per_km != null ? `₹${Number(account.custom_rate_per_km).toFixed(2)}/km` : <em style={{ color: "#64748b" }}>none (using tier)</em>}</span>
+          </div>
+          <div className="dl-profile-row" style={{ alignItems: "center" }}>
+            <span>Tier</span>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {["JUNIOR", "STANDARD", "SENIOR", "EXPERT"].map(t => (
+                <button
+                  key={t}
+                  disabled={rateLoading}
+                  onClick={() => handleTierChange(t)}
+                  style={{
+                    padding: "2px 10px", borderRadius: 12, fontSize: "0.75rem", fontWeight: 600,
+                    cursor: "pointer", border: "1.5px solid",
+                    background: account.tier === t ? "#2563eb" : "transparent",
+                    color: account.tier === t ? "#fff" : "#94a3b8",
+                    borderColor: account.tier === t ? "#2563eb" : "#334155",
+                  }}
+                >{t}</button>
+              ))}
+            </div>
+          </div>
+          <form onSubmit={handleSetCustomRate} style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
+            <input
+              type="number" step="0.01" min="0.01"
+              placeholder="Custom ₹/km (blank = revert to tier)"
+              value={customRateInput}
+              onChange={e => setCustomRateInput(e.target.value)}
+              style={{ flex: 1, padding: "6px 10px", borderRadius: 6, border: "1px solid #334155", background: "#1e293b", color: "#f1f5f9", fontSize: "0.85rem" }}
+            />
+            <button type="submit" disabled={rateLoading} className="dl-admin-btn dl-admin-btn-primary" style={{ whiteSpace: "nowrap" }}>
+              {rateLoading ? "Saving…" : "Set Rate"}
+            </button>
+            {account.custom_rate_per_km != null && (
+              <button type="button" disabled={rateLoading} className="dl-admin-btn" onClick={async () => {
+                setRateLoading(true); setRateError("");
+                try { const u = await setDeliveryBoyCustomRate(accountId, null); setAccount(u); setCustomRateInput(""); }
+                catch (e) { setRateError(e.message); }
+                finally { setRateLoading(false); }
+              }}>Clear</button>
+            )}
+          </form>
         </div>
 
         {/* Map card */}
@@ -262,7 +342,14 @@ export function DeliveryBoyDetailPage() {
                     <div className="dl-driver-sub">{o.customer_name || "—"}</div>
                   </td>
                   <td>{o.distance_km ? `${Number(o.distance_km).toFixed(1)} km` : "—"}</td>
-                  <td className="dl-earn-cell">₹{o.earnings_amount ? Number(o.earnings_amount).toFixed(0) : "—"}</td>
+                  <td className="dl-earn-cell">
+                    ₹{o.earnings_amount ? Number(o.earnings_amount).toFixed(0) : "—"}
+                    {o.surge_multiplier > 1 && (
+                      <span title={o.surge_label || "Surge"} style={{ marginLeft: 4, background: "#f59e0b", color: "#fff", fontSize: "0.6rem", padding: "1px 5px", borderRadius: 99, fontWeight: 700 }}>
+                        ⚡{Number(o.surge_multiplier).toFixed(2)}×
+                      </span>
+                    )}
+                  </td>
                   <td>{o.cod_amount > 0 ? <span className="dl-cod-badge-sm">₹{Number(o.cod_amount).toFixed(0)}</span> : "—"}</td>
                   <td>
                     <span className="dl-admin-badge" style={{ background: STATUS_COLOR[o.status] + "22", color: STATUS_COLOR[o.status], border: `1px solid ${STATUS_COLOR[o.status]}` }}>

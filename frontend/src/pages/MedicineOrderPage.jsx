@@ -22,6 +22,7 @@ import {
   createPharmacyOrder,
   createPharmacyOrderWithMedia,
   getCurrentUser,
+  getDeliverySurgeConfig,
   listCustomerAddresses,
   listNearbyPharmacies,
 } from "../lib/api.js";
@@ -123,6 +124,7 @@ export function MedicineOrderPage() {
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [pendingNavTarget, setPendingNavTarget] = useState("");
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [surgeConfig, setSurgeConfig] = useState(null);
   const [offerLockUnderstood, setOfferLockUnderstood] = useState(false);
   const [draftSaved, setDraftSaved] = useState(false);
 
@@ -586,6 +588,7 @@ export function MedicineOrderPage() {
       return;
     }
     setSubmitValidationError("");
+    getDeliverySurgeConfig().then(setSurgeConfig).catch(() => {});
     setShowConfirmModal(true);
   }
 
@@ -1216,6 +1219,12 @@ export function MedicineOrderPage() {
                   <dd>₹{formatMoney(basketTotal)}</dd>
                 </div>
               ) : null}
+              {surgeConfig?.is_active && (
+                <div style={{ color: "#f59e0b" }}>
+                  <dt>⚡ Surge charge {surgeConfig.label ? `(${surgeConfig.label})` : ""}</dt>
+                  <dd>{surgeConfig.multiplier}× on delivery fee</dd>
+                </div>
+              )}
               <div>
                 <dt>Substitution</dt>
                 <dd>{substitutionAllowed ? "Allowed — pharmacy may suggest alternatives" : "Not allowed — cancel if exact medicine unavailable"}</dd>

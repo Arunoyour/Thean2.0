@@ -9,6 +9,18 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base
 
 
+class DeliveryTierRate(Base):
+    """Per-tier rate table. Admin configures rate for JUNIOR/STANDARD/SENIOR/EXPERT."""
+    __tablename__ = "delivery_tier_rates"
+
+    tier: Mapped[str] = mapped_column(String(20), primary_key=True)
+    rate_per_km: Mapped[float] = mapped_column(Numeric(6, 2), nullable=False)
+    updated_by: Mapped[str] = mapped_column(String(100), nullable=False, server_default="system")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+
+
 class DeliveryRateConfig(Base):
     """Immutable rate change-log. Latest row by effective_at is the live rate."""
     __tablename__ = "delivery_rate_config"
@@ -20,6 +32,20 @@ class DeliveryRateConfig(Base):
     changed_by: Mapped[str] = mapped_column(String(100), nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     effective_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+
+
+class DeliverySurgeConfig(Base):
+    """Singleton surge-charge config (always id=1). Multiplier applied on top of per-km earnings."""
+    __tablename__ = "delivery_surge_config"
+
+    id: Mapped[int] = mapped_column(primary_key=True, default=1)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    multiplier: Mapped[float] = mapped_column(Numeric(4, 2), nullable=False, server_default="1.00")
+    label: Mapped[str] = mapped_column(String(100), nullable=False, server_default="")
+    updated_by: Mapped[str] = mapped_column(String(100), nullable=False, server_default="system")
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
 
@@ -46,6 +72,10 @@ class DeliveryAccount(Base):
     current_lat: Mapped[float | None] = mapped_column(Numeric(10, 7))
     current_lng: Mapped[float | None] = mapped_column(Numeric(10, 7))
     location_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # COD tracking
+    # Dynamic rate — resolves as: custom_rate_per_km > tier rate > global rate
+    tier: Mapped[str] = mapped_column(String(20), nullable=False, server_default="STANDARD")
+    custom_rate_per_km: Mapped[float | None] = mapped_column(Numeric(6, 2), nullable=True)
     # COD tracking
     cod_balance: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, server_default="0")
     cod_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
@@ -102,6 +132,8 @@ class DeliveryOrder(Base):
     distance_km: Mapped[float | None] = mapped_column(Numeric(8, 2))
     earnings_amount: Mapped[float | None] = mapped_column(Numeric(10, 2))
     rate_per_km: Mapped[float] = mapped_column(Numeric(6, 2), nullable=False, server_default="7.00")
+    surge_multiplier: Mapped[float] = mapped_column(Numeric(4, 2), nullable=False, server_default="1.00")
+    surge_label: Mapped[str] = mapped_column(String(100), nullable=False, server_default="")
     # COD amount the delivery boy must collect from the customer (0 = prepaid)
     cod_amount: Mapped[float | None] = mapped_column(Numeric(10, 2))
     pickup_pin: Mapped[str | None] = mapped_column(String(6))

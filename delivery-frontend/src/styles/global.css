@@ -914,6 +914,14 @@ select.input-valid {
   line-height: 1.3;
 }
 
+.field-ok-msg {
+  display: block;
+  color: #22c55e;
+  font-size: 0.73rem;
+  margin-top: 3px;
+  line-height: 1.3;
+}
+
 
 /* ── Skeleton loading ─────────────────────────────────────────────────── */
 @keyframes skeleton-shimmer {

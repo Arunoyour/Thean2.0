@@ -369,6 +369,35 @@ export function setDeliveryRate(payload) {
   );
 }
 
+export function getTierRates() {
+  const tok = SUPER_ADMIN_TOKEN;
+  return deliveryRequest(`/delivery/admin/config/tier-rates?x_super_admin_token=${encodeURIComponent(tok)}`);
+}
+
+export function setTierRate(tier, payload) {
+  const tok = SUPER_ADMIN_TOKEN;
+  return deliveryRequest(
+    `/delivery/admin/config/tier-rates/${tier}?x_super_admin_token=${encodeURIComponent(tok)}`,
+    { method: "PUT", body: JSON.stringify(payload) }
+  );
+}
+
+export function setDeliveryBoyTier(accountId, tier) {
+  const tok = SUPER_ADMIN_TOKEN;
+  return deliveryRequest(
+    `/delivery/admin/delivery-boys/${accountId}/tier?x_super_admin_token=${encodeURIComponent(tok)}`,
+    { method: "PUT", body: JSON.stringify({ tier }) }
+  );
+}
+
+export function setDeliveryBoyCustomRate(accountId, customRatePerKm) {
+  const tok = SUPER_ADMIN_TOKEN;
+  return deliveryRequest(
+    `/delivery/admin/delivery-boys/${accountId}/custom-rate?x_super_admin_token=${encodeURIComponent(tok)}`,
+    { method: "PUT", body: JSON.stringify({ custom_rate_per_km: customRatePerKm }) }
+  );
+}
+
 // ── Sector Fee & Tax Config ───────────────────────────────────────────────
 export function getSectorFees() {
   const token = getToken();
@@ -800,4 +829,16 @@ export async function addAdminDisputeReply(disputeId, { text_content, voice_file
 export function getAdminAttention() {
   const token = getToken();
   return request("/admin/attention", { headers: { Authorization: `Bearer ${token}` } });
+}
+
+export function getSurgeConfig() {
+  return deliveryRequest("/delivery/config/surge");
+}
+
+export function setSurgeConfig(payload) {
+  const tok = SUPER_ADMIN_TOKEN;
+  return deliveryRequest(
+    `/delivery/admin/config/surge?x_super_admin_token=${encodeURIComponent(tok)}`,
+    { method: "PUT", body: JSON.stringify(payload) }
+  );
 }

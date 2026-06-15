@@ -3,7 +3,7 @@ import { ImagePlus, PackagePlus, RefreshCw, ShieldAlert } from "lucide-react";
 
 import { PharmacyPageShell } from "../components/PharmacyPageShell.jsx";
 import { addProduct, getCurrentPharmacy } from "../lib/api.js";
-import { validatePositiveNumber, validateNonNegativeNumber, validateOfferPrice, validateRequired, inputClass, touch } from "../lib/validation.js";
+import { validatePositiveNumber, validateNonNegativeNumber, validateOfferPrice, validateRequired, validateFileSize, inputClass, touch } from "../lib/validation.js";
 
 const reqProductName = validateRequired("Product name");
 
@@ -82,6 +82,10 @@ export function AddProductPage() {
 
   function updateProductPhotos(event) {
     const files = Array.from(event.target.files || []).slice(0, 6);
+    for (const f of files) {
+      const err = validateFileSize(f);
+      if (err) { setErrors([err]); event.target.value = ""; return; }
+    }
     setPhotoFiles(files);
     setPhotoPreviews(files.map((file) => URL.createObjectURL(file)));
   }

@@ -2,9 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Mic, MicOff, Paperclip, Send, X } from "lucide-react";
 import { raiseOrderDispute } from "../lib/api.js";
+import { MAX_FILE_SIZE_BYTES, validateFileSize } from "../lib/validation.js";
 
-const MAX_FILE_MB = 10;
-const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
 
 export function CustomerRaiseDisputePage() {
   const navigate = useNavigate();
@@ -69,7 +68,7 @@ export function CustomerRaiseDisputePage() {
   function pickFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > MAX_FILE_BYTES) { setError(`File must be under ${MAX_FILE_MB} MB.`); return; }
+    const sizeErr = validateFileSize(file); if (sizeErr) { setError(sizeErr); return; }
     setAttachment(file);
   }
 
@@ -168,7 +167,7 @@ export function CustomerRaiseDisputePage() {
         </div>
 
         <div className="dispute-field">
-          <label className="dispute-label">Attach file (image / PDF / audio · max {MAX_FILE_MB} MB)</label>
+          <label className="dispute-label">Attach file (image / PDF / audio · max 1 MB)</label>
           {attachment ? (
             <div className="dispute-attachment-preview">
               <Paperclip size={14} /> {attachment.name}
