@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bike, BookOpen, Building2, ClipboardList, CreditCard, GitMerge, LogOut, MessageSquare, Percent, Pill, RefreshCw, ScrollText, ShieldCheck, Users } from "lucide-react";
 
-import { getCurrentAdmin, listCustomers, listPharmacies, logoutAdmin } from "../lib/api.js";
+import { getAdminAttention, getCurrentAdmin, listCustomers, listPharmacies, logoutAdmin } from "../lib/api.js";
 import { canManageAdmins, canSeeAuditLog, canApprove } from "../lib/role.js";
 
 export function DashboardPage() {
@@ -13,6 +13,7 @@ export function DashboardPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [attentionCount, setAttentionCount] = useState(0);
 
   async function loadData({ silent = false } = {}) {
     setError("");
@@ -20,14 +21,16 @@ export function DashboardPage() {
     else setIsLoading(true);
 
     try {
-      const [adminProfile, pharmacyList, customerList] = await Promise.all([
+      const [adminProfile, pharmacyList, customerList, attentionData] = await Promise.all([
         getCurrentAdmin(),
         listPharmacies(),
         listCustomers(),
+        getAdminAttention().catch(() => ({ count: 0 })),
       ]);
       setAdmin(adminProfile);
       setPharmacies(pharmacyList);
       setCustomers(customerList);
+      setAttentionCount(attentionData?.count || 0);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -93,6 +96,11 @@ export function DashboardPage() {
 
   return (
     <main className="page">
+      {attentionCount > 0 && (
+        <a href="/dashboard/attention" className="attention-banner">
+          ⚠️ Immediate attention needed ({attentionCount} item{attentionCount > 1 ? "s" : ""}) — click to view
+        </a>
+      )}
       <header className="dashboard-header">
         <div>
           <p className="eyebrow">Super admin</p>

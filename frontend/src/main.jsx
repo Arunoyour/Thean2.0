@@ -6,6 +6,7 @@ import { AppShell } from "./components/AppShell.jsx";
 import { RequireAuth } from "./components/RequireAuth.jsx";
 import { AddressListPage } from "./pages/AddressListPage.jsx";
 import { AddressPage } from "./pages/AddressPage.jsx";
+import { CustomerAttentionPage } from "./pages/CustomerAttentionPage.jsx";
 import { CustomerDisputeDetailPage } from "./pages/CustomerDisputeDetailPage.jsx";
 import { CustomerDisputeListPage } from "./pages/CustomerDisputeListPage.jsx";
 import { CustomerRaiseDisputePage } from "./pages/CustomerRaiseDisputePage.jsx";
@@ -40,6 +41,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route path="/home/pharmacy/orders" element={<RequireAuth><PharmacyOrdersPage /></RequireAuth>} />
 
           {/* ── Customer Disputes & Refunds ── */}
+          <Route path="/home/attention" element={<RequireAuth><CustomerAttentionPage /></RequireAuth>} />
           <Route path="/home/disputes" element={<RequireAuth><CustomerDisputeListPage /></RequireAuth>} />
           <Route path="/home/disputes/raise" element={<RequireAuth><CustomerRaiseDisputePage /></RequireAuth>} />
           <Route path="/home/disputes/:disputeId" element={<RequireAuth><CustomerDisputeDetailPage /></RequireAuth>} />

@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { ErrorBoundary } from "./components/ErrorBoundary.jsx";
 import { ChatPage } from "./pages/ChatPage.jsx";
+import { DeliveryAttentionPage } from "./pages/DeliveryAttentionPage.jsx";
 import { DeliveryDisputeDetailPage } from "./pages/DeliveryDisputeDetailPage.jsx";
 import { DeliveryDisputeListPage } from "./pages/DeliveryDisputeListPage.jsx";
 import { DeliveryRaiseDisputePage } from "./pages/DeliveryRaiseDisputePage.jsx";
@@ -66,6 +67,7 @@ function App() {
         {/* ── Delivery Boy: Settlement & Disputes ── */}
         <Route path="/settlement" element={<RequireAuth><DeliverySettlementHistoryPage /></RequireAuth>} />
         <Route path="/settlement/:batchId" element={<RequireAuth><DeliverySettlementDetailPage /></RequireAuth>} />
+        <Route path="/attention" element={<RequireAuth><DeliveryAttentionPage /></RequireAuth>} />
         <Route path="/disputes" element={<RequireAuth><DeliveryDisputeListPage /></RequireAuth>} />
         <Route path="/disputes/raise" element={<RequireAuth><DeliveryRaiseDisputePage /></RequireAuth>} />
         <Route path="/disputes/:disputeId" element={<RequireAuth><DeliveryDisputeDetailPage /></RequireAuth>} />

@@ -263,3 +263,12 @@ export function getDeliveryOrderDispute(disputeId) { return request(`/delivery/o
 export function raiseDeliveryOrderDispute(formData) { return _dlUpload("/delivery/order-disputes", formData); }
 export function replyDeliveryOrderDispute(disputeId, formData) { return _dlUpload(`/delivery/order-disputes/${disputeId}/reply`, formData); }
 export function closeDeliveryOrderDispute(disputeId) { return request(`/delivery/order-disputes/${disputeId}/close`, { method: "POST", headers: authHeaders() }); }
+
+export function getDeliveryAttention() {
+  return fetch(`${API_BASE_URL}/delivery/attention`, { headers: authHeaders() })
+    .then(async r => {
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || "Failed.");
+      return d;
+    });
+}

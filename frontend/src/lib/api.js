@@ -510,3 +510,7 @@ export function replyOrderDispute(disputeId, formData) { return _dUpload(`/custo
 export function closeOrderDispute(disputeId) {
   return request(`/customer/order-disputes/${disputeId}/close`, { method: "POST", headers: _dAuthHdr() });
 }
+
+export function getCustomerAttention() {
+  return request("/customer/attention", { headers: _dAuthHdr() });
+}

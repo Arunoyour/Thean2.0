@@ -25,6 +25,7 @@ import {
 import {
   acceptDeliveryOrder,
   getActiveDeliveryOrder,
+  getDeliveryAttention,
   getDeliveryDisputeUnreadCount,
   getDeliveryMe,
   getDeliveryToken,
@@ -290,6 +291,7 @@ export function HomePage() {
   const [error, setError] = useState("");
   const [codWarning, setCodWarning] = useState(null); // WS-pushed warning message
   const [disputeUnread, setDisputeUnread] = useState(0);
+  const [attentionCount, setAttentionCount] = useState(0);
   // account_disabled: show explanation screen for 3 s then logout
   const [accountDisabled, setAccountDisabled] = useState(false);
   const watchIdRef = useRef(null);
@@ -371,14 +373,16 @@ export function HomePage() {
   async function loadData() {
     setIsLoading(true);
     try {
-      const [acc, active, unreadData] = await Promise.all([
+      const [acc, active, unreadData, attentionData] = await Promise.all([
         getDeliveryMe(),
         getActiveDeliveryOrder(),
         getDeliveryDisputeUnreadCount().catch(() => ({ unread: 0 })),
+        getDeliveryAttention().catch(() => ({ count: 0 })),
       ]);
       setAccount(acc);
       setActiveOrder(active);
       setDisputeUnread(unreadData?.unread || 0);
+      setAttentionCount(attentionData?.count || 0);
     } catch (e) {
       if (e.message.includes("login")) navigate("/login");
       else setError(e.message);
@@ -463,6 +467,12 @@ export function HomePage() {
         </div>
       </header>
 
+      {/* Attention banner */}
+      {attentionCount > 0 && (
+        <a href="/attention" className="attention-banner">
+          ⚠️ Immediate attention needed ({attentionCount} item{attentionCount > 1 ? "s" : ""}) — tap to view
+        </a>
+      )}
       {/* Dispute unread indicator */}
       {disputeUnread > 0 && (
         <a href="/disputes" className="dispute-home-banner">

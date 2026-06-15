@@ -569,3 +569,14 @@ async def pharmacy_close_order_dispute(
     result = await dsvc.user_close_dispute(main_session, dispute_id, account_profile[0].account_id)
     await main_session.commit()
     return result
+
+
+@router.get("/attention")
+async def pharmacy_attention_items(
+    account_profile=Depends(get_current_pharmacy),
+    session: AsyncSession = Depends(get_pharmacy_session),
+):
+    """Items needing immediate attention on pharmacy home page load."""
+    from app.services.attention_service import get_pharmacy_attention
+    account = account_profile[0]
+    return await get_pharmacy_attention(session, account.account_id)

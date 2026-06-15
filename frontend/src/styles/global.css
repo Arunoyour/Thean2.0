@@ -3385,3 +3385,13 @@ select.input-valid {
 .order-dispute-link { font-size: 0.78rem; color: #d97706; text-decoration: none; padding: 3px 10px; border-radius: 99px; border: 1px solid #fde68a; background: #fffbeb; }
 .order-dispute-link:hover { background: #fef3c7; }
 
+
+/* ── Attention banner ───────────────────────────────────────────────────── */
+.attention-banner {
+  display: block; padding: 0.75rem 1rem; margin-bottom: 0.75rem;
+  background: #fef2f2; border: 1px solid #fca5a5; border-left: 4px solid #dc2626;
+  border-radius: 8px; color: #991b1b; font-weight: 700; font-size: 0.9rem;
+  text-decoration: none; letter-spacing: 0.01em;
+}
+.attention-banner:hover { background: #fee2e2; }
+

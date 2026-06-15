@@ -796,3 +796,8 @@ export async function addAdminDisputeReply(disputeId, { text_content, voice_file
   if (!resp.ok) throw new Error(payload.detail || "Failed to send reply.");
   return payload;
 }
+
+export function getAdminAttention() {
+  const token = getToken();
+  return request("/admin/attention", { headers: { Authorization: `Bearer ${token}` } });
+}

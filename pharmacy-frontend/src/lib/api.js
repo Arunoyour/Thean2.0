@@ -460,3 +460,14 @@ export function getPharmacyOrderDispute(disputeId) { return request(`/pharmacy/o
 export function raisePharmacyOrderDispute(formData) { return _phUpload("/pharmacy/order-disputes", formData); }
 export function replyPharmacyOrderDispute(disputeId, formData) { return _phUpload(`/pharmacy/order-disputes/${disputeId}/reply`, formData); }
 export function closePharmacyOrderDispute(disputeId) { return request(`/pharmacy/order-disputes/${disputeId}/close`, { method: "POST", headers: _phHdr() }); }
+
+export function getPharmacyAttention() {
+  const token = window.localStorage.getItem("thean_pharmacy_access_token");
+  return fetch(`${API_BASE_URL}/pharmacy/attention`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }).then(async r => {
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.detail || "Failed.");
+    return d;
+  });
+}

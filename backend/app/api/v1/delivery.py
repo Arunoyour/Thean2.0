@@ -897,3 +897,13 @@ async def delivery_close_order_dispute(
     result = await dsvc.user_close_dispute(main_session, dispute_id, account.account_id)
     await main_session.commit()
     return result
+
+
+@router.get("/attention")
+async def delivery_attention_items(
+    account: DeliveryAccount = Depends(get_current_delivery_account),
+    session: AsyncSession = Depends(get_delivery_session),
+):
+    """Items needing immediate attention on delivery home page load."""
+    from app.services.attention_service import get_delivery_attention
+    return await get_delivery_attention(session, account.account_id)

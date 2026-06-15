@@ -12,6 +12,7 @@ import { OrderManagementPage } from "./pages/OrderManagementPage.jsx";
 import { RegisterPage } from "./pages/RegisterPage.jsx";
 import { SettlementHistoryPage } from "./pages/SettlementHistoryPage.jsx";
 import { SettlementDetailPage } from "./pages/SettlementDetailPage.jsx";
+import { AttentionPage } from "./pages/AttentionPage.jsx";
 import { DisputeListPage } from "./pages/DisputeListPage.jsx";
 import { RaiseDisputePage } from "./pages/RaiseDisputePage.jsx";
 import { DisputeDetailPage } from "./pages/DisputeDetailPage.jsx";
@@ -107,6 +108,7 @@ function App() {
         <Route path="/settlement" element={<RequireAuth><SettlementHistoryPage /></RequireAuth>} />
         <Route path="/settlement/:batchId" element={<RequireAuth><SettlementDetailPage /></RequireAuth>} />
         {/* Disputes */}
+        <Route path="/attention" element={<RequireAuth><AttentionPage /></RequireAuth>} />
         <Route path="/disputes" element={<RequireAuth><DisputeListPage /></RequireAuth>} />
         <Route path="/disputes/raise" element={<RequireAuth><RaiseDisputePage /></RequireAuth>} />
         <Route path="/disputes/:disputeId" element={<RequireAuth><DisputeDetailPage /></RequireAuth>} />
