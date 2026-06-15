@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { ErrorBoundary } from "./components/ErrorBoundary.jsx";
 import { AdminManagementPage } from "./pages/AdminManagementPage.jsx";
+import { AttentionPage } from "./pages/AttentionPage.jsx";
 import { ApprovalsPage } from "./pages/ApprovalsPage.jsx";
 import { AuditLogPage } from "./pages/AuditLogPage.jsx";
 import { PaymentProofsPage } from "./pages/PaymentProofsPage.jsx";
@@ -103,6 +104,7 @@ function App() {
         <Route path="/dashboard/ledger" element={<RequireAuth><StakeholderLedgerPage /></RequireAuth>} />
 
         {/* Disputes */}
+        <Route path="/dashboard/attention" element={<RequireAuth><AttentionPage /></RequireAuth>} />
         <Route path="/dashboard/disputes" element={<RequireAuth><DisputeManagementPage /></RequireAuth>} />
         <Route path="/dashboard/disputes/:disputeId" element={<RequireAuth><DisputeDetailPage /></RequireAuth>} />
 

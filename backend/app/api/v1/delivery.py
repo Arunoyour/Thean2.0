@@ -788,3 +788,122 @@ async def active_locations(
     Used by the live map."""
     await _check_admin(x_super_admin_token)
     return await get_all_active_locations(session)
+
+
+# ── Order Disputes (delivery boy) ─────────────────────────────────────────────
+
+import uuid as _duuid
+from typing import Optional as _DOpt
+from fastapi import File as _DFile, Form as _DForm, UploadFile as _DUpload
+from app.db.session import get_session as _get_main_session_d
+
+
+@router.post("/order-disputes", status_code=201)
+async def delivery_raise_order_dispute(
+    source_order_id: str = _DForm(...),
+    tagged_sectors: str = _DForm("delivery"),
+    text_content: _DOpt[str] = _DForm(None),
+    voice_duration_secs: _DOpt[int] = _DForm(None),
+    voice_file: _DOpt[_DUpload] = _DFile(None),
+    image_file: _DOpt[_DUpload] = _DFile(None),
+    attachment_file: _DOpt[_DUpload] = _DFile(None),
+    account: DeliveryAccount = Depends(get_current_delivery_account),
+    main_session: AsyncSession = Depends(_get_main_session_d),
+):
+    from app.services import dispute_service as dsvc
+    sectors = [s.strip() for s in tagged_sectors.split(",") if s.strip()]
+    result = await dsvc.user_raise_order_dispute(
+        main_session,
+        raised_by_app="DELIVERY_BOY",
+        raised_by_id=account.account_id,
+        raised_by_name=account.full_name,
+        source_order_id=_duuid.UUID(source_order_id),
+        tagged_sectors=sectors,
+        text_content=text_content,
+        voice_file=voice_file,
+        voice_duration_secs=voice_duration_secs,
+        image_file=image_file,
+        attachment_file=attachment_file,
+    )
+    await main_session.commit()
+    return result
+
+
+@router.get("/order-disputes/unread-count")
+async def delivery_dispute_unread_count(
+    account: DeliveryAccount = Depends(get_current_delivery_account),
+    main_session: AsyncSession = Depends(_get_main_session_d),
+):
+    from app.services import dispute_service as dsvc
+    count = await dsvc.user_unread_count(main_session, account.account_id)
+    return {"unread": count}
+
+
+@router.get("/order-disputes")
+async def delivery_list_order_disputes(
+    status: _DOpt[str] = None,
+    account: DeliveryAccount = Depends(get_current_delivery_account),
+    main_session: AsyncSession = Depends(_get_main_session_d),
+):
+    from app.services import dispute_service as dsvc
+    return await dsvc.user_list_disputes(main_session, account.account_id, status=status)
+
+
+@router.get("/order-disputes/{dispute_id}")
+async def delivery_get_order_dispute(
+    dispute_id: _duuid.UUID,
+    account: DeliveryAccount = Depends(get_current_delivery_account),
+    main_session: AsyncSession = Depends(_get_main_session_d),
+):
+    from app.services import dispute_service as dsvc
+    await dsvc.user_mark_read(main_session, dispute_id, account.account_id)
+    return await dsvc.get_dispute(main_session, dispute_id)
+
+
+@router.post("/order-disputes/{dispute_id}/reply")
+async def delivery_reply_order_dispute(
+    dispute_id: _duuid.UUID,
+    text_content: _DOpt[str] = _DForm(None),
+    voice_duration_secs: _DOpt[int] = _DForm(None),
+    voice_file: _DOpt[_DUpload] = _DFile(None),
+    image_file: _DOpt[_DUpload] = _DFile(None),
+    attachment_file: _DOpt[_DUpload] = _DFile(None),
+    account: DeliveryAccount = Depends(get_current_delivery_account),
+    main_session: AsyncSession = Depends(_get_main_session_d),
+):
+    from app.services import dispute_service as dsvc
+    result = await dsvc.user_reply_dispute(
+        main_session, dispute_id,
+        raised_by_app="DELIVERY_BOY",
+        raised_by_id=account.account_id,
+        raised_by_name=account.full_name,
+        text_content=text_content,
+        voice_file=voice_file,
+        voice_duration_secs=voice_duration_secs,
+        image_file=image_file,
+        attachment_file=attachment_file,
+    )
+    await main_session.commit()
+    return result
+
+
+@router.post("/order-disputes/{dispute_id}/close")
+async def delivery_close_order_dispute(
+    dispute_id: _duuid.UUID,
+    account: DeliveryAccount = Depends(get_current_delivery_account),
+    main_session: AsyncSession = Depends(_get_main_session_d),
+):
+    from app.services import dispute_service as dsvc
+    result = await dsvc.user_close_dispute(main_session, dispute_id, account.account_id)
+    await main_session.commit()
+    return result
+
+
+@router.get("/attention")
+async def delivery_attention_items(
+    account: DeliveryAccount = Depends(get_current_delivery_account),
+    session: AsyncSession = Depends(get_delivery_session),
+):
+    """Items needing immediate attention on delivery home page load."""
+    from app.services.attention_service import get_delivery_attention
+    return await get_delivery_attention(session, account.account_id)

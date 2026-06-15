@@ -440,3 +440,34 @@ export async function removePushSubscription(sub) {
     body: JSON.stringify({ endpoint, p256dh: keys.p256dh, auth: keys.auth }),
   });
 }
+
+// ── Order Disputes (pharmacy) ─────────────────────────────────────────────
+const _phToken = () => window.localStorage.getItem(TOKEN_KEY);
+const _phHdr = () => ({ Authorization: `Bearer ${_phToken()}` });
+async function _phUpload(path, formData) {
+  const resp = await fetch(`${API_BASE_URL}${path}`, { method: "POST", headers: _phHdr(), body: formData });
+  if (resp.status === 401) { window.localStorage.removeItem(TOKEN_KEY); window.location.href = "/login"; throw new Error("Session expired."); }
+  const payload = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(payload.detail || "Request failed.");
+  return payload;
+}
+export function getPharmacyDisputeUnreadCount() { return request("/pharmacy/order-disputes/unread-count", { headers: _phHdr() }); }
+export function listPharmacyOrderDisputes(status) {
+  const p = status ? `?status=${status}` : "";
+  return request(`/pharmacy/order-disputes${p}`, { headers: _phHdr() });
+}
+export function getPharmacyOrderDispute(disputeId) { return request(`/pharmacy/order-disputes/${disputeId}`, { headers: _phHdr() }); }
+export function raisePharmacyOrderDispute(formData) { return _phUpload("/pharmacy/order-disputes", formData); }
+export function replyPharmacyOrderDispute(disputeId, formData) { return _phUpload(`/pharmacy/order-disputes/${disputeId}/reply`, formData); }
+export function closePharmacyOrderDispute(disputeId) { return request(`/pharmacy/order-disputes/${disputeId}/close`, { method: "POST", headers: _phHdr() }); }
+
+export function getPharmacyAttention() {
+  const token = window.localStorage.getItem("thean_pharmacy_access_token");
+  return fetch(`${API_BASE_URL}/pharmacy/attention`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }).then(async r => {
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.detail || "Failed.");
+    return d;
+  });
+}

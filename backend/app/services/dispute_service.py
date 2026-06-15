@@ -2,15 +2,17 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.dispute import Dispute, DisputeMessage, DisputeStatusHistory
 from app.models.super_admin import SuperAdmin
+
+ADMIN_CLOSE_MIN_DAYS = 60
 
 VOICE_DIR      = Path(__file__).resolve().parents[2] / "uploads" / "disputes" / "voice"
 IMAGE_DIR      = Path(__file__).resolve().parents[2] / "uploads" / "disputes" / "images"
@@ -54,6 +56,7 @@ def _serialize_history(h: DisputeStatusHistory) -> dict:
 
 
 def _serialize_dispute(d: Dispute, *, include_messages: bool = False, include_history: bool = False) -> dict:
+    age_days = (datetime.utcnow() - d.created_at).days
     data: dict = {
         "dispute_id":       str(d.dispute_id),
         "raised_by_app":    d.raised_by_app,
@@ -73,6 +76,14 @@ def _serialize_dispute(d: Dispute, *, include_messages: bool = False, include_hi
         "message_count":    len(d.messages),
         "created_at":       d.created_at.isoformat(),
         "updated_at":       d.updated_at.isoformat(),
+        # order-dispute extensions
+        "source_order_id":  str(d.source_order_id) if d.source_order_id else None,
+        "tagged_sectors":   d.tagged_sectors or [],
+        "unread_by_raiser": d.unread_by_raiser,
+        "unread_by_admin":  d.unread_by_admin,
+        "closed_by_raiser": d.closed_by_raiser,
+        "age_days":         age_days,
+        "admin_can_close":  age_days >= ADMIN_CLOSE_MIN_DAYS,
     }
     if include_messages:
         data["messages"] = [_serialize_message(m) for m in d.messages]
@@ -210,6 +221,33 @@ async def raise_dispute(
 
 # ── Admin reply ───────────────────────────────────────────────────────────────
 
+async def admin_reply_and_mark_unread(
+    session: AsyncSession,
+    dispute_id: uuid.UUID,
+    actor: SuperAdmin,
+    *,
+    text_content: str | None,
+    voice_file: UploadFile | None,
+    voice_duration_secs: int | None,
+    image_file: UploadFile | None,
+    attachment_file: UploadFile | None,
+    is_internal: bool = False,
+) -> dict:
+    """Admin sends a reply — marks dispute unread for the raiser."""
+    return await add_admin_reply(
+        session,
+        dispute_id,
+        actor,
+        text_content=text_content,
+        voice_file=voice_file,
+        voice_duration_secs=voice_duration_secs,
+        image_file=image_file,
+        attachment_file=attachment_file,
+        is_internal=is_internal,
+        _mark_unread_raiser=True,
+    )
+
+
 async def add_admin_reply(
     session: AsyncSession,
     dispute_id: uuid.UUID,
@@ -221,6 +259,7 @@ async def add_admin_reply(
     image_file: UploadFile | None,
     attachment_file: UploadFile | None,
     is_internal: bool = False,
+    _mark_unread_raiser: bool = False,
 ) -> dict:
     dispute = await _get_or_404(session, dispute_id)
     if dispute.status == "CLOSED":
@@ -245,7 +284,11 @@ async def add_admin_reply(
         _add_history(session, dispute_id, "OPEN", "IN_REVIEW", changed_by=actor, notes="Admin replied")
         dispute.status = "IN_REVIEW"
         dispute.assigned_to = actor.admin_id
-        dispute.updated_at  = datetime.utcnow()
+
+    # Notify raiser of new reply
+    dispute.unread_by_raiser = True
+    dispute.unread_by_admin  = False
+    dispute.updated_at = datetime.utcnow()
 
     await session.flush()
     return _serialize_message(dispute.messages[-1]) if dispute.messages else {}
@@ -416,3 +459,271 @@ async def _get_or_404(session: AsyncSession, dispute_id: uuid.UUID) -> Dispute:
     if not d:
         raise HTTPException(404, "Dispute not found.")
     return d
+
+
+# ── Admin close (60-day rule) ─────────────────────────────────────────────────
+
+async def admin_close_dispute(
+    session: AsyncSession,
+    dispute_id: uuid.UUID,
+    actor: SuperAdmin,
+    resolution_notes: str,
+) -> dict:
+    dispute = await _get_or_404(session, dispute_id)
+    if dispute.status == "CLOSED":
+        raise HTTPException(400, "Dispute is already closed.")
+    age_days = (datetime.utcnow() - dispute.created_at).days
+    if age_days < ADMIN_CLOSE_MIN_DAYS:
+        days_left = ADMIN_CLOSE_MIN_DAYS - age_days
+        raise HTTPException(
+            400,
+            f"Admin can only close disputes that are at least {ADMIN_CLOSE_MIN_DAYS} days old. "
+            f"This dispute is {age_days} days old — {days_left} more day(s) required."
+        )
+    old_status = dispute.status
+    dispute.status           = "CLOSED"
+    dispute.closed_by_raiser = False
+    dispute.resolution_notes = resolution_notes
+    dispute.resolved_by      = actor.admin_id
+    dispute.resolved_at      = datetime.utcnow()
+    dispute.updated_at       = datetime.utcnow()
+    _add_history(session, dispute_id, old_status, "CLOSED", changed_by=actor, notes=resolution_notes)
+    await session.flush()
+    await session.refresh(dispute)
+    return _serialize_dispute(dispute, include_messages=True)
+
+
+# ── User-facing: raise order dispute ─────────────────────────────────────────
+
+async def user_raise_order_dispute(
+    session: AsyncSession,
+    *,
+    raised_by_app: str,
+    raised_by_id: uuid.UUID,
+    raised_by_name: str,
+    source_order_id: uuid.UUID,
+    tagged_sectors: list[str],
+    text_content: str | None,
+    voice_file: UploadFile | None,
+    voice_duration_secs: int | None,
+    image_file: UploadFile | None,
+    attachment_file: UploadFile | None,
+) -> dict:
+    # Enforce: no open dispute for same user + order
+    existing = await session.execute(
+        select(Dispute).where(
+            Dispute.raised_by_id == raised_by_id,
+            Dispute.source_order_id == source_order_id,
+            Dispute.status.in_(["OPEN", "IN_REVIEW", "REOPENED"]),
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(400, "You already have an open dispute for this order.")
+
+    dispute = Dispute(
+        raised_by_app=raised_by_app,
+        raised_by_id=raised_by_id,
+        raised_by_name=raised_by_name,
+        dispute_type="ORDER_DISPUTE",
+        reference_type="ORDER",
+        reference_id=source_order_id,
+        reference_detail={},
+        source_order_id=source_order_id,
+        tagged_sectors=tagged_sectors,
+        unread_by_raiser=False,
+        unread_by_admin=True,
+    )
+    session.add(dispute)
+    await session.flush()
+
+    await _build_message(
+        session,
+        dispute_id=dispute.dispute_id,
+        sender_type=raised_by_app,
+        sender_id=raised_by_id,
+        sender_name=raised_by_name,
+        text_content=text_content,
+        voice_file=voice_file,
+        voice_duration_secs=voice_duration_secs,
+        image_file=image_file,
+        attachment_file=attachment_file,
+    )
+    _add_history(session, dispute.dispute_id, None, "OPEN", notes="Dispute raised by user")
+    await session.flush()
+    await session.refresh(dispute)
+    return _serialize_dispute(dispute, include_messages=True)
+
+
+# ── User-facing: reply to dispute ────────────────────────────────────────────
+
+async def user_reply_dispute(
+    session: AsyncSession,
+    dispute_id: uuid.UUID,
+    *,
+    raised_by_app: str,
+    raised_by_id: uuid.UUID,
+    raised_by_name: str,
+    text_content: str | None,
+    voice_file: UploadFile | None,
+    voice_duration_secs: int | None,
+    image_file: UploadFile | None,
+    attachment_file: UploadFile | None,
+) -> dict:
+    dispute = await _get_or_404(session, dispute_id)
+    if str(dispute.raised_by_id) != str(raised_by_id):
+        raise HTTPException(403, "Not your dispute.")
+    if dispute.status == "CLOSED":
+        raise HTTPException(400, "Cannot reply to a closed dispute.")
+
+    await _build_message(
+        session,
+        dispute_id=dispute_id,
+        sender_type=raised_by_app,
+        sender_id=raised_by_id,
+        sender_name=raised_by_name,
+        text_content=text_content,
+        voice_file=voice_file,
+        voice_duration_secs=voice_duration_secs,
+        image_file=image_file,
+        attachment_file=attachment_file,
+    )
+    dispute.unread_by_admin  = True
+    dispute.unread_by_raiser = False
+    # If it was IN_REVIEW, revert to OPEN so admin knows there's a new message
+    if dispute.status == "IN_REVIEW":
+        _add_history(session, dispute_id, "IN_REVIEW", "REOPENED", notes="User replied")
+        dispute.status = "REOPENED"
+    dispute.updated_at = datetime.utcnow()
+    await session.flush()
+    await session.refresh(dispute)
+    return _serialize_dispute(dispute, include_messages=True)
+
+
+# ── User-facing: close own dispute ───────────────────────────────────────────
+
+async def user_close_dispute(
+    session: AsyncSession,
+    dispute_id: uuid.UUID,
+    raised_by_id: uuid.UUID,
+) -> dict:
+    dispute = await _get_or_404(session, dispute_id)
+    if str(dispute.raised_by_id) != str(raised_by_id):
+        raise HTTPException(403, "Not your dispute.")
+    if dispute.status == "CLOSED":
+        raise HTTPException(400, "Already closed.")
+    old_status = dispute.status
+    dispute.status           = "CLOSED"
+    dispute.closed_by_raiser = True
+    dispute.updated_at       = datetime.utcnow()
+    _add_history(session, dispute_id, old_status, "CLOSED", notes="Closed by user")
+    await session.flush()
+    await session.refresh(dispute)
+    return _serialize_dispute(dispute, include_messages=True)
+
+
+# ── User-facing: list own disputes ───────────────────────────────────────────
+
+async def user_list_disputes(
+    session: AsyncSession,
+    raised_by_id: uuid.UUID,
+    status: str | None = None,
+) -> list[dict]:
+    q = (
+        select(Dispute)
+        .where(Dispute.raised_by_id == raised_by_id)
+        .order_by(Dispute.updated_at.desc())
+    )
+    if status:
+        q = q.where(Dispute.status == status)
+    result = await session.execute(q)
+    return [_serialize_dispute(d) for d in result.scalars().all()]
+
+
+# ── User-facing: unread count for home page indicator ────────────────────────
+
+async def user_unread_count(session: AsyncSession, raised_by_id: uuid.UUID) -> int:
+    count = await session.scalar(
+        select(func.count())
+        .select_from(Dispute)
+        .where(
+            Dispute.raised_by_id == raised_by_id,
+            Dispute.unread_by_raiser.is_(True),
+            Dispute.status != "CLOSED",
+        )
+    )
+    return count or 0
+
+
+# ── User-facing: mark dispute read (when user opens thread) ──────────────────
+
+async def user_mark_read(
+    session: AsyncSession,
+    dispute_id: uuid.UUID,
+    raised_by_id: uuid.UUID,
+) -> None:
+    dispute = await _get_or_404(session, dispute_id)
+    if str(dispute.raised_by_id) == str(raised_by_id):
+        dispute.unread_by_raiser = False
+        await session.flush()
+
+
+# ── Admin board: list with sector + age sorting ───────────────────────────────
+
+async def admin_list_disputes(
+    session: AsyncSession,
+    *,
+    raised_by_app: str | None = None,
+    sector: str | None = None,
+    status: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[dict]:
+    q = select(Dispute).order_by(Dispute.created_at.asc())  # oldest first on admin board
+    if raised_by_app:
+        q = q.where(Dispute.raised_by_app == raised_by_app)
+    if sector:
+        from sqlalchemy import cast
+        from sqlalchemy.dialects.postgresql import ARRAY
+        q = q.where(Dispute.tagged_sectors.contains([sector]))
+    if status:
+        q = q.where(Dispute.status == status)
+    else:
+        # Default: open/in-review/reopened only
+        q = q.where(Dispute.status.in_(["OPEN", "IN_REVIEW", "REOPENED"]))
+    q = q.limit(limit).offset(offset)
+    result = await session.execute(q)
+    return [_serialize_dispute(d) for d in result.scalars().all()]
+
+
+async def admin_dispute_summary(session: AsyncSession) -> dict:
+    total = await session.scalar(select(func.count()).select_from(Dispute))
+    open_ = await session.scalar(
+        select(func.count()).select_from(Dispute)
+        .where(Dispute.status.in_(["OPEN", "IN_REVIEW", "REOPENED"]))
+    )
+    closed = await session.scalar(
+        select(func.count()).select_from(Dispute).where(Dispute.status == "CLOSED")
+    )
+    unread = await session.scalar(
+        select(func.count()).select_from(Dispute)
+        .where(Dispute.unread_by_admin.is_(True), Dispute.status != "CLOSED")
+    )
+    by_sector: dict[str, int] = {}
+    for sector in ("pharmacy", "delivery"):
+        cnt = await session.scalar(
+            select(func.count()).select_from(Dispute)
+            .where(Dispute.tagged_sectors.contains([sector]))
+        )
+        by_sector[sector] = cnt or 0
+    by_app: dict[str, int] = {}
+    for app in ("CUSTOMER", "PHARMACY", "DELIVERY_BOY"):
+        cnt = await session.scalar(
+            select(func.count()).select_from(Dispute)
+            .where(Dispute.raised_by_app == app, Dispute.status != "CLOSED")
+        )
+        by_app[app.lower()] = cnt or 0
+    return {
+        "total": total, "open": open_, "closed": closed,
+        "unread_by_admin": unread,
+        "by_sector": by_sector, "by_app": by_app,
+    }

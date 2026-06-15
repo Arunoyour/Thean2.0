@@ -81,9 +81,15 @@ export function OrdersListPage() {
               </div>
               <div className="dl-order-card-meta">
                 <span><Navigation size={13} /> {o.distance_km ? `${Number(o.distance_km).toFixed(1)} km` : "—"}</span>
-                {/* toLocaleString() shows both date and time */}
                 <span>{new Date(o.created_at).toLocaleString()}</span>
               </div>
+              <a
+                href={`/disputes/raise?order_id=${o.source_order_id || o.delivery_order_id}&sectors=delivery`}
+                className="dl-order-dispute-link"
+                onClick={(e) => e.stopPropagation()}
+              >
+                ⚠️ Raise dispute
+              </a>
             </Link>
           ))}
         </div>

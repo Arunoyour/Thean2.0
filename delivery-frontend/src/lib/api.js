@@ -245,3 +245,30 @@ export function adminClearCod(memberId, amount, note) {
     body: JSON.stringify({ account_id: memberId, amount, note }),
   });
 }
+
+// ── Order Disputes (delivery boy) ─────────────────────────────────────────
+async function _dlUpload(path, formData) {
+  const resp = await fetch(`${API_BASE_URL}${path}`, { method: "POST", headers: authHeaders(), body: formData });
+  if (resp.status === 401) { window.localStorage.removeItem(TOKEN_KEY); window.location.href = "/login"; throw new Error("Session expired."); }
+  const payload = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(payload.detail || "Request failed.");
+  return payload;
+}
+export function getDeliveryDisputeUnreadCount() { return request("/delivery/order-disputes/unread-count", { headers: authHeaders() }); }
+export function listDeliveryOrderDisputes(status) {
+  const p = status ? `?status=${status}` : "";
+  return request(`/delivery/order-disputes${p}`, { headers: authHeaders() });
+}
+export function getDeliveryOrderDispute(disputeId) { return request(`/delivery/order-disputes/${disputeId}`, { headers: authHeaders() }); }
+export function raiseDeliveryOrderDispute(formData) { return _dlUpload("/delivery/order-disputes", formData); }
+export function replyDeliveryOrderDispute(disputeId, formData) { return _dlUpload(`/delivery/order-disputes/${disputeId}/reply`, formData); }
+export function closeDeliveryOrderDispute(disputeId) { return request(`/delivery/order-disputes/${disputeId}/close`, { method: "POST", headers: authHeaders() }); }
+
+export function getDeliveryAttention() {
+  return fetch(`${API_BASE_URL}/delivery/attention`, { headers: authHeaders() })
+    .then(async r => {
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || "Failed.");
+      return d;
+    });
+}

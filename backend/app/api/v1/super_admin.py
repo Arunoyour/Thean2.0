@@ -521,3 +521,15 @@ async def list_audit_logs(
         }
         for l in logs
     ]
+
+
+@router.get("/attention")
+async def admin_attention_items(
+    admin: SuperAdmin = Depends(require_role("SUPER", "SUPERVISOR")),
+    main_session: AsyncSession = Depends(get_session),
+):
+    """Items needing immediate attention on admin dashboard load."""
+    from app.services.attention_service import get_admin_attention
+    from app.db.session import DeliverySessionLocal, PharmacySessionLocal
+    async with DeliverySessionLocal() as dl_session, PharmacySessionLocal() as ph_session:
+        return await get_admin_attention(main_session, dl_session, ph_session)

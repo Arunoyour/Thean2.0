@@ -458,3 +458,125 @@ async def unsubscribe_push(
 async def vapid_public_key():
     from app.core.config import get_settings
     return {"key": get_settings().vapid_public_key}
+
+
+# ── Order Disputes (pharmacy) ─────────────────────────────────────────────────
+
+import uuid as _puuid
+from typing import Optional as _POpt
+from fastapi import File as _PFile, Form as _PForm, UploadFile as _PUpload
+from app.db.session import get_session as _get_main_session
+
+
+@router.post("/order-disputes", status_code=201)
+async def pharmacy_raise_order_dispute(
+    source_order_id: str = _PForm(...),
+    tagged_sectors: str = _PForm("pharmacy"),
+    text_content: _POpt[str] = _PForm(None),
+    voice_duration_secs: _POpt[int] = _PForm(None),
+    voice_file: _POpt[_PUpload] = _PFile(None),
+    image_file: _POpt[_PUpload] = _PFile(None),
+    attachment_file: _POpt[_PUpload] = _PFile(None),
+    account_profile: tuple = Depends(get_current_pharmacy),
+    main_session: AsyncSession = Depends(_get_main_session),
+):
+    from app.services import dispute_service as dsvc
+    account: PharmacyAccount = account_profile[0]
+    sectors = [s.strip() for s in tagged_sectors.split(",") if s.strip()]
+    result = await dsvc.user_raise_order_dispute(
+        main_session,
+        raised_by_app="PHARMACY",
+        raised_by_id=account.account_id,
+        raised_by_name=account.business_name or account.contact_name,
+        source_order_id=_puuid.UUID(source_order_id),
+        tagged_sectors=sectors,
+        text_content=text_content,
+        voice_file=voice_file,
+        voice_duration_secs=voice_duration_secs,
+        image_file=image_file,
+        attachment_file=attachment_file,
+    )
+    await main_session.commit()
+    return result
+
+
+@router.get("/order-disputes/unread-count")
+async def pharmacy_dispute_unread_count(
+    account_profile: tuple = Depends(get_current_pharmacy),
+    main_session: AsyncSession = Depends(_get_main_session),
+):
+    from app.services import dispute_service as dsvc
+    count = await dsvc.user_unread_count(main_session, account_profile[0].account_id)
+    return {"unread": count}
+
+
+@router.get("/order-disputes")
+async def pharmacy_list_order_disputes(
+    status: _POpt[str] = None,
+    account_profile: tuple = Depends(get_current_pharmacy),
+    main_session: AsyncSession = Depends(_get_main_session),
+):
+    from app.services import dispute_service as dsvc
+    return await dsvc.user_list_disputes(main_session, account_profile[0].account_id, status=status)
+
+
+@router.get("/order-disputes/{dispute_id}")
+async def pharmacy_get_order_dispute(
+    dispute_id: _puuid.UUID,
+    account_profile: tuple = Depends(get_current_pharmacy),
+    main_session: AsyncSession = Depends(_get_main_session),
+):
+    from app.services import dispute_service as dsvc
+    await dsvc.user_mark_read(main_session, dispute_id, account_profile[0].account_id)
+    return await dsvc.get_dispute(main_session, dispute_id)
+
+
+@router.post("/order-disputes/{dispute_id}/reply")
+async def pharmacy_reply_order_dispute(
+    dispute_id: _puuid.UUID,
+    text_content: _POpt[str] = _PForm(None),
+    voice_duration_secs: _POpt[int] = _PForm(None),
+    voice_file: _POpt[_PUpload] = _PFile(None),
+    image_file: _POpt[_PUpload] = _PFile(None),
+    attachment_file: _POpt[_PUpload] = _PFile(None),
+    account_profile: tuple = Depends(get_current_pharmacy),
+    main_session: AsyncSession = Depends(_get_main_session),
+):
+    from app.services import dispute_service as dsvc
+    account: PharmacyAccount = account_profile[0]
+    result = await dsvc.user_reply_dispute(
+        main_session, dispute_id,
+        raised_by_app="PHARMACY",
+        raised_by_id=account.account_id,
+        raised_by_name=account.business_name or account.contact_name,
+        text_content=text_content,
+        voice_file=voice_file,
+        voice_duration_secs=voice_duration_secs,
+        image_file=image_file,
+        attachment_file=attachment_file,
+    )
+    await main_session.commit()
+    return result
+
+
+@router.post("/order-disputes/{dispute_id}/close")
+async def pharmacy_close_order_dispute(
+    dispute_id: _puuid.UUID,
+    account_profile: tuple = Depends(get_current_pharmacy),
+    main_session: AsyncSession = Depends(_get_main_session),
+):
+    from app.services import dispute_service as dsvc
+    result = await dsvc.user_close_dispute(main_session, dispute_id, account_profile[0].account_id)
+    await main_session.commit()
+    return result
+
+
+@router.get("/attention")
+async def pharmacy_attention_items(
+    account_profile=Depends(get_current_pharmacy),
+    session: AsyncSession = Depends(get_pharmacy_session),
+):
+    """Items needing immediate attention on pharmacy home page load."""
+    from app.services.attention_service import get_pharmacy_attention
+    account = account_profile[0]
+    return await get_pharmacy_attention(session, account.account_id)

@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { ClipboardList, Home, LogOut, Menu, PackageCheck, PackagePlus, X } from "lucide-react";
+import { ClipboardList, CreditCard, Home, LogOut, Menu, MessageSquare, PackageCheck, PackagePlus, X } from "lucide-react";
 
 import { logoutPharmacy } from "../lib/api.js";
 
@@ -8,6 +8,8 @@ const menuItems = [
   { label: "Order Management", path: "/orders", icon: PackageCheck },
   { label: "Add Product", path: "/products/add", icon: PackagePlus },
   { label: "Listed Products", path: "/products", icon: ClipboardList },
+  { label: "Settlement History", path: "/settlement", icon: CreditCard },
+  { label: "My Disputes", path: "/disputes", icon: MessageSquare },
 ];
 
 export function PharmacyMenu({ isOpen, onClose, onOpen }) {
