@@ -507,6 +507,90 @@ async def escalate_stale_reconciliation_exceptions() -> dict:
 # has not yet been marked as ready for delivery.
 # ──────────────────────────────────────────────────────────────────────────────
 
+# ──────────────────────────────────────────────────────────────────────────────
+# JOB — SLA order transitions (wraps the 5-second pharmacy SLA worker)
+# Exposed as an API so an external cron caller can hit it every 10 seconds.
+# The internal asyncio loop (main.py) also keeps running as a fallback.
+# ──────────────────────────────────────────────────────────────────────────────
+
+async def run_sla_order_transitions() -> dict:
+    """
+    Run all three pharmacy order SLA checks in a single session:
+      1. Expired customer review windows → auto-assign or cancel
+      2. Expired pharmacy assignment deadlines → reroute or cancel
+      3. Expired price review windows → auto-reject
+
+    Mirrors the internal 5-second SLA worker (main.py:pharmacy_order_sla_worker).
+    External callers should hit this every 10 seconds.
+    """
+    from app.services.customer_order_service import (
+        handle_expired_customer_review_windows,
+        handle_expired_pharmacy_assignments,
+        handle_expired_price_reviews,
+    )
+
+    async with PharmacySessionLocal() as session:
+        await handle_expired_customer_review_windows(session)
+        await handle_expired_pharmacy_assignments(session)
+        await handle_expired_price_reviews(session)
+        await session.commit()
+
+    return {"checked": ["customer_review_windows", "pharmacy_assignments", "price_reviews"]}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# JOB — COD balance reminders (wraps delivery_service._cod_reminder_loop body)
+# External callers should hit this every 30 minutes.
+# The internal asyncio loop also keeps running as a fallback.
+# ──────────────────────────────────────────────────────────────────────────────
+
+async def check_cod_balance_reminders() -> dict:
+    """
+    Push WebSocket reminders to every online delivery account whose COD balance
+    is in the warning (≥ ₹1000) or blocked (≥ ₹1200) band.
+
+    Mirrors the internal COD reminder loop started via ensure_cod_reminder_running().
+    External callers should hit this every 30 minutes.
+    """
+    from app.models.delivery import DeliveryAccount
+    from app.services.delivery_service import COD_BLOCK_THRESHOLD, COD_WARN_THRESHOLD
+    from app.services.realtime import manager
+    from sqlalchemy import and_
+
+    warned = blocked = 0
+
+    async with DeliverySessionLocal() as session:
+        result = await session.execute(
+            select(DeliveryAccount).where(
+                and_(
+                    DeliveryAccount.is_online == True,
+                    DeliveryAccount.cod_balance >= COD_WARN_THRESHOLD,
+                )
+            )
+        )
+        accounts = result.scalars().all()
+
+        for acc in accounts:
+            bal = float(acc.cod_balance)
+            if bal >= COD_BLOCK_THRESHOLD:
+                await manager.send_delivery_boy(str(acc.account_id), {
+                    "type": "cod_blocked_reminder",
+                    "cod_balance": bal,
+                    "message": f"Your COD balance is ₹{bal:.0f}. Account is blocked — clear cash immediately.",
+                })
+                blocked += 1
+            else:
+                await manager.send_delivery_boy(str(acc.account_id), {
+                    "type": "cod_warning_reminder",
+                    "cod_balance": bal,
+                    "message": f"Your COD balance is ₹{bal:.0f}. Please clear cash before it reaches ₹{int(COD_BLOCK_THRESHOLD)}.",
+                })
+                warned += 1
+
+    log.info("COD balance reminders: %d warning, %d blocked.", warned, blocked)
+    return {"warned": warned, "blocked": blocked}
+
+
 PICKUP_REMINDER_GRACE_SECONDS = 120   # first reminder fires 2 min after acceptance
 
 async def remind_pharmacy_pending_pickup() -> dict:
