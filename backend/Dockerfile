@@ -7,6 +7,7 @@ WORKDIR /app
 # postgresql-client: psql for the migration entrypoint
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    libffi-dev \
     libpq-dev \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
