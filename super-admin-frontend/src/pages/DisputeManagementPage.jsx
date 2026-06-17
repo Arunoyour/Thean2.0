@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertCircle, MessageSquare, RefreshCw } from "lucide-react";
 import { getDisputeOverview, getDisputeSummary, listAdminDisputes, listDisputes } from "../lib/api.js";
+import { BackButton } from "../components/BackButton.jsx";
 
 const STATUS_COLORS = {
   OPEN:      "#dc2626",
@@ -109,6 +110,7 @@ export function DisputeManagementPage() {
 
   return (
     <main className="page">
+      <BackButton />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.75rem" }}>
         <div>
           <p className="eyebrow">Operations</p>

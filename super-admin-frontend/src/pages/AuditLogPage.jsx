@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Download, RefreshCw, Search } from "lucide-react";
 import { getAuditLogs } from "../lib/api.js";
+import { BackButton } from "../components/BackButton.jsx";
 
 const ROLES = ["", "SUPER", "SUPERVISOR", "CHECKER", "AUDITOR", "TEAM_LEAD"];
 const ACTION_TYPES = [
@@ -64,6 +65,7 @@ export function AuditLogPage() {
 
   return (
     <main className="page">
+      <BackButton />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.75rem" }}>
         <div>
           <p className="eyebrow">Compliance</p>

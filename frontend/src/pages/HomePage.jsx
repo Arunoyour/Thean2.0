@@ -9,6 +9,7 @@ import {
   Pill,
   Plus,
   RefreshCw,
+  Scissors,
   WalletCards,
   WifiOff,
 } from "lucide-react";
@@ -23,6 +24,13 @@ const sectors = [
     icon: Pill,
     status: "View products",
     path: "/home/pharmacy",
+  },
+  {
+    title: "Haircut",
+    description: "Discover nearby salons, book a slot, and check in with a code.",
+    icon: Scissors,
+    status: "Book now",
+    path: "/haircut",
   },
   {
     title: "Vegetables",

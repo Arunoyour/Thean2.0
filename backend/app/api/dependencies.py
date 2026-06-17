@@ -42,7 +42,11 @@ async def get_current_user(
 
     try:
         payload = decode_access_token(credentials.credentials)
+        if not payload:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token.")
         user_id = uuid.UUID(payload["sub"])
+    except HTTPException:
+        raise
     except (KeyError, ValueError, JWTError) as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token.") from exc
 
@@ -67,7 +71,11 @@ async def get_current_super_admin(
 
     try:
         payload = decode_access_token(credentials.credentials)
+        if not payload:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token.")
         admin_id = uuid.UUID(payload["sub"])
+    except HTTPException:
+        raise
     except (KeyError, ValueError, JWTError) as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token.") from exc
 

@@ -44,6 +44,9 @@ def create_access_token(
     return jwt.encode(payload, settings.app_secret_key, algorithm=ALGORITHM)
 
 
-def decode_access_token(token: str) -> dict:
-    settings = get_settings()
-    return jwt.decode(token, settings.app_secret_key, algorithms=[ALGORITHM])
+def decode_access_token(token: str) -> dict | None:
+    try:
+        settings = get_settings()
+        return jwt.decode(token, settings.app_secret_key, algorithms=[ALGORITHM])
+    except Exception:
+        return None

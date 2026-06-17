@@ -8,6 +8,7 @@ import {
   executeSettlementBatch,
 } from "../lib/api.js";
 import { canWriteConfig } from "../lib/role.js";
+import { BackButton } from "../components/BackButton.jsx";
 
 const BATCH_STATUS_COLORS = {
   DRAFT:            "#6b7280",
@@ -90,7 +91,8 @@ export function SettlementBatchDetailPage() {
     }
   }
 
-  if (isLoading) return <main className="page"><p style={{ color: "#6b7280" }}>Loading batch…</p></main>;
+  if (isLoading) return <main className="page">
+      <BackButton /><p style={{ color: "#6b7280" }}>Loading batch…</p></main>;
   if (error)     return <main className="page"><div className="error">{error}</div></main>;
   if (!batch)    return null;
 

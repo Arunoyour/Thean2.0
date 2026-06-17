@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { getSettlementCycle } from "../lib/api.js";
+import { BackButton } from "../components/BackButton.jsx";
 
 const STATUS_COLORS = {
   DRAFT:            "#6b7280",
@@ -50,7 +51,8 @@ export function SettlementCycleDetailPage() {
 
   useEffect(() => { load(); }, [cycleId]);
 
-  if (isLoading) return <main className="page"><p style={{ color: "#6b7280" }}>Loading cycle…</p></main>;
+  if (isLoading) return <main className="page">
+      <BackButton /><p style={{ color: "#6b7280" }}>Loading cycle…</p></main>;
   if (error)     return <main className="page"><div className="error">{error}</div></main>;
   if (!cycle)    return null;
 

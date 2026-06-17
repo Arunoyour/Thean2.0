@@ -28,6 +28,7 @@ STALE_GPS_MIN                 = 5   # admin: driver GPS stale 5 min
 DISPUTE_SLA_HOURS             = 48  # admin: open dispute > 48 h
 RECON_EXCEPTION_SLA_HOURS     = 24  # admin: open exception > 24 h
 COD_WARN_THRESHOLD            = 1000.0  # delivery: COD balance warn
+PRODUCT_REVIEW_SLA_HOURS      = 4   # admin: pharmacy product awaiting review > 4 h
 
 
 def _age(dt: datetime) -> int:
@@ -198,34 +199,38 @@ async def get_admin_attention(
     main_session: AsyncSession,
     delivery_session: AsyncSession,
     pharmacy_session: AsyncSession,
+    haircut_session: AsyncSession | None = None,
 ) -> dict:
     """
     - Unassigned orders (READY_FOR_DELIVERY in pharmacy DB) > 10 min
     - Ghost drivers (is_online + GPS stale > 5 min) in delivery DB
     - Open disputes > 48 h in main DB
     - Open reconciliation exceptions > 24 h in main DB
+    - Pharmacy products awaiting approval > 4 h in pharmacy DB
+    - Haircut vendors awaiting approval > 4 h in haircut DB
     """
     from app.models.delivery import DeliveryAccount
     from app.models.dispute import Dispute
-    from app.models.pharmacy_merchant import CustomerPharmacyOrder
+    from app.models.pharmacy_merchant import CustomerPharmacyOrder, PharmacyProduct, PharmacyProfile
     from app.models.reconciliation import ReconciliationException
 
     items = []
     now = datetime.now(UTC)
+    now_naive = datetime.utcnow()  # for comparing against naive DB columns
 
     # ── Unassigned orders ──────────────────────────────────────────────────
-    unassigned_cutoff = now - timedelta(minutes=READY_NO_DRIVER_MIN)
+    unassigned_cutoff = now_naive - timedelta(minutes=READY_NO_DRIVER_MIN)
     ph_result = await pharmacy_session.execute(
         select(CustomerPharmacyOrder).where(
             and_(
                 CustomerPharmacyOrder.status == "READY_FOR_DELIVERY",
-                CustomerPharmacyOrder.updated_at <= unassigned_cutoff,
+                CustomerPharmacyOrder.created_at <= unassigned_cutoff,
             )
         )
     )
     unassigned = ph_result.scalars().all()
     for o in unassigned:
-        age = _age(o.updated_at or o.created_at)
+        age = _age(o.created_at)
         ref = str(o.order_id)[:8].upper()
         items.append({
             "type": "UNASSIGNED_ORDER",
@@ -237,7 +242,7 @@ async def get_admin_attention(
         })
 
     # ── Ghost drivers ──────────────────────────────────────────────────────
-    stale_cutoff = now - timedelta(minutes=STALE_GPS_MIN)
+    stale_cutoff = now_naive - timedelta(minutes=STALE_GPS_MIN)
     dl_result = await delivery_session.execute(
         select(DeliveryAccount).where(
             and_(
@@ -259,7 +264,7 @@ async def get_admin_attention(
         })
 
     # ── Stale disputes ─────────────────────────────────────────────────────
-    dispute_cutoff = now - timedelta(hours=DISPUTE_SLA_HOURS)
+    dispute_cutoff = now_naive - timedelta(hours=DISPUTE_SLA_HOURS)
     d_result = await main_session.execute(
         select(Dispute).where(
             and_(
@@ -280,7 +285,7 @@ async def get_admin_attention(
         })
 
     # ── Stale reconciliation exceptions ───────────────────────────────────
-    recon_cutoff = now - timedelta(hours=RECON_EXCEPTION_SLA_HOURS)
+    recon_cutoff = now_naive - timedelta(hours=RECON_EXCEPTION_SLA_HOURS)
     r_result = await main_session.execute(
         select(ReconciliationException).where(
             and_(
@@ -299,6 +304,54 @@ async def get_admin_attention(
             "link": "/dashboard/reconciliation",
             "age_minutes": age_h * 60,
         })
+
+    # ── Pharmacy products awaiting approval ────────────────────────────────
+    # PharmacyProduct.created_at is tz-aware, unlike the naive columns above.
+    product_cutoff = now - timedelta(hours=PRODUCT_REVIEW_SLA_HOURS)
+    p_result = await pharmacy_session.execute(
+        select(PharmacyProduct, PharmacyProfile)
+        .join(PharmacyProfile, PharmacyProfile.account_id == PharmacyProduct.account_id)
+        .where(
+            and_(
+                PharmacyProduct.approval_status.in_(["PENDING_APPROVAL", "NEEDS_REVISION"]),
+                PharmacyProduct.created_at <= product_cutoff,
+            )
+        )
+    )
+    for product, profile in p_result.all():
+        age = _age(product.created_at)
+        items.append({
+            "type": "PENDING_PRODUCT_APPROVAL",
+            "severity": "MEDIUM",
+            "title": f"{product.product_name} — awaiting review {age} min",
+            "detail": f"{profile.store_name} submitted this product and it's still {product.approval_status.replace('_', ' ').lower()}.",
+            "link": f"/dashboard/pharmacy/products/review?product_id={product.product_id}",
+            "age_minutes": age,
+        })
+
+    # ── Haircut vendors awaiting approval ──────────────────────────────────
+    if haircut_session is not None:
+        from app.models.haircut import HaircutVendorAccount
+
+        vendor_cutoff = now - timedelta(hours=PRODUCT_REVIEW_SLA_HOURS)
+        v_result = await haircut_session.execute(
+            select(HaircutVendorAccount).where(
+                and_(
+                    HaircutVendorAccount.account_status == "pending",
+                    HaircutVendorAccount.created_at <= vendor_cutoff,
+                )
+            )
+        )
+        for vendor in v_result.scalars().all():
+            age = _age(vendor.created_at)
+            items.append({
+                "type": "PENDING_HAIRCUT_VENDOR_APPROVAL",
+                "severity": "MEDIUM",
+                "title": f"{vendor.full_name} — awaiting approval {age} min",
+                "detail": "This haircut vendor registered and is still pending admin approval.",
+                "link": "/haircut/shops",
+                "age_minutes": age,
+            })
 
     # Sort: HIGH first, then by age descending
     items.sort(key=lambda x: (x["severity"] != "HIGH", -x["age_minutes"]))

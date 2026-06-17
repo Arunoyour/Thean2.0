@@ -18,7 +18,7 @@ from app.schemas.pharmacy import (
     PharmacyProductReviewResponse,
 )
 from app.schemas.admin_customer import AdminCustomerDetailResponse, AdminCustomerSummaryResponse
-from app.schemas.pharmacy import PharmacyStatusEventResponse, PharmacyStatusUpdateRequest
+from app.schemas.pharmacy import PharmacyScheduleStatusResponse, PharmacyStatusEventResponse, PharmacyStatusUpdateRequest
 from app.schemas.super_admin import (
     CreateAdminRequest,
     DeactivateAdminRequest,
@@ -33,6 +33,7 @@ from app.services.audit_service import AuditAction, audit
 from app.services.pharmacy_service import (
     activate_pharmacy,
     approve_product,
+    get_schedule_status,
     list_pharmacies,
     list_pharmacy_availability_events,
     list_products_for_review,
@@ -95,10 +96,10 @@ async def me(admin: SuperAdmin = Depends(get_current_super_admin)):
 @router.get("/admins", response_model=list[SuperAdminResponse])
 async def list_all_admins(
     request: Request,
-    admin: SuperAdmin = Depends(require_role("SUPER")),
+    admin: SuperAdmin = Depends(require_role("SUPER", "SUPERVISOR")),
     session: AsyncSession = Depends(get_session),
 ):
-    """List all admin accounts. SUPER only."""
+    """List all admin accounts. SUPER and SUPERVISOR."""
     admins = await list_admins(session)
     await audit(
         session=session, actor=admin, action_type=AuditAction.VIEW_LEDGER,
@@ -304,6 +305,30 @@ async def pharmacy_availability_events(
     session: AsyncSession = Depends(get_pharmacy_session),
 ):
     return await list_pharmacy_availability_events(session, account_id, date_from, date_to)
+
+
+@router.get(
+    "/pharmacies/{account_id}/schedule-status",
+    response_model=PharmacyScheduleStatusResponse,
+)
+async def pharmacy_schedule_status(
+    account_id: uuid.UUID,
+    _: SuperAdmin = Depends(require_role("SUPER", "SUPERVISOR", "CHECKER", "AUDITOR")),
+    session: AsyncSession = Depends(get_pharmacy_session),
+):
+    from app.models.pharmacy_merchant import PharmacyAccount, PharmacyProfile
+
+    result = await session.execute(
+        select(PharmacyAccount, PharmacyProfile)
+        .join(PharmacyProfile, PharmacyProfile.account_id == PharmacyAccount.account_id)
+        .where(PharmacyAccount.account_id == account_id)
+    )
+    row = result.first()
+    if row is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Pharmacy not found.")
+    account, profile = row
+    return await get_schedule_status(session, account, profile)
 
 
 # ── Pharmacy products ─────────────────────────────────────────────────────────
@@ -530,6 +555,6 @@ async def admin_attention_items(
 ):
     """Items needing immediate attention on admin dashboard load."""
     from app.services.attention_service import get_admin_attention
-    from app.db.session import DeliverySessionLocal, PharmacySessionLocal
-    async with DeliverySessionLocal() as dl_session, PharmacySessionLocal() as ph_session:
-        return await get_admin_attention(main_session, dl_session, ph_session)
+    from app.db.session import DeliverySessionLocal, HaircutSessionLocal, PharmacySessionLocal
+    async with DeliverySessionLocal() as dl_session, PharmacySessionLocal() as ph_session, HaircutSessionLocal() as hc_session:
+        return await get_admin_attention(main_session, dl_session, ph_session, hc_session)

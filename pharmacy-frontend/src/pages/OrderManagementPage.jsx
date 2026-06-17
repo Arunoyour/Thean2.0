@@ -283,6 +283,7 @@ export function OrderManagementPage() {
   const [now, setNow] = useState(Date.now());
   const [estimateModalOrder, setEstimateModalOrder] = useState(null);
   const [pendingRejectOrderId, setPendingRejectOrderId] = useState(null);
+  const [pendingReadyOrderId, setPendingReadyOrderId] = useState(null);
   const announcedRef = useRef({}); // {orderId: Set of announced seconds}
 
   // Audio announcement preference — persistent, default ON
@@ -426,7 +427,8 @@ export function OrderManagementPage() {
     setIsSubmitting(true);
     try {
       await markOrderReadyForDelivery(orderId);
-      setMessage("Order marked as ready for delivery.");
+      setPendingReadyOrderId(null);
+      setMessage("Order marked as ready for delivery — the customer has been notified.");
       await loadOrders({ showLoading: false });
     } catch (e) {
       setError(e.message);
@@ -549,6 +551,12 @@ export function OrderManagementPage() {
                     ) : order.substitution_allowed === true ? (
                       <span className="substitution-row-badge substitution-row-badge-yes">Substitution Approved</span>
                     ) : null}
+                    {order.partial_fulfillment_allowed === true ? (
+                      <span className="substitution-row-badge substitution-row-badge-yes">Partial Fulfillment Allowed</span>
+                    ) : null}
+                    {order.split_from_order_id ? (
+                      <span className="substitution-row-badge substitution-row-badge-yes">Split Order</span>
+                    ) : null}
                     <h2>{order.patient_name || "Customer"} medicine order</h2>
                     <p>
                       {formatDate(order.created_at)}
@@ -639,14 +647,37 @@ export function OrderManagementPage() {
                       </button>
                     ) : null}
                     {(order.status === "PRICE_APPROVED" || order.status === "PHARMACY_ACCEPTED") ? (
-                      <button
-                        className="success-button button-small"
-                        type="button"
-                        disabled={isSubmitting}
-                        onClick={() => handleMarkReadyForDelivery(order.order_id)}
-                      >
-                        <PackageCheck size={16} /> Ready for Delivery
-                      </button>
+                      pendingReadyOrderId === order.order_id ? (
+                        <>
+                          <span style={{ fontSize: "0.8rem", color: "#b45309", alignSelf: "center" }}>
+                            Skip billing and notify the customer it's packed?
+                          </span>
+                          <button
+                            className="success-button button-small"
+                            type="button"
+                            disabled={isSubmitting}
+                            onClick={() => handleMarkReadyForDelivery(order.order_id)}
+                          >
+                            <PackageCheck size={16} /> Confirm — mark ready
+                          </button>
+                          <button
+                            className="outline-button button-small"
+                            type="button"
+                            onClick={() => setPendingReadyOrderId(null)}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className="success-button button-small"
+                          type="button"
+                          disabled={isSubmitting}
+                          onClick={() => setPendingReadyOrderId(order.order_id)}
+                        >
+                          <PackageCheck size={16} /> Skip billing — ready for delivery
+                        </button>
+                      )
                     ) : null}
                   </div>
                 </div>

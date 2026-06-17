@@ -568,6 +568,71 @@ li {
   color: #52625f;
   font-size: 13px;
   font-weight: 900;
+  aspect-ratio: 4 / 3;
+  border: 1px solid #dce6e3;
+  border-radius: 8px;
+  background: #f8fbfa;
+}
+
+.photo-preview-slideshow-stage {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid #dce6e3;
+  border-radius: 8px;
+  background: #f8fbfa;
+}
+
+.photo-preview-slideshow-stage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-preview-slideshow-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(15, 23, 42, 0.55);
+  color: #fff;
+  cursor: pointer;
+}
+
+.photo-preview-slideshow-prev {
+  left: 6px;
+}
+
+.photo-preview-slideshow-next {
+  right: 6px;
+}
+
+.photo-preview-slideshow-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.photo-preview-slideshow-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  background: #cbd5d1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.photo-preview-slideshow-dot.active {
+  background: #0f766e;
 }
 
 .sample-row {
@@ -1908,7 +1973,85 @@ select.input-valid {
 .bill-skeleton { display: flex; flex-direction: column; gap: 0.75rem; padding: 1.5rem; }
 .bill-skeleton-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 0.5rem; }
 
+/* ── Generic inner page (back button + title) ───────────────────────── */
+.ph-page { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+.ph-inner-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem; }
+.ph-inner-header h1 { margin: 0; font-size: 1.2rem; font-weight: 700; color: #111827; }
+.ph-back-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 8px;
+  border: 1px solid #e5e7eb; background: #fff; color: #374151;
+  cursor: pointer; flex-shrink: 0;
+}
+.ph-back-btn:hover { background: #f9fafb; }
+.ph-loading { color: #6b7280; text-align: center; padding: 2rem; }
+
+/* ── Settlement ──────────────────────────────────────────────────────── */
+.settlement-stat-grid { display: flex; gap: 12px; flex-wrap: wrap; margin: 20px 0; }
+.settlement-stat-card { flex: 1; min-width: 130px; border: 1px solid #dce6e3; border-radius: 8px; background: rgba(255, 255, 255, 0.92); padding: 14px 16px; }
+.settlement-stat-label { margin: 0; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: #52625f; }
+.settlement-stat-value { margin: 6px 0 0; font-size: 19px; font-weight: 900; color: #172522; }
+.settlement-stat-value.positive { color: #115e36; }
+.settlement-stat-value.negative { color: #b91c1c; }
+.settlement-stat-value.warning { color: #7c4a00; }
+
+.settlement-filter-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.settlement-filter-chip { padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 800; cursor: pointer; border: 1px solid #c9d8d4; background: #fff; color: #334155; }
+.settlement-filter-chip.active { border-color: #0f766e; background: #0f766e; color: #fff; }
+
+.settlement-empty { padding: 48px 24px; text-align: center; color: #52625f; }
+.settlement-empty p:first-child { margin: 0; font-weight: 900; color: #172522; }
+.settlement-empty p:last-child { margin: 8px 0 0; font-size: 13px; }
+
+.settlement-batch-list { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+.settlement-batch-card { border: 1px solid #dce6e3; border-radius: 8px; background: rgba(255, 255, 255, 0.92); padding: 18px 20px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 16px; box-shadow: 0 14px 36px rgba(36, 58, 53, 0.08); transition: border-color 0.15s; }
+.settlement-batch-card:hover { border-color: #0f766e; }
+.settlement-batch-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.settlement-cycle-tag { font-size: 12px; color: #52625f; }
+.settlement-retry-tag { font-size: 11px; font-weight: 900; color: #7c4a00; background: #fff4dc; border-radius: 999px; padding: 1px 8px; }
+.settlement-amount-row { display: flex; gap: 24px; margin-top: 8px; flex-wrap: wrap; }
+.settlement-amount-row .settlement-amount-label { margin: 0; font-size: 11px; color: #52625f; }
+.settlement-amount-row .settlement-amount-value { margin: 0; font-size: 16px; font-weight: 900; }
+.settlement-amount-value.positive { color: #115e36; }
+.settlement-amount-value.negative { color: #b91c1c; }
+
+.settlement-status { color: #52625f; background: #eef3f1; }
+.settlement-status-draft { color: #52625f; background: #eef3f1; }
+.settlement-status-pending_approval { color: #7c4a00; background: #fff4dc; }
+.settlement-status-approved { color: #115e36; background: #dff6e8; }
+.settlement-status-executed { color: #115e36; background: #dff6e8; }
+.settlement-status-rejected { color: #8a1f11; background: #fde8e4; }
+.settlement-status-needs_correction { color: #8a1f11; background: #fde8e4; }
+.settlement-status-cancelled { color: #52625f; background: #eef3f1; }
+
+.settlement-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
+.settlement-detail-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.settlement-audit-note { margin: 6px 0 0; font-size: 12px; color: #52625f; }
+
+.settlement-proof-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #dce6e3; }
+.settlement-proof-row:last-child { border-bottom: none; }
+.settlement-proof-meta { margin: 0; color: #334155; font-size: 13px; }
+.settlement-proof-note { margin: 0; color: #52625f; font-size: 12px; }
+.settlement-proof-timestamp { margin: 0; color: #52625f; font-size: 11px; }
+.settlement-proof-verified { font-size: 12px; font-weight: 800; color: #115e36; }
+.settlement-proof-pending { font-size: 12px; font-weight: 800; color: #7c4a00; }
+
+.settlement-line-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #dce6e3; font-size: 13px; }
+.settlement-line-row:last-child { border-bottom: none; }
+.settlement-line-title { margin: 0; font-weight: 800; color: #172522; }
+.settlement-line-desc { margin: 0; color: #52625f; font-size: 12px; }
+.settlement-line-amount { margin: 0; font-weight: 900; white-space: nowrap; }
+.settlement-line-amount.positive { color: #115e36; }
+.settlement-line-amount.negative { color: #b91c1c; }
+
 /* ── Dispute UI ──────────────────────────────────────────────────────── */
+.dispute-order-id { margin: 0; font-size: 0.85rem; color: #52625f; font-family: monospace; }
+.dispute-order-summary { border: 1px solid #dce6e3; border-radius: 8px; background: #fff; padding: 0.85rem 1rem; }
+.dispute-order-summary-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
+.dispute-order-summary-date { font-size: 0.78rem; color: #52625f; }
+.dispute-order-summary-line { margin: 0.3rem 0 0; font-size: 0.85rem; color: #172522; }
+.dispute-order-summary-line strong { color: #52625f; font-weight: 700; margin-right: 0.3rem; }
+.dispute-order-summary-id { margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #eef3f1; font-family: monospace; font-size: 0.72rem; color: #9ca3af; }
 .dispute-home-banner {
   display: block; padding: 0.75rem 1rem; margin-bottom: 1rem;
   background: #fef3c7; border: 1px solid #fbbf24; border-radius: 8px;

@@ -1,28 +1,23 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, RefreshCw } from "lucide-react";
+import { PharmacyPageShell } from "../components/PharmacyPageShell.jsx";
 import { listMySettlementBatches } from "../lib/api.js";
-
-const STATUS_COLORS = {
-  DRAFT:            "#6b7280",
-  PENDING_APPROVAL: "#d97706",
-  APPROVED:         "#2563eb",
-  EXECUTED:         "#16a34a",
-  REJECTED:         "#dc2626",
-  NEEDS_CORRECTION: "#7c3aed",
-  CANCELLED:        "#9ca3af",
-};
 
 const FILTER_OPTIONS = ["ALL", "DRAFT", "PENDING_APPROVAL", "APPROVED", "EXECUTED", "REJECTED"];
 
-function StatusBadge({ status }) {
-  const color = STATUS_COLORS[status] ?? "#6b7280";
+function StatCard({ label, value, tone }) {
   return (
-    <span style={{
-      display: "inline-block", padding: "2px 10px", borderRadius: 99,
-      fontSize: "0.72rem", fontWeight: 700,
-      background: color + "18", color, border: `1px solid ${color}40`,
-    }}>
+    <div className="settlement-stat-card">
+      <p className="settlement-stat-label">{label}</p>
+      <p className={`settlement-stat-value${tone ? ` ${tone}` : ""}`}>{value}</p>
+    </div>
+  );
+}
+
+function StatusBadge({ status }) {
+  return (
+    <span className={`status-pill settlement-status-${status.toLowerCase()}`}>
       {status.replace(/_/g, " ")}
     </span>
   );
@@ -60,94 +55,96 @@ export function SettlementHistoryPage() {
 
   const fmt = (n) => Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2 });
 
-  return (
-    <main style={{ minHeight: "100vh", background: "#f9fafb", padding: "1.25rem 1rem" }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
-        <div>
-          <p style={{ margin: 0, fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em" }}>Finance</p>
-          <h1 style={{ margin: "0.2rem 0 0", fontSize: "1.4rem", fontWeight: 700 }}>Settlement History</h1>
-        </div>
-        <button
-          onClick={() => load(statusFilter)}
-          style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: "#374151" }}>
-          <RefreshCw size={16} />
-        </button>
-      </div>
+  const summary = batches.reduce(
+    (acc, b) => ({
+      netPayable: acc.netPayable + Number(b.net_payable || 0),
+      credits: acc.credits + Number(b.total_credits || 0),
+      debits: acc.debits + Number(b.total_debits || 0),
+      pending: acc.pending + (b.status === "PENDING_APPROVAL" ? 1 : 0),
+    }),
+    { netPayable: 0, credits: 0, debits: 0, pending: 0 },
+  );
 
-      {/* Filter chips */}
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+  return (
+    <PharmacyPageShell>
+      <header className="portal-header">
+        <div>
+          <p className="eyebrow">Finance</p>
+          <h1>Settlement History</h1>
+          <p>Your payout batches, grouped by settlement cycle.</p>
+        </div>
+        <button className="outline-button button-small" type="button" onClick={() => load(statusFilter)}>
+          <RefreshCw size={15} />
+        </button>
+      </header>
+
+      {!isLoading && batches.length > 0 && (
+        <div className="settlement-stat-grid">
+          <StatCard label="Batches" value={batches.length} />
+          <StatCard label="Net Payable" value={`₹${fmt(summary.netPayable)}`} tone={summary.netPayable >= 0 ? "positive" : "negative"} />
+          <StatCard label="Credits" value={`+₹${fmt(summary.credits)}`} tone="positive" />
+          <StatCard label="Debits" value={`−₹${fmt(summary.debits)}`} tone="negative" />
+          {summary.pending > 0 && <StatCard label="Pending Approval" value={summary.pending} tone="warning" />}
+        </div>
+      )}
+
+      <div className="settlement-filter-chips">
         {FILTER_OPTIONS.map(f => (
           <button
             key={f}
-            onClick={() => changeFilter(f)}
-            style={{
-              padding: "4px 12px", borderRadius: 99, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer",
-              background: statusFilter === f ? "#111827" : "#fff",
-              color: statusFilter === f ? "#fff" : "#374151",
-              border: `1px solid ${statusFilter === f ? "#111827" : "#e5e7eb"}`,
-            }}>
+            type="button"
+            className={`settlement-filter-chip${statusFilter === f ? " active" : ""}`}
+            onClick={() => changeFilter(f)}>
             {f.replace(/_/g, " ")}
           </button>
         ))}
       </div>
 
-      {error && (
-        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "0.75rem 1rem", color: "#dc2626", marginBottom: "1rem", fontSize: "0.875rem" }}>
-          {error}
-        </div>
-      )}
+      {error && <div className="error">{error}</div>}
 
-      {isLoading && (
-        <p style={{ color: "#6b7280", textAlign: "center", padding: "2rem" }}>Loading settlements…</p>
-      )}
+      {isLoading && <p className="field-help" style={{ textAlign: "center", padding: "2rem 0" }}>Loading settlements…</p>}
 
       {!isLoading && batches.length === 0 && !error && (
-        <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", padding: "3rem", textAlign: "center", color: "#6b7280" }}>
-          <p style={{ margin: 0, fontWeight: 600 }}>No settlement batches yet</p>
-          <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem" }}>Your payouts will appear here once settlements are processed.</p>
+        <div className="panel settlement-empty">
+          <p>No settlement batches yet</p>
+          <p>Your payouts will appear here once settlements are processed.</p>
         </div>
       )}
 
-      {/* Batch list */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+      <div className="settlement-batch-list">
         {batches.map(b => (
-          <div
-            key={b.batch_id}
-            onClick={() => navigate(`/settlement/${b.batch_id}`)}
-            style={{
-              background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb",
-              padding: "1rem 1.25rem", cursor: "pointer", display: "flex",
-              alignItems: "center", justifyContent: "space-between", gap: "1rem",
-            }}>
+          <div key={b.batch_id} className="settlement-batch-card" onClick={() => navigate(`/settlement/${b.batch_id}`)}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+              <div className="settlement-batch-meta">
                 <StatusBadge status={b.status} />
                 {b.cycle_date && (
-                  <span style={{ fontSize: "0.78rem", color: "#9ca3af" }}>{b.cycle_date}</span>
+                  <span className="settlement-cycle-tag">
+                    {b.cycle_type ? `${b.cycle_type} · ` : ""}{b.cycle_date}
+                  </span>
                 )}
+                {b.retry_count > 0 && <span className="settlement-retry-tag">Retry {b.retry_count}/2</span>}
               </div>
-              <div style={{ display: "flex", gap: "1.5rem", marginTop: "0.4rem", flexWrap: "wrap" }}>
+              <div className="settlement-amount-row">
                 <div>
-                  <p style={{ margin: 0, fontSize: "0.72rem", color: "#9ca3af" }}>Net Payable</p>
-                  <p style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: Number(b.net_payable) >= 0 ? "#16a34a" : "#dc2626" }}>
+                  <p className="settlement-amount-label">Net Payable</p>
+                  <p className={`settlement-amount-value ${Number(b.net_payable) >= 0 ? "positive" : "negative"}`}>
                     ₹{fmt(b.net_payable)}
                   </p>
                 </div>
                 <div>
-                  <p style={{ margin: 0, fontSize: "0.72rem", color: "#9ca3af" }}>Credits</p>
-                  <p style={{ margin: 0, fontSize: "0.92rem", fontWeight: 600, color: "#16a34a" }}>+₹{fmt(b.total_credits)}</p>
+                  <p className="settlement-amount-label">Credits</p>
+                  <p className="settlement-amount-value positive">+₹{fmt(b.total_credits)}</p>
                 </div>
                 <div>
-                  <p style={{ margin: 0, fontSize: "0.72rem", color: "#9ca3af" }}>Debits</p>
-                  <p style={{ margin: 0, fontSize: "0.92rem", fontWeight: 600, color: "#dc2626" }}>−₹{fmt(b.total_debits)}</p>
+                  <p className="settlement-amount-label">Debits</p>
+                  <p className="settlement-amount-value negative">−₹{fmt(b.total_debits)}</p>
                 </div>
               </div>
             </div>
-            <ChevronRight size={18} color="#9ca3af" style={{ flexShrink: 0 }} />
+            <ChevronRight size={18} color="#52625f" style={{ flexShrink: 0 }} />
           </div>
         ))}
       </div>
-    </main>
+    </PharmacyPageShell>
   );
 }

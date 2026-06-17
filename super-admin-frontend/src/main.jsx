@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { ErrorBoundary } from "./components/ErrorBoundary.jsx";
+import { AppLayout } from "./components/AppLayout.jsx";
 import { AdminManagementPage } from "./pages/AdminManagementPage.jsx";
 import { AttentionPage } from "./pages/AttentionPage.jsx";
 import { ApprovalsPage } from "./pages/ApprovalsPage.jsx";
@@ -33,21 +34,21 @@ import { ProductReviewPage } from "./pages/ProductReviewPage.jsx";
 import { PharmacyOrderManagementPage } from "./pages/PharmacyOrderManagementPage.jsx";
 import { PharmacyOrderStatusPage } from "./pages/PharmacyOrderStatusPage.jsx";
 import { SubstitutionAuditPage } from "./pages/SubstitutionAuditPage.jsx";
+import { HaircutShopsPage } from "./pages/HaircutShopsPage.jsx";
+import { HaircutShopDetailPage } from "./pages/HaircutShopDetailPage.jsx";
 import { canManageAdmins, canSeeAuditLog } from "./lib/role.js";
 import "./styles/global.css";
 
-/** Redirects to /dashboard when the required role check fails. */
 function RequireRole({ check, children }) {
   return check() ? children : <Navigate to="/dashboard" replace />;
 }
 
-/** Redirects unauthenticated users to /login before they can reach a protected page. */
 function RequireAuth({ children }) {
   const token = window.localStorage.getItem("thean_super_admin_access_token");
-  return token ? children : <Navigate to="/login" replace />;
+  if (!token) return <Navigate to="/login" replace />;
+  return <AppLayout>{children}</AppLayout>;
 }
 
-/** Sticky bottom banner shown when the device loses network connectivity. */
 function OfflineBanner() {
   const [offline, setOffline] = useState(!navigator.onLine);
   useEffect(() => {
@@ -75,16 +76,17 @@ function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginPage />} />
+
         <Route path="/dashboard" element={<RequireAuth><DashboardPage /></RequireAuth>} />
         <Route path="/dashboard/customers" element={<RequireAuth><CustomerDashboardPage /></RequireAuth>} />
         <Route path="/dashboard/customers/:userId" element={<RequireAuth><CustomerDetailPage /></RequireAuth>} />
+
         <Route path="/dashboard/pharmacy" element={<RequireAuth><PharmacyDashboardPage /></RequireAuth>} />
         <Route path="/dashboard/pharmacy/products" element={<RequireAuth><ProductReviewPage /></RequireAuth>} />
         <Route path="/dashboard/pharmacy/orders" element={<RequireAuth><PharmacyOrderManagementPage /></RequireAuth>} />
         <Route path="/dashboard/pharmacy/order-status" element={<RequireAuth><PharmacyOrderStatusPage /></RequireAuth>} />
         <Route path="/dashboard/pharmacy/substitution-audit" element={<RequireAuth><SubstitutionAuditPage /></RequireAuth>} />
 
-        {/* Delivery */}
         <Route path="/dashboard/delivery" element={<RequireAuth><DeliveryMapPage /></RequireAuth>} />
         <Route path="/dashboard/delivery/boys" element={<RequireAuth><DeliveryBoysPage /></RequireAuth>} />
         <Route path="/dashboard/delivery/boys/:accountId" element={<RequireAuth><DeliveryBoyDetailPage /></RequireAuth>} />
@@ -92,27 +94,24 @@ function App() {
         <Route path="/dashboard/delivery/cod" element={<RequireAuth><DeliveryCodPage /></RequireAuth>} />
         <Route path="/dashboard/delivery/rate" element={<RequireAuth><DeliveryRateConfigPage /></RequireAuth>} />
         <Route path="/dashboard/delivery/auto-assign" element={<RequireAuth><AutoAssignPage /></RequireAuth>} />
-        <Route path="/dashboard/fee-config" element={<RequireAuth><FeeConfigPage /></RequireAuth>} />
 
-        {/* Settlement */}
+        <Route path="/dashboard/fee-config" element={<RequireAuth><FeeConfigPage /></RequireAuth>} />
         <Route path="/dashboard/settlement" element={<RequireAuth><SettlementDashboardPage /></RequireAuth>} />
         <Route path="/dashboard/settlement/:cycleId" element={<RequireAuth><SettlementCycleDetailPage /></RequireAuth>} />
         <Route path="/dashboard/settlement/:cycleId/batch/:batchId" element={<RequireAuth><SettlementBatchDetailPage /></RequireAuth>} />
         <Route path="/dashboard/settlement/batch/:batchId/proofs" element={<RequireAuth><PaymentProofsPage /></RequireAuth>} />
-
-        {/* Stakeholder Ledger */}
         <Route path="/dashboard/ledger" element={<RequireAuth><StakeholderLedgerPage /></RequireAuth>} />
 
-        {/* Disputes */}
         <Route path="/dashboard/attention" element={<RequireAuth><AttentionPage /></RequireAuth>} />
         <Route path="/dashboard/disputes" element={<RequireAuth><DisputeManagementPage /></RequireAuth>} />
         <Route path="/dashboard/disputes/:disputeId" element={<RequireAuth><DisputeDetailPage /></RequireAuth>} />
 
-        {/* Reconciliation */}
         <Route path="/dashboard/reconciliation" element={<RequireAuth><ReconciliationOverviewPage /></RequireAuth>} />
         <Route path="/dashboard/reconciliation/exceptions/:exceptionId" element={<RequireAuth><ReconciliationExceptionDetailPage /></RequireAuth>} />
 
-        {/* Role-gated */}
+        <Route path="/haircut/shops" element={<RequireAuth><HaircutShopsPage /></RequireAuth>} />
+        <Route path="/haircut/shops/:shopId" element={<RequireAuth><HaircutShopDetailPage /></RequireAuth>} />
+
         <Route path="/dashboard/admins" element={<RequireAuth><RequireRole check={canManageAdmins}><AdminManagementPage /></RequireRole></RequireAuth>} />
         <Route path="/dashboard/approvals" element={<RequireAuth><ApprovalsPage /></RequireAuth>} />
         <Route path="/dashboard/audit-log" element={<RequireAuth><RequireRole check={canSeeAuditLog}><AuditLogPage /></RequireRole></RequireAuth>} />
@@ -123,7 +122,7 @@ function App() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <App />
     </BrowserRouter>
   </React.StrictMode>,

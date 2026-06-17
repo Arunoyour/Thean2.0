@@ -1,359 +1,225 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bike, BookOpen, Building2, ClipboardList, CreditCard, GitMerge, LogOut, MessageSquare, Percent, Pill, RefreshCw, ScrollText, ShieldCheck, Users } from "lucide-react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
+import {
+  getAdminAttention,
+  listCustomers,
+  listPharmacies,
+  listDeliveryAccounts,
+  listDeliveryOrders,
+  getDisputeSummary,
+  adminListHaircutShops,
+  adminListHaircutVendors,
+} from "../lib/api.js";
 
-import { getAdminAttention, getCurrentAdmin, listCustomers, listPharmacies, logoutAdmin } from "../lib/api.js";
-import { canManageAdmins, canSeeAuditLog, canApprove } from "../lib/role.js";
+function KpiCard({ label, value, sub, accent = "#0f766e", onClick }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        background: "#ffffff", border: "1px solid #dce6e3", borderRadius: 14,
+        padding: "18px 20px", cursor: onClick ? "pointer" : "default",
+        transition: "border-color 0.15s",
+      }}
+      onMouseEnter={e => onClick && (e.currentTarget.style.borderColor = accent)}
+      onMouseLeave={e => onClick && (e.currentTarget.style.borderColor = "#dce6e3")}
+    >
+      <div style={{ fontSize: "0.72rem", color: "#52625f", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 8 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: "1.9rem", fontWeight: 800, color: accent, lineHeight: 1 }}>{value}</div>
+      {sub && <div style={{ fontSize: "0.78rem", color: "#94a3a0", marginTop: 6 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function SectionHeading({ children }) {
+  return (
+    <h2 style={{ fontSize: "0.72rem", fontWeight: 700, color: "#52625f", textTransform: "uppercase", letterSpacing: "0.08em", margin: "28px 0 12px" }}>
+      {children}
+    </h2>
+  );
+}
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const [admin, setAdmin] = useState(null);
-  const [pharmacies, setPharmacies] = useState([]);
-  const [customers, setCustomers] = useState([]);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [attentionCount, setAttentionCount] = useState(0);
 
-  async function loadData({ silent = false } = {}) {
+  async function load(silent = false) {
+    if (silent) setRefreshing(true); else setLoading(true);
     setError("");
-    if (silent) setIsRefreshing(true);
-    else setIsLoading(true);
-
     try {
-      const [adminProfile, pharmacyList, customerList, attentionData] = await Promise.all([
-        getCurrentAdmin(),
-        listPharmacies(),
-        listCustomers(),
-        getAdminAttention().catch(() => ({ count: 0 })),
+      const [customers, pharmacies, deliveryAccounts, deliveryOrders, attention, disputes, haircutShops, haircutVendors] = await Promise.all([
+        listCustomers().catch(() => []),
+        listPharmacies().catch(() => []),
+        listDeliveryAccounts().catch(() => ({ accounts: [] })),
+        listDeliveryOrders().catch(() => []),
+        getAdminAttention().catch(() => ({ count: 0, items: [] })),
+        getDisputeSummary().catch(() => ({})),
+        adminListHaircutShops("").catch(() => []),
+        adminListHaircutVendors("").catch(() => []),
       ]);
-      setAdmin(adminProfile);
-      setPharmacies(pharmacyList);
-      setCustomers(customerList);
-      setAttentionCount(attentionData?.count || 0);
-    } catch (requestError) {
-      setError(requestError.message);
+      const drivers = Array.isArray(deliveryAccounts) ? deliveryAccounts : (deliveryAccounts.accounts ?? []);
+      const orders = Array.isArray(deliveryOrders) ? deliveryOrders : [];
+      setData({ customers, pharmacies, drivers, orders, attention, disputes, haircutShops, haircutVendors });
+    } catch (e) {
+      setError(e.message);
     } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      setLoading(false);
+      setRefreshing(false);
     }
   }
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { load(); }, []);
 
-  function logout() {
-    logoutAdmin();
-    navigate("/login");
-  }
-
-  // Memoised so it doesn't recompute on every render unrelated to customers
-  const totalPharmacyOrders = useMemo(
-    () => customers.reduce((sum, customer) => sum + customer.pharmacy_order_count, 0),
-    [customers],
-  );
-
-  if (isLoading) {
+  if (loading) {
     return (
-      <main className="page" aria-busy="true" aria-label="Loading dashboard">
-        <div className="dashboard-skeleton-header">
-          <span className="skeleton skeleton-text-sm" style={{ width: "80px", display: "inline-block" }} />
-          <span className="skeleton skeleton-text-lg" style={{ width: "220px", marginTop: "0.4rem" }} />
-          <span className="skeleton skeleton-text" style={{ width: "340px", marginTop: "0.4rem" }} />
-        </div>
-        <div className="dashboard-skeleton-grid">
-          {[1, 2, 3, 4].map((i) => (
-            <span key={i} className="skeleton skeleton-card" />
+      <div style={{ padding: 32 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14 }}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} style={{ background: "#eef3f1", borderRadius: 14, height: 90 }} className="skeleton" />
           ))}
         </div>
-      </main>
+      </div>
     );
   }
 
-  if (error && !admin) {
-    return (
-      <main className="page">
-        <section className="panel">
-          <div className="error">{error}</div>
-          <button className="button" type="button" onClick={() => loadData()}>
-            Retry
-          </button>
-          <button className="outline-button" type="button" onClick={() => navigate("/login")}>
-            Login again
-          </button>
-        </section>
-      </main>
-    );
-  }
-
-  const pendingPharmacies = pharmacies.filter(
-    (pharmacy) => pharmacy.activation_status === "PENDING_SUPER_ADMIN_APPROVAL",
-  ).length;
-  const inactivePharmacies = pharmacies.filter(
-    (pharmacy) => pharmacy.activation_status === "INACTIVE",
-  ).length;
+  const pendingPharmacies = data?.pharmacies.filter(p => p.activation_status === "PENDING_SUPER_ADMIN_APPROVAL").length ?? 0;
+  const activeDrivers = data?.drivers.filter(d => d.is_online).length ?? 0;
+  const liveOrders = data?.orders.filter(o => !["DELIVERED", "FAILED", "CANCELLED"].includes(o.status)).length ?? 0;
+  const openDisputes = data?.disputes?.open ?? 0;
+  const attentionCount = data?.attention?.count ?? 0;
+  const activeShops = data?.haircutShops.filter(s => s.shop_status === "active").length ?? 0;
+  const pendingVendors = data?.haircutVendors.filter(v => v.account_status === "pending").length ?? 0;
 
   return (
-    <main className="page">
-      {attentionCount > 0 && (
-        <a href="/dashboard/attention" className="attention-banner">
-          ⚠️ Immediate attention needed ({attentionCount} item{attentionCount > 1 ? "s" : ""}) — click to view
-        </a>
-      )}
-      <header className="dashboard-header">
+    <div style={{ padding: 32, maxWidth: 1000 }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <div>
-          <p className="eyebrow">Super admin</p>
-          <h1>Hi, {admin?.full_name}</h1>
-          <p>Choose a sector to manage approvals, listings, and operational controls.</p>
+          <h1 style={{ fontSize: "1.4rem", fontWeight: 800, margin: 0, color: "#13201e" }}>Dashboard</h1>
+          <p style={{ margin: "4px 0 0", color: "#52625f", fontSize: "0.85rem" }}>
+            {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+          </p>
         </div>
-        <div className="header-actions">
-          <button
-            className="outline-button"
-            type="button"
-            onClick={() => loadData({ silent: true })}
-            disabled={isRefreshing}
-          >
-            <RefreshCw size={18} aria-hidden="true" className={isRefreshing ? "spin" : undefined} />
-            {isRefreshing ? "Refreshing…" : "Refresh"}
-          </button>
-          <button className="outline-button" type="button" onClick={logout}>
-            <LogOut size={18} aria-hidden="true" />
-            Logout
-          </button>
+        <button
+          onClick={() => load(true)} disabled={refreshing}
+          style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: "1px solid #c9d8d4", background: "#ffffff", color: "#52625f", cursor: "pointer", fontSize: "0.82rem" }}
+        >
+          <RefreshCw size={14} className={refreshing ? "spin" : ""} />
+          {refreshing ? "Refreshing…" : "Refresh"}
+        </button>
+      </div>
+
+      {error && <div className="error" style={{ marginBottom: 16 }}>{error}</div>}
+
+      {/* Attention banner */}
+      {attentionCount > 0 && (
+        <div
+          onClick={() => navigate("/dashboard/attention")}
+          style={{
+            display: "flex", alignItems: "center", gap: 10, padding: "12px 16px",
+            background: "#fde8e4", border: "1px solid #f2c2b8", borderRadius: 12,
+            cursor: "pointer", marginBottom: 24, marginTop: 16,
+          }}
+        >
+          <AlertTriangle size={18} color="#8a1f11" />
+          <span style={{ color: "#8a1f11", fontWeight: 700, fontSize: "0.88rem" }}>
+            {attentionCount} item{attentionCount !== 1 ? "s" : ""} need immediate attention
+          </span>
+          <span style={{ color: "#b91c1c", marginLeft: "auto", fontSize: "0.82rem" }}>View →</span>
         </div>
-      </header>
+      )}
 
-      {error && <div className="error">{error}</div>}
+      {/* Customers */}
+      <SectionHeading>Customers</SectionHeading>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14 }}>
+        <KpiCard label="Total Customers" value={data?.customers.length ?? 0} accent="#0f766e"
+          onClick={() => navigate("/dashboard/customers")} />
+      </div>
 
-      <section className="sector-hub">
-        <article className="sector-card">
-          <span className="sector-icon">
-            <Users size={26} aria-hidden="true" />
-          </span>
-          <div className="sector-copy">
-            <p className="eyebrow">Operations</p>
-            <h2>Customers</h2>
-            <p>View customer profiles, saved addresses, and sector-wise order history.</p>
-          </div>
-          <div className="sector-metrics">
-            <div>
-              <span>{customers.length}</span>
-              <p>Total</p>
-            </div>
-            <div>
-              <span>{totalPharmacyOrders}</span>
-              <p>Pharmacy orders</p>
-            </div>
-          </div>
-          <button className="button" type="button" onClick={() => navigate("/dashboard/customers")}>
-            <Users size={18} aria-hidden="true" />
-            Open Customer Dashboard
-          </button>
-        </article>
+      {/* Pharmacy */}
+      <SectionHeading>Pharmacy</SectionHeading>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14 }}>
+        <KpiCard label="Total Pharmacies" value={data?.pharmacies.length ?? 0} accent="#15803d"
+          onClick={() => navigate("/dashboard/pharmacy")} />
+        <KpiCard label="Pending Approval" value={pendingPharmacies} accent="#b45309"
+          sub="Awaiting activation"
+          onClick={() => navigate("/dashboard/pharmacy")} />
+      </div>
 
-        <article className="sector-card">
-          <span className="sector-icon">
-            <Pill size={26} aria-hidden="true" />
-          </span>
-          <div className="sector-copy">
-            <p className="eyebrow">Sector</p>
-            <h2>Pharmacy</h2>
-            <p>Manage pharmacy approvals, activation status, and customer listing readiness.</p>
-          </div>
-          <div className="sector-metrics">
-            <div>
-              <span>{pendingPharmacies}</span>
-              <p>Pending approval</p>
-            </div>
-            <div>
-              <span>{inactivePharmacies}</span>
-              <p>Inactive</p>
-            </div>
-            <div>
-              <span>{pharmacies.length}</span>
-              <p>Total</p>
-            </div>
-          </div>
-          <button className="button" type="button" onClick={() => navigate("/dashboard/pharmacy")}>
-            <Building2 size={18} aria-hidden="true" />
-            Open Pharmacy Dashboard
-          </button>
-          <button className="outline-button" type="button" onClick={() => navigate("/dashboard/pharmacy/products")}>
-            <Pill size={18} aria-hidden="true" />
-            Review Pharmacy Products
-          </button>
-          <button className="outline-button" type="button" onClick={() => navigate("/dashboard/pharmacy/order-status")}>
-            Live Order Status Board
-          </button>
-        </article>
+      {/* Delivery */}
+      <SectionHeading>Delivery</SectionHeading>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14 }}>
+        <KpiCard label="Total Drivers" value={data?.drivers.length ?? 0} accent="#2563eb"
+          onClick={() => navigate("/dashboard/delivery/boys")} />
+        <KpiCard label="Online Now" value={activeDrivers} accent="#15803d"
+          onClick={() => navigate("/dashboard/delivery")} />
+        <KpiCard label="Live Orders" value={liveOrders} accent="#0f766e"
+          onClick={() => navigate("/dashboard/delivery/orders")} />
+      </div>
 
-        {/* Fee & Tax Config */}
-        <article className="sector-card">
-          <header className="sector-card-header">
-            <Percent size={26} aria-hidden="true" />
-            <div>
-              <h2>Fee &amp; Tax</h2>
-              <p className="eyebrow">Platform fee &amp; GST per sector</p>
-            </div>
-          </header>
-          <div className="sector-card-actions">
-            <button className="button" type="button" onClick={() => navigate("/dashboard/fee-config")}>
-              <Percent size={18} aria-hidden="true" />
-              Configure Fees &amp; GST
-            </button>
-          </div>
-        </article>
+      {/* Haircut */}
+      <SectionHeading>Haircut</SectionHeading>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14 }}>
+        <KpiCard label="Total Shops" value={data?.haircutShops.length ?? 0} accent="#0f766e"
+          onClick={() => navigate("/haircut/shops")} />
+        <KpiCard label="Active Shops" value={activeShops} accent="#15803d"
+          onClick={() => navigate("/haircut/shops")} />
+        <KpiCard label="Pending Vendor Approval" value={pendingVendors} accent="#b45309"
+          sub="Awaiting approval"
+          onClick={() => navigate("/haircut/shops")} />
+      </div>
 
-        {/* Delivery sector */}
-        <article className="sector-card">
-          <header className="sector-card-header">
-            <Bike size={26} aria-hidden="true" />
-            <div>
-              <h2>Delivery</h2>
-              <p className="eyebrow">Driver management & COD</p>
-            </div>
-          </header>
-          <div className="sector-card-actions">
-            <button className="button" type="button" onClick={() => navigate("/dashboard/delivery")}>
-              <Bike size={18} aria-hidden="true" />
-              Live Map & Overview
-            </button>
-            <button className="outline-button" type="button" onClick={() => navigate("/dashboard/delivery/boys")}>
-              <Users size={18} aria-hidden="true" />
-              Manage Drivers
-            </button>
-            <button className="outline-button" type="button" onClick={() => navigate("/dashboard/delivery/cod")}>
-              COD & Cash
-            </button>
-          </div>
-        </article>
+      {/* Disputes */}
+      <SectionHeading>Disputes</SectionHeading>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14 }}>
+        <KpiCard label="Open" value={openDisputes} accent="#b91c1c"
+          onClick={() => navigate("/dashboard/disputes")} />
+        <KpiCard label="Reopened" value={data?.disputes?.reopened ?? 0} accent="#b45309"
+          onClick={() => navigate("/dashboard/disputes")} />
+        <KpiCard label="Resolved" value={data?.disputes?.resolved ?? 0} accent="#15803d"
+          onClick={() => navigate("/dashboard/disputes")} />
+      </div>
 
-        {/* Settlement */}
-        <article className="sector-card">
-          <header className="sector-card-header">
-            <CreditCard size={26} aria-hidden="true" />
-            <div>
-              <h2>Settlement</h2>
-              <p className="eyebrow">Cycles, batches & ledger</p>
-            </div>
-          </header>
-          <div className="sector-card-actions">
-            <button className="button" type="button" onClick={() => navigate("/dashboard/settlement")}>
-              <CreditCard size={18} aria-hidden="true" />
-              Open Settlement
-            </button>
-          </div>
-        </article>
-
-        {/* Stakeholder Ledger */}
-        <article className="sector-card">
-          <header className="sector-card-header">
-            <BookOpen size={26} aria-hidden="true" />
-            <div>
-              <h2>Ledger</h2>
-              <p className="eyebrow">Running balance per stakeholder</p>
-            </div>
-          </header>
-          <div className="sector-card-actions">
-            <button className="button" type="button" onClick={() => navigate("/dashboard/ledger")}>
-              <BookOpen size={18} aria-hidden="true" />
-              View Ledger
-            </button>
-          </div>
-        </article>
-
-        {/* Disputes */}
-        <article className="sector-card">
-          <header className="sector-card-header">
-            <MessageSquare size={26} aria-hidden="true" />
-            <div>
-              <h2>Disputes</h2>
-              <p className="eyebrow">All apps — raise, review, resolve</p>
-            </div>
-          </header>
-          <div className="sector-card-actions">
-            <button className="button" type="button" onClick={() => navigate("/dashboard/disputes")}>
-              <MessageSquare size={18} aria-hidden="true" />
-              Open Dispute Management
-            </button>
-          </div>
-        </article>
-
-        {/* Reconciliation */}
-        <article className="sector-card">
-          <header className="sector-card-header">
-            <GitMerge size={26} aria-hidden="true" />
-            <div>
-              <h2>Reconciliation</h2>
-              <p className="eyebrow">Three-way match & exceptions</p>
-            </div>
-          </header>
-          <div className="sector-card-actions">
-            <button className="button" type="button" onClick={() => navigate("/dashboard/reconciliation")}>
-              <GitMerge size={18} aria-hidden="true" />
-              Open Reconciliation
-            </button>
-          </div>
-        </article>
-
-        {/* Approval queue — all roles that can approve/view */}
-        {canApprove() && (
-          <article className="sector-card">
-            <header className="sector-card-header">
-              <ClipboardList size={26} aria-hidden="true" />
-              <div>
-                <h2>Approvals</h2>
-                <p className="eyebrow">Maker-Checker queue</p>
+      {/* Attention detail */}
+      {attentionCount > 0 && data?.attention?.items?.length > 0 && (
+        <>
+          <SectionHeading>Attention Items</SectionHeading>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {data.attention.items.slice(0, 5).map((item, i) => (
+              <div
+                key={i}
+                onClick={() => item.link && navigate(item.link)}
+                style={{
+                  background: "#ffffff", border: `1px solid ${item.severity === "HIGH" ? "#f2c2b8" : "#dce6e3"}`,
+                  borderRadius: 12, padding: "12px 16px", cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 12,
+                }}
+              >
+                <span style={{
+                  width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+                  background: item.severity === "HIGH" ? "#b91c1c" : "#b45309",
+                }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#13201e" }}>{item.title}</div>
+                  <div style={{ fontSize: "0.78rem", color: "#52625f", marginTop: 2 }}>{item.detail}</div>
+                </div>
+                <span style={{ color: "#94a3a0", fontSize: "0.78rem" }}>{item.age_minutes}m ago →</span>
               </div>
-            </header>
-            <div className="sector-card-actions">
-              <button className="button" type="button" onClick={() => navigate("/dashboard/approvals")}>
-                <ClipboardList size={18} aria-hidden="true" />
-                Open Approval Queue
+            ))}
+            {data.attention.items.length > 5 && (
+              <button onClick={() => navigate("/dashboard/attention")}
+                style={{ background: "none", border: "1px solid #c9d8d4", borderRadius: 10, padding: "8px", color: "#52625f", cursor: "pointer", fontSize: "0.82rem" }}>
+                View all {data.attention.items.length} items →
               </button>
-            </div>
-          </article>
-        )}
-
-        {/* Audit log — SUPER + SUPERVISOR only */}
-        {canSeeAuditLog() && (
-          <article className="sector-card">
-            <header className="sector-card-header">
-              <ScrollText size={26} aria-hidden="true" />
-              <div>
-                <h2>Audit Log</h2>
-                <p className="eyebrow">All admin activity</p>
-              </div>
-            </header>
-            <div className="sector-card-actions">
-              <button className="button" type="button" onClick={() => navigate("/dashboard/audit-log")}>
-                <ScrollText size={18} aria-hidden="true" />
-                View Audit Log
-              </button>
-            </div>
-          </article>
-        )}
-
-        {/* Admin management — SUPER only */}
-        {canManageAdmins() && (
-          <article className="sector-card">
-            <header className="sector-card-header">
-              <ShieldCheck size={26} aria-hidden="true" />
-              <div>
-                <h2>Admin Management</h2>
-                <p className="eyebrow">User accounts & roles</p>
-              </div>
-            </header>
-            <div className="sector-card-actions">
-              <button className="button" type="button" onClick={() => navigate("/dashboard/admins")}>
-                <ShieldCheck size={18} aria-hidden="true" />
-                Manage Admins
-              </button>
-            </div>
-          </article>
-        )}
-      </section>
-    </main>
+            )}
+          </div>
+        </>
+      )}
+    </div>
   );
 }

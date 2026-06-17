@@ -20,6 +20,7 @@ from app.schemas.customer_order import (
     CreatePharmacyOrderRequest,
     CustomerOrderActionRequest,
     CustomerPharmacyOrderResponse,
+    PartialFulfillmentPermissionRequest,
     PharmacyOrderItem,
     SectorFeeConfigResponse,
     SetSectorFeeRequest,
@@ -187,6 +188,9 @@ def serialize_order(order: CustomerPharmacyOrder) -> CustomerPharmacyOrderRespon
         pharmacy_action_deadline_at=order.pharmacy_action_deadline_at,
         substitution_allowed=order.substitution_allowed,
         substitution_decided_at=order.substitution_decided_at,
+        partial_fulfillment_allowed=order.partial_fulfillment_allowed,
+        partial_fulfillment_decided_at=order.partial_fulfillment_decided_at,
+        split_from_order_id=order.split_from_order_id,
         customer_review_deadline_at=order.customer_review_deadline_at,
         price_breakdown=order.price_breakdown,
         bill_items=order.bill_items,
@@ -270,6 +274,8 @@ async def create_customer_pharmacy_order(
         requires_manual_review=payload.billing_mode == "manual",
         substitution_allowed=payload.substitution_allowed,
         substitution_decided_at=datetime.now(UTC) if payload.substitution_allowed is not None else None,
+        partial_fulfillment_allowed=payload.partial_fulfillment_allowed,
+        partial_fulfillment_decided_at=datetime.now(UTC) if payload.partial_fulfillment_allowed is not None else None,
     )
     session.add(order)
     await session.commit()
@@ -599,7 +605,7 @@ async def list_orders_for_pharmacy_management(
         ASSIGNED_TO_PHARMACY, PHARMACY_ACCEPTED,
         PRICE_APPROVED, PENDING_PRICE_REVIEW,
         READY_FOR_DELIVERY, OUT_FOR_DELIVERY,
-        COMPLETED,
+        READY_FOR_PICKUP, COMPLETED,
     ]
     result = await session.execute(
         select(CustomerPharmacyOrder)
@@ -819,6 +825,25 @@ async def set_substitution_permission(
         )
     order.substitution_allowed = payload.allowed
     order.substitution_decided_at = datetime.now(UTC)
+    await session.commit()
+    await session.refresh(order)
+    return serialize_order(order)
+
+
+async def set_partial_fulfillment_permission(
+    session: AsyncSession,
+    user: User,
+    order_id: UUID,
+    payload: PartialFulfillmentPermissionRequest,
+) -> CustomerPharmacyOrderResponse:
+    order = await get_order_for_user(session, user, order_id)
+    if order.status not in (ASSIGNED_TO_PHARMACY, PHARMACY_ACCEPTED):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Partial fulfillment permission can only be set while the order is with the pharmacy.",
+        )
+    order.partial_fulfillment_allowed = payload.allowed
+    order.partial_fulfillment_decided_at = datetime.now(UTC)
     await session.commit()
     await session.refresh(order)
     return serialize_order(order)
@@ -1079,6 +1104,81 @@ async def reject_price_estimate(
     return serialize_order(order)
 
 
+async def _split_unavailable_items_into_new_order(
+    session: AsyncSession,
+    parent_order: CustomerPharmacyOrder,
+    unavailable_items: list[BillLineItem],
+) -> CustomerPharmacyOrder:
+    """Create a fresh order for items the pharmacy marked unavailable, and
+    try to immediately hand it to the next nearby pharmacy (excluding the
+    one that just rejected the items)."""
+    notes = parent_order.order_notes or {}
+    child = CustomerPharmacyOrder(
+        user_id=parent_order.user_id,
+        account_id=None,
+        status=PENDING_CUSTOMER_APPROVAL,
+        estimated_amount=Decimal(max(len(unavailable_items), 1) * 125),
+        doctor_name=parent_order.doctor_name,
+        patient_name=parent_order.patient_name,
+        pharmacy_city=parent_order.pharmacy_city,
+        pharmacy_pincode=parent_order.pharmacy_pincode,
+        order_items=[
+            {"name": item.name, "metric": item.type, "quantity": item.qty} for item in unavailable_items
+        ],
+        order_notes={
+            **notes,
+            "split_from_order_id": str(parent_order.order_id),
+            "split_reason": f"Items unavailable at {parent_order.pharmacy_name or 'the original pharmacy'}",
+            "auto_choose_pharmacy": True,
+            "pharmacy_choice_mode": "auto",
+        },
+        requires_manual_review=False,
+        substitution_allowed=parent_order.substitution_allowed,
+        partial_fulfillment_allowed=parent_order.partial_fulfillment_allowed,
+        split_from_order_id=parent_order.order_id,
+    )
+    session.add(child)
+    await session.flush()
+
+    rejected_ids = {str(parent_order.account_id)} if parent_order.account_id else set()
+    next_account_id = await find_next_pharmacy_for_order(session, child, rejected_ids)
+    if next_account_id:
+        child.account_id = next_account_id
+        assign_order_to_current_pharmacy(child)
+        await session.flush()
+        await notify_pharmacy_assignment(child)
+    else:
+        child.status = CANCELLED
+        child.customer_action_comment = "No nearby pharmacy currently has these items in stock."
+        child.order_notes = {
+            **child.order_notes,
+            "cancellation_reason": "No pharmacy available for the split-off items.",
+            "can_recreate_any_nearby": True,
+        }
+
+    await manager.send_customer(
+        child.user_id,
+        {
+            "type": "order_split_for_unavailable_items",
+            "order_id": str(child.order_id),
+            "title": "Part of your order moved to a new request",
+            "message": (
+                f"{parent_order.pharmacy_name or 'Your pharmacy'} didn't have some items in stock. "
+                + (
+                    "We've created a new order for them and assigned it to a nearby pharmacy."
+                    if child.account_id
+                    else "We've created a new order for them, but no nearby pharmacy currently has them in stock."
+                )
+            ),
+            "payload": {
+                "order": serialize_order(child).model_dump(mode="json"),
+                "parent_order_id": str(parent_order.order_id),
+            },
+        },
+    )
+    return child
+
+
 async def submit_pharmacy_bill(
     session: AsyncSession,
     account_id: UUID,
@@ -1093,14 +1193,32 @@ async def submit_pharmacy_bill(
             detail="Bill can only be submitted for accepted or price-approved orders.",
         )
     now = datetime.now(UTC)
-    final_amount = sum(Decimal(item.amount) * item.qty for item in payload.items)
-    order.bill_items = [item.model_dump() for item in payload.items]
+
+    if order.partial_fulfillment_allowed:
+        available_items = [item for item in payload.items if item.available]
+        unavailable_items = [item for item in payload.items if not item.available]
+    else:
+        available_items, unavailable_items = list(payload.items), []
+    if not available_items:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one item must be marked available to generate a bill.",
+        )
+
+    final_amount = sum(Decimal(item.amount) * item.qty for item in available_items)
+    order.bill_items = [item.model_dump() for item in available_items]
     order.final_amount = final_amount
     order.status = READY_FOR_PICKUP
     order.pickup_code = _generate_pickup_code()
     order.pickup_code_generated_at = now
     await session.commit()
     await session.refresh(order)
+
+    if unavailable_items:
+        await _split_unavailable_items_into_new_order(session, order, unavailable_items)
+        await session.commit()
+        await session.refresh(order)
+
     await manager.send_customer(
         order.user_id,
         {

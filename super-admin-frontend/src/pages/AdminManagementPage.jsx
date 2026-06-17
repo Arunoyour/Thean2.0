@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Plus, RefreshCw, Shield, Trash2, UserCheck } from "lucide-react";
 import { createAdmin, changeAdminRole, deactivateAdmin, listAdmins } from "../lib/api.js";
+import { BackButton } from "../components/BackButton.jsx";
 
 const ASSIGNABLE_ROLES = ["SUPERVISOR", "CHECKER", "AUDITOR", "TEAM_LEAD"];
 const ROLE_LABELS = {
@@ -104,7 +105,8 @@ export function AdminManagementPage() {
     }
   }
 
-  if (isLoading) return <main className="page"><p>Loading admins…</p></main>;
+  if (isLoading) return <main className="page">
+      <BackButton /><p>Loading admins…</p></main>;
 
   return (
     <main className="page">

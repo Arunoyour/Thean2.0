@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import HTTPException, UploadFile
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.settlement import (
     PaymentProof,
@@ -55,7 +56,13 @@ def _serialize_proof(proof: PaymentProof) -> dict:
     }
 
 
-def _serialize_batch(batch: SettlementBatch, *, include_lines: bool = False, include_proofs: bool = False) -> dict:
+def _serialize_batch(
+    batch: SettlementBatch,
+    *,
+    include_lines: bool = False,
+    include_proofs: bool = False,
+    include_cycle: bool = False,
+) -> dict:
     data: dict = {
         "batch_id":          str(batch.batch_id),
         "cycle_id":          str(batch.cycle_id),
@@ -78,6 +85,11 @@ def _serialize_batch(batch: SettlementBatch, *, include_lines: bool = False, inc
         data["lines"] = [_serialize_line(l) for l in batch.lines]
     if include_proofs:
         data["proofs"] = [_serialize_proof(p) for p in batch.proofs]
+    if include_cycle:
+        # Only safe to access batch.cycle when the caller has eager-loaded it
+        # (selectinload) — otherwise this would trigger an async lazy-load error.
+        data["cycle_date"] = batch.cycle.cycle_date.isoformat() if batch.cycle else None
+        data["cycle_type"] = batch.cycle.cycle_type if batch.cycle else None
     return data
 
 
@@ -256,7 +268,7 @@ async def list_batches(
     limit: int = 50,
     offset: int = 0,
 ) -> list[dict]:
-    q = select(SettlementBatch).order_by(SettlementBatch.created_at.desc())
+    q = select(SettlementBatch).options(selectinload(SettlementBatch.cycle)).order_by(SettlementBatch.created_at.desc())
     if cycle_id:
         q = q.where(SettlementBatch.cycle_id == cycle_id)
     if stakeholder_type:
@@ -267,7 +279,7 @@ async def list_batches(
         q = q.where(SettlementBatch.status == status)
     q = q.limit(limit).offset(offset)
     result = await session.execute(q)
-    return [_serialize_batch(b) for b in result.scalars().all()]
+    return [_serialize_batch(b, include_cycle=True) for b in result.scalars().all()]
 
 
 async def create_batch(
@@ -321,6 +333,7 @@ async def create_batch(
         idempotency_key=idempotency_key,
         notes=notes,
     )
+    batch.cycle = cycle  # populate relationship in-memory to avoid an async lazy-load on serialize
     session.add(batch)
     await session.flush()
 
@@ -342,12 +355,14 @@ async def create_batch(
 
 async def get_batch(session: AsyncSession, batch_id: uuid.UUID) -> dict:
     result = await session.execute(
-        select(SettlementBatch).where(SettlementBatch.batch_id == batch_id)
+        select(SettlementBatch)
+        .options(selectinload(SettlementBatch.cycle))
+        .where(SettlementBatch.batch_id == batch_id)
     )
     batch = result.scalar_one_or_none()
     if not batch:
         raise HTTPException(404, "Settlement batch not found.")
-    return _serialize_batch(batch, include_lines=True, include_proofs=True)
+    return _serialize_batch(batch, include_lines=True, include_proofs=True, include_cycle=True)
 
 
 async def submit_batch_for_approval(

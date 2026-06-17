@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, CheckCircle2, RefreshCw, XCircle } from "lucide-react";
 import { getReconciliationOverview, listReconciliationExceptions } from "../lib/api.js";
+import { BackButton } from "../components/BackButton.jsx";
 
 const SEVERITY_COLORS = { HIGH: "#dc2626", MEDIUM: "#d97706", LOW: "#2563eb" };
 const STATUS_COLORS = {
@@ -72,6 +73,7 @@ export function ReconciliationOverviewPage() {
 
   return (
     <main className="page">
+      <BackButton />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.75rem" }}>
         <div>
           <p className="eyebrow">Finance</p>

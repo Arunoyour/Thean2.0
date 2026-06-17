@@ -13,9 +13,11 @@ class Settings(BaseSettings):
     database_url: str
     pharmacy_database_url: str
     delivery_database_url: str = ""   # defaults to pharmacy DB if not set
+    haircut_database_url: str          # required — dedicated thean_haircut DB
     core_database_schema: str = "T"
     pharmacy_database_schema: str = "PH"
     delivery_database_schema: str = "D"
+    haircut_database_schema: str = "HC"
     database_pool_size: int = 20
     database_max_overflow: int = 40
     access_token_expire_minutes: int = 60

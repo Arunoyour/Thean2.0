@@ -24,6 +24,7 @@ class CreatePharmacyOrderRequest(BaseModel):
     has_prescription: bool
     has_voice_note: bool
     substitution_allowed: bool | None = None
+    partial_fulfillment_allowed: bool | None = None
     notes: dict = Field(default_factory=dict)
 
 
@@ -32,6 +33,10 @@ class CustomerOrderActionRequest(BaseModel):
 
 
 class SubstitutionPermissionRequest(BaseModel):
+    allowed: bool
+
+
+class PartialFulfillmentPermissionRequest(BaseModel):
     allowed: bool
 
 
@@ -70,6 +75,7 @@ class BillLineItem(BaseModel):
     type: str = Field(min_length=1, max_length=80)
     amount: str = Field(min_length=1)
     substitute_name: str | None = None
+    available: bool = True
 
 
 class SubmitBillRequest(BaseModel):
@@ -96,6 +102,9 @@ class CustomerPharmacyOrderResponse(BaseModel):
     pharmacy_action_deadline_at: datetime | None = None
     substitution_allowed: bool | None = None
     substitution_decided_at: datetime | None = None
+    partial_fulfillment_allowed: bool | None = None
+    partial_fulfillment_decided_at: datetime | None = None
+    split_from_order_id: UUID | None = None
     customer_review_deadline_at: datetime | None = None
     price_breakdown: dict | None = None
     bill_items: list | None = None

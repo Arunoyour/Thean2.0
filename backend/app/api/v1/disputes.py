@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_role
@@ -178,9 +178,11 @@ async def assign_dispute(
     actor: SuperAdmin = Depends(require_role("SUPER", "SUPERVISOR")),
     session: AsyncSession = Depends(get_session),
 ):
-    result = await svc.assign_dispute(
-        session, dispute_id, uuid.UUID(payload["assignee_id"]), actor
-    )
+    try:
+        assignee_uuid = uuid.UUID(str(payload.get("assignee_id", "")))
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=422, detail="assignee_id must be a valid UUID.")
+    result = await svc.assign_dispute(session, dispute_id, assignee_uuid, actor)
     await audit(session, actor=actor, action_type=AuditAction.DISPUTE_ASSIGN,
                 description=f"Dispute {dispute_id} assigned",
                 target_type="dispute", target_id=str(dispute_id))

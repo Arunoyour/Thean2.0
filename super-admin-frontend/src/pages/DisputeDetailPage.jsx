@@ -11,6 +11,7 @@ import {
 } from "../lib/api.js";
 import { canApprove, canWriteConfig } from "../lib/role.js";
 import { validateFileSize } from "../lib/validation.js";
+import { BackButton } from "../components/BackButton.jsx";
 
 const STATUS_COLORS = {
   OPEN:      "#dc2626",
@@ -135,10 +136,10 @@ export function DisputeDetailPage() {
     try {
       const [d, adminList] = await Promise.all([
         getDispute(disputeId),
-        listAdmins(),
+        listAdmins().catch(() => []),
       ]);
       setDispute(d);
-      setAdmins(adminList.filter(a => a.is_active));
+      setAdmins(Array.isArray(adminList) ? adminList.filter(a => a.is_active) : []);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -204,7 +205,8 @@ export function DisputeDetailPage() {
     }
   }
 
-  if (isLoading) return <main className="page"><p style={{ color: "#6b7280" }}>Loading dispute…</p></main>;
+  if (isLoading) return <main className="page">
+      <BackButton /><p style={{ color: "#6b7280" }}>Loading dispute…</p></main>;
   if (error)     return <main className="page"><div className="error">{error}</div></main>;
   if (!dispute)  return null;
 

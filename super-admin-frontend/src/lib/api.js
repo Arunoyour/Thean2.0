@@ -107,6 +107,19 @@ export function listPharmacies() {
   });
 }
 
+export function adminGetPharmacyScheduleStatus(accountId) {
+  const token = getToken();
+  if (!token) {
+    return Promise.reject(new Error("Please login to continue."));
+  }
+
+  return request(`/super-admin/pharmacies/${accountId}/schedule-status`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export function listCustomers() {
   const token = getToken();
   if (!token) {
@@ -593,6 +606,10 @@ export function executeSettlementBatch(batchId) {
   });
 }
 
+export function listPharmacyVendors() {
+  return request("/pharmacy/admin/accounts", { headers: { "x-super-admin-token": SUPER_ADMIN_TOKEN } });
+}
+
 export function getStakeholderLedger(stakeholderType, stakeholderId, { dateFrom, dateTo, limit = 100, offset = 0 } = {}) {
   const token = getToken();
   const params = new URLSearchParams({ limit, offset });
@@ -828,7 +845,7 @@ export async function addAdminDisputeReply(disputeId, { text_content, voice_file
 
 export function getAdminAttention() {
   const token = getToken();
-  return request("/admin/attention", { headers: { Authorization: `Bearer ${token}` } });
+  return request("/super-admin/attention", { headers: { Authorization: `Bearer ${token}` } });
 }
 
 export function getSurgeConfig() {
@@ -841,4 +858,82 @@ export function setSurgeConfig(payload) {
     `/delivery/admin/config/surge?x_super_admin_token=${encodeURIComponent(tok)}`,
     { method: "PUT", body: JSON.stringify(payload) }
   );
+}
+
+// ── Haircut Admin API ──────────────────────────────────────────────────────
+
+function haircutAdminHeaders() {
+  const token = getToken();
+  return {
+    Authorization: `Bearer ${token}`,
+    "x-super-admin-token": SUPER_ADMIN_TOKEN,
+  };
+}
+
+function haircutRequest(path, options = {}) {
+  return request(path, { ...options, headers: { ...haircutAdminHeaders(), ...(options.headers || {}) } });
+}
+
+export function adminListHaircutShops(status = "") {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+  return haircutRequest(`/haircut/admin/shops${qs}`);
+}
+
+export function adminGetHaircutShop(shopId) {
+  return haircutRequest(`/haircut/admin/shops/${shopId}`);
+}
+
+export function adminSetHaircutShopStatus(shopId, shop_status) {
+  return haircutRequest(`/haircut/admin/shops/${shopId}/status`, {
+    method: "POST",
+    body: JSON.stringify({ shop_status }),
+  });
+}
+
+export function adminGetHaircutDayDetail(shopId, date) {
+  return haircutRequest(`/haircut/admin/shops/${shopId}/day?date=${date}`);
+}
+
+export function adminGetHaircutClosures(shopId) {
+  return haircutRequest(`/haircut/admin/shops/${shopId}/closures`);
+}
+
+export function adminCreateHaircutClosure(shopId, { start_date, end_date, reason }) {
+  return haircutRequest(`/haircut/admin/shops/${shopId}/closures`, {
+    method: "POST",
+    body: JSON.stringify({ start_date, end_date: end_date || null, reason: reason || null }),
+  });
+}
+
+export function adminDeleteHaircutClosure(shopId, closureDate) {
+  return haircutRequest(`/haircut/admin/shops/${shopId}/closures/${closureDate}`, { method: "DELETE" });
+}
+
+export function adminGetHaircutShopServices(shopId) {
+  return haircutRequest(`/haircut/admin/shops/${shopId}/services`);
+}
+
+export function adminGetHaircutShopBookings(shopId, { start_date, end_date, status } = {}) {
+  const params = new URLSearchParams();
+  if (start_date) params.set("start_date", start_date);
+  if (end_date) params.set("end_date", end_date);
+  if (status) params.set("status", status);
+  const qs = params.toString() ? `?${params.toString()}` : "";
+  return haircutRequest(`/haircut/admin/shops/${shopId}/bookings${qs}`);
+}
+
+export function adminListHaircutVendors(status = "") {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+  return haircutRequest(`/haircut/admin/vendors${qs}`);
+}
+
+export function adminApproveHaircutVendor(vendorId) {
+  return haircutRequest(`/haircut/admin/vendors/${vendorId}/approve`, { method: "POST" });
+}
+
+export function adminRejectHaircutVendor(vendorId, reason = "") {
+  return haircutRequest(`/haircut/admin/vendors/${vendorId}/reject`, {
+    method: "POST",
+    body: JSON.stringify({ reason: reason || null }),
+  });
 }

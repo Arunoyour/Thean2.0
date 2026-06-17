@@ -14,6 +14,7 @@ from app.schemas.customer_order import (
     CreatePharmacyOrderRequest,
     CustomerOrderActionRequest,
     CustomerPharmacyOrderResponse,
+    PartialFulfillmentPermissionRequest,
     SubstitutionPermissionRequest,
 )
 from app.services.customer_service import (
@@ -36,6 +37,7 @@ from app.services.customer_order_service import (
     recreate_cancelled_order_any_nearby,
     reject_price_estimate,
     save_customer_order_media,
+    set_partial_fulfillment_permission,
     set_substitution_permission,
     update_customer_order_status,
 )
@@ -238,6 +240,16 @@ async def set_order_substitution_permission(
     session: AsyncSession = Depends(get_pharmacy_session),
 ):
     return await set_substitution_permission(session, current_user, order_id, payload)
+
+
+@router.post("/pharmacy-orders/{order_id}/partial-fulfillment", response_model=CustomerPharmacyOrderResponse)
+async def set_order_partial_fulfillment_permission(
+    order_id: UUID,
+    payload: PartialFulfillmentPermissionRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_pharmacy_session),
+):
+    return await set_partial_fulfillment_permission(session, current_user, order_id, payload)
 
 
 # ── Delivery chat (customer → delivery boy) ───────────────────────────────

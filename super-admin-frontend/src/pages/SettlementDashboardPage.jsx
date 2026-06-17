@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Plus, RefreshCw } from "lucide-react";
 import { createSettlementCycle, listSettlementCycles } from "../lib/api.js";
 import { canWriteConfig } from "../lib/role.js";
+import { BackButton } from "../components/BackButton.jsx";
 
 const STATUS_COLORS = {
   OPEN:             "#d97706",
@@ -80,6 +81,7 @@ export function SettlementDashboardPage() {
 
   return (
     <main className="page">
+      <BackButton />
       {/* Create modal */}
       {showCreate && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>

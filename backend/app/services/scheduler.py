@@ -63,6 +63,7 @@ def start_all_jobs() -> list[asyncio.Task]:
         escalate_stale_disputes,
         escalate_stale_reconciliation_exceptions,
         expire_delivery_accept_deadlines,
+        mark_haircut_no_shows,
         mark_stale_drivers_offline,
         process_unmatched_gateway_events,
         prune_old_audit_logs,
@@ -108,6 +109,12 @@ def start_all_jobs() -> list[asyncio.Task]:
             "remind_pharmacy_pending_pickup",
             remind_pharmacy_pending_pickup,
             _seconds(minutes=2),
+            False,
+        ),
+        (
+            "mark_haircut_no_shows",
+            mark_haircut_no_shows,
+            _seconds(minutes=5),
             False,
         ),
         # ── GOOD TO HAVE ──────────────────────────────────────────────────────

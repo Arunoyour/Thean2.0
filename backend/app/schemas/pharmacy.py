@@ -1,5 +1,5 @@
 from uuid import UUID
-from datetime import datetime
+from datetime import date, datetime, time
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -193,3 +193,45 @@ class NearbyPharmacyResponse(BaseModel):
     fill_rate_percent: float
     rating: float
     recommendation_score: float
+
+
+class PharmacyStatusResponse(BaseModel):
+    account_id: UUID
+    store_name: str
+    is_online: bool
+
+
+class OperatingHoursItem(BaseModel):
+    day_of_week: int = Field(ge=0, le=6, description="0=Monday .. 6=Sunday")
+    open_time: time
+    close_time: time
+    is_closed: bool = False
+
+
+class OperatingHoursResponse(OperatingHoursItem):
+    hours_id: UUID
+    account_id: UUID
+
+
+class SetOperatingHoursRequest(BaseModel):
+    days: list[OperatingHoursItem]
+
+
+class HolidayCreateRequest(BaseModel):
+    holiday_date: date
+    reason: str | None = None
+
+
+class HolidayResponse(BaseModel):
+    holiday_id: UUID
+    account_id: UUID
+    holiday_date: date
+    reason: str | None
+
+
+class PharmacyScheduleStatusResponse(BaseModel):
+    account_id: UUID
+    has_schedule: bool
+    is_online: bool
+    mode: str  # "AUTO" | "MANUAL_OVERRIDE" | "NO_SCHEDULE" | "HOLIDAY"
+    message: str | None = None

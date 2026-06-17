@@ -27,6 +27,7 @@ import {
   listCustomerPharmacyOrders,
   rejectPriceEstimate,
   reorderCustomerPharmacyOrder,
+  setPartialFulfillmentPermission,
   setSubstitutionPermission,
   submitDeliveryRating,
   updateCustomerPharmacyOrder,
@@ -593,6 +594,25 @@ export function PharmacyOrdersPage() {
     }
   }
 
+  async function respondPartialFulfillment(orderId, allowed) {
+    // Guard against race condition: order status may have advanced since the page rendered
+    const order = orders.find((o) => o.order_id === orderId);
+    if (order && !SUBSTITUTION_ACTIVE_STATUSES.has(order.status)) {
+      setError(
+        "This order's status has changed — partial fulfillment can no longer be updated. Refresh the page to see the latest state.",
+      );
+      return;
+    }
+    try {
+      const updatedOrder = await setPartialFulfillmentPermission(orderId, allowed);
+      setOrders((current) => current.map((o) => (o.order_id === orderId ? updatedOrder : o)));
+      setMessage(allowed ? "Partial fulfillment approved." : "Partial fulfillment preference saved.");
+      setError("");
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  }
+
   return (
     <section className="home-layout">
       <div className="pharmacy-page-header">
@@ -975,12 +995,12 @@ export function PharmacyOrdersPage() {
                 );
               })() : null}
 
-              {/* ── Pickup code (READY_FOR_PICKUP) ── */}
-              {order.status === "READY_FOR_PICKUP" && order.pickup_code ? (
+              {/* ── Pickup ready (READY_FOR_PICKUP) — pickup_code is for the delivery
+                   partner/pharmacy handover, not shown to the customer ── */}
+              {order.status === "READY_FOR_PICKUP" ? (
                 <div className="pickup-code-banner">
                   <strong>Your order is ready!</strong>
-                  <p>Show this code at the pharmacy counter:</p>
-                  <div className="pickup-code-chip">{order.pickup_code}</div>
+                  <p>It will be handed over to your delivery partner shortly.</p>
                 </div>
               ) : null}
 
@@ -1120,6 +1140,59 @@ export function PharmacyOrdersPage() {
                     <div className="substitution-badge substitution-badge-approved">
                       <CheckCircle2 size={16} aria-hidden="true" />
                       Alternative Approved
+                    </div>
+                  ) : null}
+
+                  {/* Partial fulfillment permission — only meaningful for multi-item orders */}
+                  {order.items.length > 1 && (order.status === "ASSIGNED_TO_PHARMACY" || order.status === "PHARMACY_ACCEPTED") ? (
+                    <div className="substitution-permission-panel">
+                      <h3>Partial fulfillment</h3>
+                      {order.partial_fulfillment_allowed === true ? (
+                        <div className="substitution-badge substitution-badge-approved">
+                          <CheckCircle2 size={16} aria-hidden="true" />
+                          Partial Fulfillment Allowed — missing items become a new order
+                        </div>
+                      ) : order.partial_fulfillment_allowed === false ? (
+                        <div className="substitution-badge substitution-badge-denied">
+                          <XCircle size={16} aria-hidden="true" />
+                          Full Order Only
+                        </div>
+                      ) : (
+                        <>
+                          <p className="substitution-prompt">
+                            If the pharmacy only has some of your items in stock, should they fulfil what they
+                            have and let us auto-create a new order for the rest?
+                          </p>
+                          <div className="substitution-actions">
+                            <button
+                              className="button"
+                              type="button"
+                              onClick={() => respondPartialFulfillment(order.order_id, true)}
+                            >
+                              <CheckCircle2 size={16} />
+                              Yes, Allow Partial Fulfillment
+                            </button>
+                            <button
+                              className="button button-secondary"
+                              type="button"
+                              onClick={() => respondPartialFulfillment(order.order_id, false)}
+                            >
+                              <XCircle size={16} />
+                              No, Full Order Only
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ) : order.partial_fulfillment_allowed === true ? (
+                    <div className="substitution-badge substitution-badge-approved">
+                      <CheckCircle2 size={16} aria-hidden="true" />
+                      Partial Fulfillment Allowed
+                    </div>
+                  ) : null}
+                  {order.split_from_order_id ? (
+                    <div className="substitution-badge substitution-badge-approved">
+                      Split from order {String(order.split_from_order_id).slice(0, 8)}
                     </div>
                   ) : null}
 

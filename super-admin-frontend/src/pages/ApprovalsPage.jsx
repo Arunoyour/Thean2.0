@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, RefreshCw, XCircle } from "lucide-react";
 import { cancelApproval, listApprovals, reviewApprovalLine } from "../lib/api.js";
 import { canApprove, canWriteConfig } from "../lib/role.js";
+import { BackButton } from "../components/BackButton.jsx";
 
 const STATUS_COLORS = {
   PENDING_APPROVAL: "#d97706",
@@ -257,6 +258,7 @@ export function ApprovalsPage() {
 
   return (
     <main className="page">
+      <BackButton />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.75rem" }}>
         <div>
           <p className="eyebrow">Operations</p>
