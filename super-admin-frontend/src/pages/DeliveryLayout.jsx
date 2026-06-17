@@ -13,29 +13,53 @@ const NAV = [
 export function DeliveryLayout({ children, title }) {
   const loc = useLocation();
   return (
-    <div className="dl-admin-layout">
-      <aside className="dl-admin-sidebar">
-        <div className="dl-admin-sidebar-header">
-          <Link to="/dashboard" className="dl-admin-back">
-            <ChevronLeft size={16} /> Dashboard
+    <div style={{ display: "flex", minHeight: "100vh", background: "#f6f8f7" }}>
+      <aside style={{
+        width: 200, flexShrink: 0,
+        background: "#ffffff",
+        borderRight: "1px solid #dce6e3",
+        display: "flex", flexDirection: "column",
+      }}>
+        <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid #eef3f1" }}>
+          <Link to="/dashboard" style={{
+            display: "flex", alignItems: "center", gap: 4,
+            fontSize: "0.78rem", color: "#94a3a0", textDecoration: "none", marginBottom: 8,
+          }}>
+            <ChevronLeft size={14} /> Dashboard
           </Link>
-          <h2>Delivery</h2>
+          <h2 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#13201e" }}>Delivery</h2>
         </div>
-        <nav className="dl-admin-nav">
-          {NAV.map(({ to, icon: Icon, label }) => (
-            <Link
-              key={to}
-              to={to}
-              className={`dl-admin-nav-item ${loc.pathname === to ? "dl-admin-nav-active" : ""}`}
-            >
-              <Icon size={18} />
-              {label}
-            </Link>
-          ))}
+        <nav style={{ padding: "8px 0" }}>
+          {NAV.map(({ to, icon: Icon, label }) => {
+            const active = loc.pathname === to;
+            return (
+              <Link
+                key={to}
+                to={to}
+                style={{
+                  display: "flex", alignItems: "center", gap: 9,
+                  padding: "8px 16px 8px 18px",
+                  textDecoration: "none", fontSize: "0.83rem",
+                  fontWeight: active ? 700 : 500,
+                  color: active ? "#0f766e" : "#52625f",
+                  background: active ? "rgba(15,118,110,0.08)" : "transparent",
+                  borderLeft: active ? "2px solid #0f766e" : "2px solid transparent",
+                  transition: "all 0.12s",
+                }}
+              >
+                <Icon size={14} />
+                {label}
+              </Link>
+            );
+          })}
         </nav>
       </aside>
-      <main className="dl-admin-main">
-        {title && <div className="dl-admin-page-title">{title}</div>}
+      <main style={{ flex: 1, overflow: "auto", padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
+        {title && (
+          <div style={{ fontSize: "1.2rem", fontWeight: 800, color: "#13201e", borderBottom: "1px solid #dce6e3", paddingBottom: 12 }}>
+            {title}
+          </div>
+        )}
         {children}
       </main>
     </div>
