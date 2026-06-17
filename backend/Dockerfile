@@ -2,11 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# gcc + libpq-dev needed to compile asyncpg/psycopg; postgresql-client for migration runner
+# build-essential: gcc, g++, libc6-dev, make (all needed to compile asyncpg/greenlet/uvloop/cffi on ARM)
+# libpq-dev: asyncpg C headers
+# postgresql-client: psql for the migration entrypoint
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    g++ \
-    libc6-dev \
+    build-essential \
     libpq-dev \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
