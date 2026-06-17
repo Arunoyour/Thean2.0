@@ -18,7 +18,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, select, update
 
-from app.db.session import AsyncSessionLocal, DeliverySessionLocal, PharmacySessionLocal
+from app.db.session import AsyncSessionLocal, DeliverySessionLocal, HaircutSessionLocal, PharmacySessionLocal
 
 log = logging.getLogger(__name__)
 
@@ -632,3 +632,20 @@ async def remind_pharmacy_pending_pickup() -> dict:
             reminded += 1
 
     return {"reminded": reminded}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# JOB — Haircut no-show sweep
+# ──────────────────────────────────────────────────────────────────────────────
+
+async def mark_haircut_no_shows() -> dict:
+    """
+    Marks PENDING/CONFIRMED haircut bookings as NO_SHOW once the grace period
+    after the appointment time has passed without an OTP or manual check-in.
+    Permanently forfeits the held token. Runs every 5 minutes.
+    """
+    from app.services.haircut_service import mark_no_shows
+
+    async with HaircutSessionLocal() as session:
+        count = await mark_no_shows(session)
+    return {"marked_no_show": count}

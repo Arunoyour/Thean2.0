@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ImagePlus, PackagePlus, RefreshCw, ShieldAlert } from "lucide-react";
+import { ChevronLeft, ChevronRight, ImagePlus, PackagePlus, RefreshCw, ShieldAlert } from "lucide-react";
 
 import { PharmacyPageShell } from "../components/PharmacyPageShell.jsx";
 import { addProduct, getCurrentPharmacy } from "../lib/api.js";
@@ -16,6 +16,66 @@ function readImageFile(file) {
     reader.onerror = () => reject(new Error("Could not read product photo."));
     reader.readAsDataURL(file);
   });
+}
+
+function PhotoPreviewSlideshow({ previewUrls }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [previewUrls]);
+
+  if (!previewUrls.length) {
+    return (
+      <div className="photo-empty">
+        <ImagePlus size={20} aria-hidden="true" />
+        Add at least 2 photos
+      </div>
+    );
+  }
+
+  const safeIndex = Math.min(activeIndex, previewUrls.length - 1);
+
+  return (
+    <div className="photo-preview-slideshow">
+      <div className="photo-preview-slideshow-stage">
+        {previewUrls.length > 1 && (
+          <button
+            type="button"
+            className="photo-preview-slideshow-nav photo-preview-slideshow-prev"
+            aria-label="Previous photo"
+            onClick={() => setActiveIndex((i) => (i - 1 + previewUrls.length) % previewUrls.length)}
+          >
+            <ChevronLeft size={18} />
+          </button>
+        )}
+        <img src={previewUrls[safeIndex]} alt={`Product preview ${safeIndex + 1} of ${previewUrls.length}`} />
+        {previewUrls.length > 1 && (
+          <button
+            type="button"
+            className="photo-preview-slideshow-nav photo-preview-slideshow-next"
+            aria-label="Next photo"
+            onClick={() => setActiveIndex((i) => (i + 1) % previewUrls.length)}
+          >
+            <ChevronRight size={18} />
+          </button>
+        )}
+      </div>
+      {previewUrls.length > 1 && (
+        <div className="photo-preview-slideshow-dots">
+          {previewUrls.map((url, index) => (
+            <button
+              key={url}
+              type="button"
+              className={`photo-preview-slideshow-dot${index === safeIndex ? " active" : ""}`}
+              aria-label={`Show photo ${index + 1}`}
+              onClick={() => setActiveIndex(index)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function AddProductPage() {
@@ -84,7 +144,7 @@ export function AddProductPage() {
     const files = Array.from(event.target.files || []).slice(0, 6);
     for (const f of files) {
       const err = validateFileSize(f);
-      if (err) { setErrors([err]); event.target.value = ""; return; }
+      if (err) { setError(err); event.target.value = ""; return; }
     }
     setPhotoFiles(files);
     setPhotoPreviews(files.map((file) => URL.createObjectURL(file)));
@@ -227,19 +287,7 @@ export function AddProductPage() {
               required
             />
           </label>
-          {/* overflow-x: auto so grid scrolls horizontally when 6 images are added */}
-          <div className="photo-preview-grid" style={{ overflowX: "auto" }}>
-            {photoPreviews.length ? (
-              photoPreviews.map((previewUrl) => (
-                <img src={previewUrl} alt="Selected product preview" key={previewUrl} />
-              ))
-            ) : (
-              <div className="photo-empty">
-                <ImagePlus size={20} aria-hidden="true" />
-                Add at least 2 photos
-              </div>
-            )}
-          </div>
+          <PhotoPreviewSlideshow previewUrls={photoPreviews} />
           <label>
             Product name
             <input

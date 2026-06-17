@@ -1,7 +1,12 @@
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { ArrowRight, MapPin, Smartphone, WalletCards } from "lucide-react";
 
 export function LandingPage() {
+  const isAuthenticated = Boolean(window.localStorage.getItem("thean_access_token"));
+  if (isAuthenticated) {
+    return <Navigate to="/home" replace />;
+  }
+
   return (
     <section className="landing">
       <div className="landing-copy">

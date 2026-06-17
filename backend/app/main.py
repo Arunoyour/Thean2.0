@@ -46,7 +46,7 @@ def create_app() -> FastAPI:
         allow_origins=[str(origin) for origin in settings.cors_origins],
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", "x-vendor-token", "x-customer-token", "x-super-admin-token"],
     )
 
     Path(settings.media_root).mkdir(parents=True, exist_ok=True)

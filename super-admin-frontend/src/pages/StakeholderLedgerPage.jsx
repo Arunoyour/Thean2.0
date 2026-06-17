@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Download, RefreshCw, Search } from "lucide-react";
-import { getStakeholderLedger } from "../lib/api.js";
+import { getStakeholderLedger, listPharmacyVendors, listDeliveryAccounts } from "../lib/api.js";
+import { BackButton } from "../components/BackButton.jsx";
 
 const ENTRY_TYPE_COLORS = { CREDIT: "#16a34a", DEBIT: "#dc2626" };
 
@@ -16,7 +17,12 @@ const REFERENCE_TYPE_LABELS = {
   SETTLEMENT_PAYOUT:  "Settlement Payout",
 };
 
-function exportCSV(entries, stakeholderType, stakeholderId) {
+const SECTORS = [
+  { value: "PHARMACY",     label: "Pharmacy" },
+  { value: "DELIVERY_BOY", label: "Delivery Boy" },
+];
+
+function exportCSV(entries, stakeholderType, stakeholderName) {
   const header = ["Date", "Type", "Reference", "Description", "Amount", "Running Balance"];
   const rows = entries.map(e => [
     new Date(e.created_at).toLocaleString("en-IN"),
@@ -33,7 +39,7 @@ function exportCSV(entries, stakeholderType, stakeholderId) {
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement("a");
   a.href     = url;
-  a.download = `ledger_${stakeholderType}_${stakeholderId}_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `ledger_${stakeholderType}_${stakeholderName.replace(/\s+/g, "_")}_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -41,31 +47,59 @@ function exportCSV(entries, stakeholderType, stakeholderId) {
 export function StakeholderLedgerPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Pre-fill from URL params so this page can be linked from batch detail
-  const [stakeholderType, setStakeholderType] = useState(searchParams.get("type") ?? "PHARMACY");
-  const [stakeholderId,   setStakeholderId]   = useState(searchParams.get("id")   ?? "");
-  const [dateFrom,        setDateFrom]        = useState(searchParams.get("from") ?? "");
-  const [dateTo,          setDateTo]          = useState(searchParams.get("to")   ?? "");
+  const [sector,        setSector]        = useState(searchParams.get("type") ?? "PHARMACY");
+  const [stakeholderId, setStakeholderId] = useState(searchParams.get("id")   ?? "");
+  const [dateFrom,      setDateFrom]      = useState(searchParams.get("from") ?? "");
+  const [dateTo,        setDateTo]        = useState(searchParams.get("to")   ?? "");
+
+  const [stakeholders,  setStakeholders]  = useState([]);
+  const [loadingList,   setLoadingList]   = useState(false);
 
   const [ledger,    setLedger]    = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error,     setError]     = useState("");
 
+  // Load stakeholder list whenever sector changes
+  useEffect(() => {
+    setStakeholderId("");
+    setLedger(null);
+    setError("");
+    loadStakeholders(sector);
+  }, [sector]);
+
+  async function loadStakeholders(type) {
+    setLoadingList(true);
+    try {
+      if (type === "PHARMACY") {
+        const data = await listPharmacyVendors();
+        setStakeholders(data.map(v => ({ id: v.account_id, label: v.display_name })));
+      } else if (type === "DELIVERY_BOY") {
+        const data = await listDeliveryAccounts();
+        // delivery accounts may be an array or { accounts: [] }
+        const list = Array.isArray(data) ? data : (data.accounts ?? []);
+        setStakeholders(list.map(v => ({ id: v.account_id, label: v.full_name || v.phone_number })));
+      }
+    } catch (e) {
+      setStakeholders([]);
+    } finally {
+      setLoadingList(false);
+    }
+  }
+
   async function load() {
-    if (!stakeholderId.trim()) { setError("Enter a stakeholder ID to view their ledger."); return; }
+    if (!stakeholderId) { setError("Select a stakeholder to view their ledger."); return; }
     setIsLoading(true);
     setError("");
     try {
-      const data = await getStakeholderLedger(stakeholderType, stakeholderId.trim(), {
+      const data = await getStakeholderLedger(sector, stakeholderId, {
         dateFrom: dateFrom || undefined,
         dateTo:   dateTo   || undefined,
         limit: 200,
       });
       setLedger(data);
-      // Sync URL params so the page is shareable
       setSearchParams({
-        type: stakeholderType,
-        id:   stakeholderId.trim(),
+        type: sector,
+        id:   stakeholderId,
         ...(dateFrom ? { from: dateFrom } : {}),
         ...(dateTo   ? { to:   dateTo   } : {}),
       });
@@ -78,13 +112,17 @@ export function StakeholderLedgerPage() {
 
   // Auto-load if URL already has params
   useEffect(() => {
-    if (searchParams.get("id")) load();
-  }, []);
+    if (searchParams.get("id") && stakeholders.length > 0) {
+      setStakeholderId(searchParams.get("id"));
+    }
+  }, [stakeholders]);
 
   const entries = ledger?.entries ?? [];
+  const selectedName = stakeholders.find(s => s.id === stakeholderId)?.label ?? stakeholderId;
 
   return (
     <main className="page">
+      <BackButton />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.75rem" }}>
         <div>
           <p className="eyebrow">Finance</p>
@@ -92,7 +130,7 @@ export function StakeholderLedgerPage() {
         </div>
         <div style={{ display: "flex", gap: "0.5rem" }}>
           {entries.length > 0 && (
-            <button className="outline-button" onClick={() => exportCSV(entries, stakeholderType, stakeholderId)}>
+            <button className="outline-button" onClick={() => exportCSV(entries, sector, selectedName)}>
               <Download size={15} /> Export CSV
             </button>
           )}
@@ -102,22 +140,40 @@ export function StakeholderLedgerPage() {
 
       {/* Search panel */}
       <div className="panel" style={{ padding: "1rem 1.25rem", marginBottom: "1rem", display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "flex-end" }}>
+
+        {/* Sector */}
         <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.82rem", fontWeight: 500 }}>
-          Stakeholder type
-          <select value={stakeholderType} onChange={e => setStakeholderType(e.target.value)} style={{ padding: "5px 8px" }}>
-            <option value="PHARMACY">Pharmacy</option>
-            <option value="DELIVERY_BOY">Delivery Boy</option>
+          Sector
+          <select
+            value={sector}
+            onChange={e => setSector(e.target.value)}
+            style={{ padding: "5px 8px", minWidth: 140 }}
+          >
+            {SECTORS.map(s => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
           </select>
         </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.82rem", fontWeight: 500, flex: 1, minWidth: 220 }}>
-          Stakeholder ID <span style={{ color: "#dc2626" }}>*</span>
-          <input
+
+        {/* Stakeholder dropdown */}
+        <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.82rem", fontWeight: 500, flex: 1, minWidth: 240 }}>
+          Stakeholder <span style={{ color: "#dc2626" }}>*</span>
+          <select
             value={stakeholderId}
             onChange={e => setStakeholderId(e.target.value)}
-            placeholder="UUID"
-            style={{ padding: "5px 8px", fontFamily: "monospace", fontSize: "0.82rem" }}
-          />
+            style={{ padding: "5px 8px" }}
+            disabled={loadingList}
+          >
+            <option value="">
+              {loadingList ? "Loading…" : stakeholders.length === 0 ? "No stakeholders found" : "— Select —"}
+            </option>
+            {stakeholders.map(s => (
+              <option key={s.id} value={s.id}>{s.label}</option>
+            ))}
+          </select>
         </label>
+
+        {/* Date filters */}
         <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.82rem", fontWeight: 500 }}>
           From
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ padding: "5px 8px" }} />
@@ -126,7 +182,8 @@ export function StakeholderLedgerPage() {
           To
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ padding: "5px 8px" }} />
         </label>
-        <button className="button" onClick={load} style={{ alignSelf: "flex-end" }}>
+
+        <button className="button" onClick={load} style={{ alignSelf: "flex-end" }} disabled={!stakeholderId || isLoading}>
           <Search size={15} /> Search
         </button>
       </div>
@@ -134,7 +191,7 @@ export function StakeholderLedgerPage() {
       {error && <div className="error">{error}</div>}
       {isLoading && <p style={{ color: "#6b7280" }}>Loading ledger…</p>}
 
-      {/* Current balance card */}
+      {/* Balance cards */}
       {ledger && (
         <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1.25rem" }}>
           <div className="panel" style={{ padding: "1rem 1.5rem", flex: "0 0 auto" }}>
@@ -146,7 +203,7 @@ export function StakeholderLedgerPage() {
               ₹{Number(ledger.current_balance).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </p>
             <p style={{ margin: "0.2rem 0 0", fontSize: "0.8rem", color: "#9ca3af" }}>
-              {ledger.stakeholder_type} · {ledger.stakeholder_id?.slice(0, 8)}…
+              {SECTORS.find(s => s.value === sector)?.label} · {selectedName}
             </p>
           </div>
           <div className="panel" style={{ padding: "1rem 1.5rem", flex: "0 0 auto" }}>
@@ -176,7 +233,6 @@ export function StakeholderLedgerPage() {
         </div>
       )}
 
-      {/* Ledger table */}
       {ledger && entries.length === 0 && (
         <div className="panel" style={{ textAlign: "center", padding: "3rem", color: "#6b7280" }}>
           No ledger entries found for this period.

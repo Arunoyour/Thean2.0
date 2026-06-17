@@ -4,6 +4,7 @@ import { ArrowLeft, CheckCircle2, Download, LogOut, RefreshCw, XCircle } from "l
 
 import { getCurrentAdmin, getSubstitutionAuditOrders, logoutAdmin } from "../lib/api.js";
 import { exportRowsToExcel } from "../lib/listingUtils.js";
+import { BackButton } from "../components/BackButton.jsx";
 
 function formatStatus(status) {
   return status.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase());

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import {
+  adminGetPharmacyScheduleStatus,
   getCurrentAdmin,
   getPharmacyAvailabilityEvents,
   getPharmacyTimeline,
@@ -48,6 +49,7 @@ export function PharmacyDashboardPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPharmacy, setSelectedPharmacy] = useState(null);
+  const [scheduleStatus, setScheduleStatus] = useState(null);
   const [targetStatus, setTargetStatus] = useState(null);
   const [comment, setComment] = useState("");
   const [timeline, setTimeline] = useState([]);
@@ -122,16 +124,19 @@ export function PharmacyDashboardPage() {
     setIsAvailabilityLoading(true);
 
     try {
-      const [events, availabilityHistory] = await Promise.all([
+      const [events, availabilityHistory, schedule] = await Promise.all([
         getPharmacyTimeline(pharmacy.account_id),
         getPharmacyAvailabilityEvents(pharmacy.account_id, availabilityFilters),
+        adminGetPharmacyScheduleStatus(pharmacy.account_id).catch(() => null),
       ]);
       setTimeline(events);
       setAvailabilityEvents(availabilityHistory);
+      setScheduleStatus(schedule);
     } catch (requestError) {
       setError(requestError.message);
       setTimeline([]);
       setAvailabilityEvents([]);
+      setScheduleStatus(null);
     } finally {
       setIsTimelineLoading(false);
       setIsAvailabilityLoading(false);
@@ -505,6 +510,23 @@ export function PharmacyDashboardPage() {
                       {selectedPharmacy.profile.is_online ? "Online" : "Offline"}
                     </span>
                   </div>
+                  {scheduleStatus && (
+                    <div className="availability-summary">
+                      <div>
+                        <p className="eyebrow">Schedule</p>
+                        <h3>
+                          {scheduleStatus.mode === "AUTO" && "Auto (weekly schedule)"}
+                          {scheduleStatus.mode === "MANUAL_OVERRIDE" && "Manual override"}
+                          {scheduleStatus.mode === "NO_SCHEDULE" && "No schedule set"}
+                          {scheduleStatus.mode === "HOLIDAY" && "Closed for holiday"}
+                        </h3>
+                        {scheduleStatus.message && <p>{scheduleStatus.message}</p>}
+                      </div>
+                      <span className={scheduleStatus.mode === "NO_SCHEDULE" ? "badge badge-pending" : "badge badge-active"}>
+                        {scheduleStatus.mode.replace("_", " ")}
+                      </span>
+                    </div>
+                  )}
                   <div className="availability-filters">
                     <label>
                       From

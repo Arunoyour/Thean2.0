@@ -2,13 +2,13 @@ import base64
 import binascii
 import math
 import re
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time as time_type, timedelta
 from decimal import Decimal
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +17,8 @@ from app.core.security import create_access_token, generate_otp, hash_secret, ve
 from app.models.pharmacy_merchant import (
     PharmacyAvailabilityEvent,
     PharmacyAccount,
+    PharmacyHoliday,
+    PharmacyOperatingHours,
     PharmacyOtpChallenge,
     PharmacyProfile,
     PharmacyProductComment,
@@ -38,6 +40,11 @@ from app.schemas.pharmacy import (
     PharmacyProductReviewResponse,
     PharmacyProductUpdateRequest,
     NearbyPharmacyResponse,
+    PharmacyStatusResponse,
+    OperatingHoursItem,
+    OperatingHoursResponse,
+    HolidayResponse,
+    PharmacyScheduleStatusResponse,
     PharmacyStatusEventResponse,
 )
 from app.services.realtime import create_notification, manager, serialize_notification
@@ -315,6 +322,7 @@ async def update_pharmacy_availability(
         return serialize_pharmacy(account, profile)
 
     profile.is_online = is_online
+    profile.manual_override_at = datetime.now(UTC)
     session.add(
         PharmacyAvailabilityEvent(
             account_id=account.account_id,
@@ -328,6 +336,258 @@ async def update_pharmacy_availability(
     await session.refresh(account)
     await session.refresh(profile)
     return serialize_pharmacy(account, profile)
+
+
+def _hours_to_response(row: PharmacyOperatingHours) -> OperatingHoursResponse:
+    return OperatingHoursResponse(
+        hours_id=row.hours_id,
+        account_id=row.account_id,
+        day_of_week=row.day_of_week,
+        open_time=row.open_time,
+        close_time=row.close_time,
+        is_closed=row.is_closed,
+    )
+
+
+async def list_operating_hours(session: AsyncSession, account_id) -> list[OperatingHoursResponse]:
+    result = await session.execute(
+        select(PharmacyOperatingHours)
+        .where(PharmacyOperatingHours.account_id == account_id)
+        .order_by(PharmacyOperatingHours.day_of_week.asc())
+    )
+    return [_hours_to_response(row) for row in result.scalars().all()]
+
+
+async def set_operating_hours(
+    session: AsyncSession, account_id, days: list[OperatingHoursItem]
+) -> list[OperatingHoursResponse]:
+    """Replace the full weekly schedule for this pharmacy."""
+    await session.execute(
+        delete(PharmacyOperatingHours).where(PharmacyOperatingHours.account_id == account_id)
+    )
+    for day in days:
+        session.add(
+            PharmacyOperatingHours(
+                account_id=account_id,
+                day_of_week=day.day_of_week,
+                open_time=day.open_time,
+                close_time=day.close_time,
+                is_closed=day.is_closed,
+            )
+        )
+    await session.commit()
+    return await list_operating_hours(session, account_id)
+
+
+async def clear_operating_hours(session: AsyncSession, account_id) -> None:
+    """Delete the auto-schedule entirely. is_online is left untouched (fails closed —
+    the pharmacy freezes at whatever state it was last in)."""
+    await session.execute(
+        delete(PharmacyOperatingHours).where(PharmacyOperatingHours.account_id == account_id)
+    )
+    await session.commit()
+
+
+async def list_holidays(session: AsyncSession, account_id) -> list[HolidayResponse]:
+    result = await session.execute(
+        select(PharmacyHoliday)
+        .where(PharmacyHoliday.account_id == account_id)
+        .order_by(PharmacyHoliday.holiday_date.asc())
+    )
+    return [
+        HolidayResponse(
+            holiday_id=row.holiday_id,
+            account_id=row.account_id,
+            holiday_date=row.holiday_date,
+            reason=row.reason,
+        )
+        for row in result.scalars().all()
+    ]
+
+
+async def add_holiday(session: AsyncSession, account_id, holiday_date, reason: str | None) -> HolidayResponse:
+    holiday = PharmacyHoliday(account_id=account_id, holiday_date=holiday_date, reason=reason)
+    session.add(holiday)
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail="A holiday is already set for this date.")
+    await session.refresh(holiday)
+    return HolidayResponse(
+        holiday_id=holiday.holiday_id,
+        account_id=holiday.account_id,
+        holiday_date=holiday.holiday_date,
+        reason=holiday.reason,
+    )
+
+
+async def delete_holiday(session: AsyncSession, account_id, holiday_id) -> None:
+    await session.execute(
+        delete(PharmacyHoliday)
+        .where(PharmacyHoliday.account_id == account_id)
+        .where(PharmacyHoliday.holiday_id == holiday_id)
+    )
+    await session.commit()
+
+
+async def get_schedule_status(
+    session: AsyncSession, account: PharmacyAccount, profile: PharmacyProfile
+) -> PharmacyScheduleStatusResponse:
+    today = datetime.now(UTC).date()
+    holiday_result = await session.execute(
+        select(PharmacyHoliday)
+        .where(PharmacyHoliday.account_id == account.account_id)
+        .where(PharmacyHoliday.holiday_date == today)
+    )
+    holiday = holiday_result.scalars().first()
+    if holiday is not None:
+        return PharmacyScheduleStatusResponse(
+            account_id=account.account_id,
+            has_schedule=True,
+            is_online=profile.is_online,
+            mode="HOLIDAY",
+            message=f"Closed today for holiday{f': {holiday.reason}' if holiday.reason else ''}.",
+        )
+
+    hours_result = await session.execute(
+        select(PharmacyOperatingHours).where(PharmacyOperatingHours.account_id == account.account_id)
+    )
+    has_schedule = len(hours_result.scalars().all()) > 0
+
+    if not has_schedule:
+        return PharmacyScheduleStatusResponse(
+            account_id=account.account_id,
+            has_schedule=False,
+            is_online=profile.is_online,
+            mode="NO_SCHEDULE",
+            message=(
+                f"No auto-schedule set — your shop will stay "
+                f"{'online' if profile.is_online else 'offline'} until you manually change it."
+            ),
+        )
+
+    if profile.manual_override_at is not None:
+        return PharmacyScheduleStatusResponse(
+            account_id=account.account_id,
+            has_schedule=True,
+            is_online=profile.is_online,
+            mode="MANUAL_OVERRIDE",
+            message="Manually overridden — will revert to your schedule at the next change.",
+        )
+
+    return PharmacyScheduleStatusResponse(
+        account_id=account.account_id,
+        has_schedule=True,
+        is_online=profile.is_online,
+        mode="AUTO",
+        message=None,
+    )
+
+
+async def run_pharmacy_schedule_tick() -> dict:
+    """Apply each pharmacy's auto-schedule + holiday calendar to is_online.
+
+    Rules:
+    - Holiday for today → force offline, always wins.
+    - No weekly schedule rows → skip entirely (fail closed: frozen at last value).
+    - Manual override set after the most recent schedule boundary today → skip
+      (manual toggle holds until the next scheduled transition, then auto resumes).
+    - Otherwise set is_online to whatever the weekly schedule says for "now".
+    """
+    from app.db.session import PharmacySessionLocal
+
+    now = datetime.now(UTC)
+    today = now.date()
+    weekday = now.weekday()  # 0=Monday..6=Sunday, matches day_of_week convention
+    now_time = now.time()
+
+    applied = skipped_no_schedule = skipped_manual_override = holiday_closed = 0
+
+    async with PharmacySessionLocal() as session:
+        accounts_result = await session.execute(
+            select(PharmacyAccount, PharmacyProfile)
+            .join(PharmacyProfile, PharmacyProfile.account_id == PharmacyAccount.account_id)
+            .where(PharmacyAccount.is_active.is_(True))
+        )
+        rows = accounts_result.all()
+
+        for account, profile in rows:
+            holiday_result = await session.execute(
+                select(PharmacyHoliday)
+                .where(PharmacyHoliday.account_id == account.account_id)
+                .where(PharmacyHoliday.holiday_date == today)
+            )
+            holiday = holiday_result.scalars().first()
+
+            if holiday is not None:
+                if profile.is_online:
+                    profile.is_online = False
+                    profile.manual_override_at = None
+                    session.add(
+                        PharmacyAvailabilityEvent(
+                            account_id=account.account_id,
+                            actor_type="SCHEDULE",
+                            is_online=False,
+                            comment=f"Auto-closed for holiday{f': {holiday.reason}' if holiday.reason else ''}.",
+                        )
+                    )
+                holiday_closed += 1
+                continue
+
+            hours_result = await session.execute(
+                select(PharmacyOperatingHours)
+                .where(PharmacyOperatingHours.account_id == account.account_id)
+                .where(PharmacyOperatingHours.day_of_week == weekday)
+            )
+            today_hours = hours_result.scalars().first()
+
+            if today_hours is None:
+                skipped_no_schedule += 1
+                continue
+
+            if today_hours.is_closed:
+                desired_online = False
+            else:
+                desired_online = today_hours.open_time <= now_time < today_hours.close_time
+
+            if profile.manual_override_at is not None:
+                # Find the next scheduled transition strictly after the override was set —
+                # the override holds until then, regardless of what "now" currently says.
+                override_time = profile.manual_override_at.time()
+                if not today_hours.is_closed and override_time < today_hours.open_time:
+                    next_boundary = datetime.combine(today, today_hours.open_time, tzinfo=UTC)
+                elif not today_hours.is_closed and override_time < today_hours.close_time:
+                    next_boundary = datetime.combine(today, today_hours.close_time, tzinfo=UTC)
+                else:
+                    # Past today's last transition (or today is fully closed) — next
+                    # boundary is the start of the next day, a safe conservative fallback.
+                    next_boundary = datetime.combine(today, time_type.max, tzinfo=UTC)
+                if now < next_boundary:
+                    skipped_manual_override += 1
+                    continue
+
+            if profile.is_online != desired_online:
+                profile.is_online = desired_online
+                profile.manual_override_at = None
+                session.add(
+                    PharmacyAvailabilityEvent(
+                        account_id=account.account_id,
+                        actor_type="SCHEDULE",
+                        is_online=desired_online,
+                        comment="Auto-opened by schedule." if desired_online else "Auto-closed by schedule.",
+                    )
+                )
+                applied += 1
+
+        await session.commit()
+
+    return {
+        "applied": applied,
+        "skipped_no_schedule": skipped_no_schedule,
+        "skipped_manual_override": skipped_manual_override,
+        "holiday_closed": holiday_closed,
+    }
 
 
 async def list_pharmacies(session: AsyncSession) -> list[PharmacyAccountResponse]:
@@ -834,6 +1094,25 @@ async def list_customer_visible_products(session: AsyncSession) -> list[Pharmacy
         .order_by(PharmacyProduct.product_name.asc())
     )
     return [serialize_product(product, profile.store_name) for product, profile in result.all()]
+
+
+async def get_pharmacy_status(session: AsyncSession, account_id: UUID) -> PharmacyStatusResponse:
+    result = await session.execute(
+        select(PharmacyAccount, PharmacyProfile)
+        .join(PharmacyProfile, PharmacyProfile.account_id == PharmacyAccount.account_id)
+        .where(PharmacyAccount.account_id == account_id)
+        .where(PharmacyAccount.is_active.is_(True))
+        .where(PharmacyProfile.is_listed.is_(True))
+    )
+    row = result.first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Pharmacy not found or no longer listed.")
+    account, profile = row
+    return PharmacyStatusResponse(
+        account_id=account.account_id,
+        store_name=profile.store_name,
+        is_online=profile.is_online,
+    )
 
 
 async def list_nearby_pharmacies(

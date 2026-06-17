@@ -9,6 +9,7 @@ import {
   requestPharmacyProductRevision,
 } from "../lib/api.js";
 import { DEFAULT_PAGE_SIZE, exportRowsToExcel, getPageCount, pageLabel, paginate } from "../lib/listingUtils.js";
+import { BackButton } from "../components/BackButton.jsx";
 
 export function ProductReviewPage() {
   const navigate = useNavigate();
@@ -159,6 +160,7 @@ export function ProductReviewPage() {
 
   return (
     <main className="page">
+      <BackButton />
       <header className="dashboard-header">
         <div>
           <button className="text-nav-button" type="button" onClick={() => navigate("/dashboard/pharmacy")}>

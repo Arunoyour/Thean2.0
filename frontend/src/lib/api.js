@@ -230,6 +230,10 @@ export function listNearbyPharmacies(latitude, longitude, radiusKm = 5) {
   return request(`/pharmacy/public/nearby?${params.toString()}`);
 }
 
+export function getPharmacyStatus(accountId) {
+  return request(`/pharmacy/public/${accountId}/status`);
+}
+
 export function createPharmacyOrder(data) {
   const token = getToken();
   if (!token) return Promise.reject(new Error("Please login to continue."));
@@ -322,6 +326,17 @@ export function setSubstitutionPermission(orderId, allowed) {
   if (!token) return Promise.reject(new Error("Please login to continue."));
   assertTokenNotExpired(token);
   return request(`/customer/pharmacy-orders/${orderId}/substitution`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ allowed }),
+  });
+}
+
+export function setPartialFulfillmentPermission(orderId, allowed) {
+  const token = getToken();
+  if (!token) return Promise.reject(new Error("Please login to continue."));
+  assertTokenNotExpired(token);
+  return request(`/customer/pharmacy-orders/${orderId}/partial-fulfillment`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ allowed }),
@@ -517,4 +532,92 @@ export function getCustomerAttention() {
 
 export function getDeliverySurgeConfig() {
   return request("/delivery/config/surge");
+}
+
+// ── Haircut API ────────────────────────────────────────────────────────────
+
+function _hcAuthHdr() { return { Authorization: `Bearer ${getToken()}`, "x-customer-token": getToken() }; }
+
+export function haircutNearbyShops(lat, lng, radiusKm = 10) {
+  return request(`/haircut/shops/nearby?lat=${lat}&lng=${lng}&radius_km=${radiusKm}`, { headers: _hcAuthHdr() });
+}
+
+export function haircutSearchShops(q) {
+  return request(`/haircut/shops/search?q=${encodeURIComponent(q)}`, { headers: _hcAuthHdr() });
+}
+
+export function haircutShopDetail(shopId) {
+  return request(`/haircut/shops/${shopId}`, { headers: _hcAuthHdr() });
+}
+
+export function haircutShopReviews(shopId) {
+  return request(`/haircut/shops/${shopId}/reviews`);
+}
+
+export function haircutShopHours(shopId) {
+  return request(`/haircut/shops/${shopId}/hours`);
+}
+
+export function haircutShopClosures(shopId) {
+  return request(`/haircut/shops/${shopId}/closures`);
+}
+
+export function haircutShopServices(shopId) {
+  return request(`/haircut/shops/${shopId}/services`);
+}
+
+export function haircutShopAvailability(shopId, date) {
+  return request(`/haircut/shops/${shopId}/availability?target_date=${date}`);
+}
+
+export function haircutListFavorites() {
+  return request("/haircut/favorites", { headers: _hcAuthHdr() });
+}
+
+export function haircutAddFavorite(shopId) {
+  return request(`/haircut/favorites/${shopId}`, { method: "POST", headers: _hcAuthHdr() });
+}
+
+export function haircutRemoveFavorite(shopId) {
+  return request(`/haircut/favorites/${shopId}`, { method: "DELETE", headers: _hcAuthHdr() });
+}
+
+export function haircutCreateBooking(payload) {
+  return request("/haircut/bookings", { method: "POST", body: JSON.stringify(payload), headers: _hcAuthHdr() });
+}
+
+export function haircutActiveBooking() {
+  return request("/haircut/bookings/active", { headers: _hcAuthHdr() });
+}
+
+export function haircutCancelBooking(bookingId, reason) {
+  return request(`/haircut/bookings/${bookingId}/cancel`, {
+    method: "POST", body: JSON.stringify({ reason }), headers: _hcAuthHdr(),
+  });
+}
+
+export function haircutManualCheckin(bookingId, lat, lng) {
+  return request(`/haircut/bookings/${bookingId}/manual-checkin`, {
+    method: "POST", body: JSON.stringify({ customer_lat: lat, customer_lng: lng }), headers: _hcAuthHdr(),
+  });
+}
+
+export function haircutRescheduleBooking(bookingId, appointmentDate, startTime) {
+  return request(`/haircut/bookings/${bookingId}/reschedule`, {
+    method: "POST", body: JSON.stringify({ appointment_date: appointmentDate, start_time: startTime }), headers: _hcAuthHdr(),
+  });
+}
+
+export function haircutSubmitReview(bookingId, rating, comment) {
+  return request(`/haircut/bookings/${bookingId}/review`, {
+    method: "POST", body: JSON.stringify({ rating, comment: comment || null }), headers: _hcAuthHdr(),
+  });
+}
+
+export function haircutBookingHistory() {
+  return request("/haircut/bookings/history", { headers: _hcAuthHdr() });
+}
+
+export function haircutTokenBalance() {
+  return request("/haircut/tokens/balance", { headers: _hcAuthHdr() });
 }

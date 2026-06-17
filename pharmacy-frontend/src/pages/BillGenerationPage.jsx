@@ -35,6 +35,7 @@ const DEFAULT_ROW = () => ({
   amount: "",
   unavailable: false,
   substitute_name: "",
+  available: true,
 });
 
 function prefillRows(items) {
@@ -46,6 +47,7 @@ function prefillRows(items) {
     amount: "",
     unavailable: false,
     substitute_name: "",
+    available: true,
   }));
 }
 
@@ -144,8 +146,12 @@ export function BillGenerationPage() {
 
   /** Returns an error string if validation fails, null if OK. */
   function validateRows() {
+    if (order?.partial_fulfillment_allowed && rows.every((r) => r.available === false)) {
+      return "At least one item must be marked available.";
+    }
     for (const row of rows) {
       if (!row.name.trim()) return "Every row must have a medicine name.";
+      if (order?.partial_fulfillment_allowed && row.available === false) continue;
       if (!row.qty || Number(row.qty) <= 0) return `Row "${row.name}": quantity must be > 0.`;
       if (!row.amount || Number(row.amount) <= 0) return `Row "${row.name}": amount must be > 0.`;
       if (row.unavailable && !row.substitute_name.trim()) {
@@ -166,13 +172,17 @@ export function BillGenerationPage() {
 
   /** Step 2 — user confirmed, do the API call. */
   async function confirmSubmit() {
-    const items = rows.map((r) => ({
-      name: r.name.trim(),
-      qty: String(r.qty),
-      type: r.type.trim() || "unit",
-      amount: String(r.amount),
-      ...(r.unavailable && r.substitute_name.trim() ? { substitute_name: r.substitute_name.trim() } : {}),
-    }));
+    const items = rows.map((r) => {
+      const isAvailable = !(order?.partial_fulfillment_allowed && r.available === false);
+      return {
+        name: r.name.trim(),
+        qty: String(r.qty || 1),
+        type: r.type.trim() || "unit",
+        amount: isAvailable ? String(r.amount) : "0",
+        available: isAvailable,
+        ...(isAvailable && r.unavailable && r.substitute_name.trim() ? { substitute_name: r.substitute_name.trim() } : {}),
+      };
+    });
     setIsSubmitting(true);
     try {
       const updated = await submitPharmacyBill(orderId, items);
@@ -187,7 +197,11 @@ export function BillGenerationPage() {
     }
   }
 
-  const billTotal = rows.reduce((sum, r) => sum + (parseFloat(r.amount) || 0) * (parseFloat(r.qty) || 0), 0);
+  const billTotal = rows.reduce((sum, r) => {
+    if (order?.partial_fulfillment_allowed && r.available === false) return sum;
+    return sum + (parseFloat(r.amount) || 0) * (parseFloat(r.qty) || 0);
+  }, 0);
+  const deferredCount = order?.partial_fulfillment_allowed ? rows.filter((r) => r.available === false).length : 0;
 
   const hasMedia = Boolean(
     (order?.prescription_files || []).length || order?.voice_note_file,
@@ -258,6 +272,7 @@ export function BillGenerationPage() {
             {order?.substitution_allowed
               ? "Substitution approved"
               : "No substitution allowed"}
+            {order?.partial_fulfillment_allowed ? " · Partial fulfillment allowed" : ""}
           </p>
         </div>
       </header>
@@ -306,6 +321,7 @@ export function BillGenerationPage() {
             <thead>
               <tr>
                 <th>Medicine Name</th>
+                {order?.partial_fulfillment_allowed ? <th>Available</th> : null}
                 <th>Qty</th>
                 <th>Type / Unit</th>
                 <th>Amount (₹)</th>
@@ -314,7 +330,9 @@ export function BillGenerationPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {rows.map((row) => {
+                const isUnavailableForPartial = order?.partial_fulfillment_allowed && row.available === false;
+                return (
                 <tr key={row._id}>
                   <td>
                     <input
@@ -325,6 +343,21 @@ export function BillGenerationPage() {
                       required
                     />
                   </td>
+                  {order?.partial_fulfillment_allowed ? (
+                    <td className="sub-cell">
+                      <label className="sub-unavail-label">
+                        <input
+                          type="checkbox"
+                          checked={row.available !== false}
+                          onChange={(e) => updateRow(row._id, "available", e.target.checked)}
+                        />
+                        In stock
+                      </label>
+                      {isUnavailableForPartial ? (
+                        <span style={{ fontSize: "0.75rem", color: "#6b7280" }}>Moves to a new order</span>
+                      ) : null}
+                    </td>
+                  ) : null}
                   <td>
                     <input
                       type="number"
@@ -333,7 +366,7 @@ export function BillGenerationPage() {
                       placeholder="1"
                       value={row.qty}
                       onChange={(e) => updateRow(row._id, "qty", e.target.value)}
-                      required
+                      required={!isUnavailableForPartial}
                     />
                   </td>
                   <td>
@@ -352,10 +385,11 @@ export function BillGenerationPage() {
                       placeholder="0.00"
                       value={row.amount}
                       onChange={(e) => updateRow(row._id, "amount", e.target.value)}
-                      required
+                      required={!isUnavailableForPartial}
+                      disabled={isUnavailableForPartial}
                     />
                   </td>
-                  {order?.substitution_allowed ? (
+                  {order?.substitution_allowed && !isUnavailableForPartial ? (
                     <td className="sub-cell">
                       <label className="sub-unavail-label">
                         <input
@@ -414,7 +448,8 @@ export function BillGenerationPage() {
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -425,6 +460,7 @@ export function BillGenerationPage() {
           </button>
           <div className="bill-total">
             Total: ₹{billTotal.toFixed(2)}
+            {deferredCount > 0 ? ` · ${deferredCount} item${deferredCount !== 1 ? "s" : ""} moved to a new order` : ""}
           </div>
           <button
             className="button"

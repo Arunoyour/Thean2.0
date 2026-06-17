@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
@@ -56,7 +56,8 @@ def _serialize_history(h: DisputeStatusHistory) -> dict:
 
 
 def _serialize_dispute(d: Dispute, *, include_messages: bool = False, include_history: bool = False) -> dict:
-    age_days = (datetime.utcnow() - d.created_at).days
+    created = d.created_at if d.created_at.tzinfo else d.created_at.replace(tzinfo=UTC)
+    age_days = (datetime.now(UTC) - created).days
     data: dict = {
         "dispute_id":       str(d.dispute_id),
         "raised_by_app":    d.raised_by_app,
@@ -288,7 +289,7 @@ async def add_admin_reply(
     # Notify raiser of new reply
     dispute.unread_by_raiser = True
     dispute.unread_by_admin  = False
-    dispute.updated_at = datetime.utcnow()
+    dispute.updated_at = datetime.now(UTC)
 
     await session.flush()
     return _serialize_message(dispute.messages[-1]) if dispute.messages else {}
@@ -304,7 +305,7 @@ async def assign_dispute(
 ) -> dict:
     dispute = await _get_or_404(session, dispute_id)
     dispute.assigned_to = assignee_id
-    dispute.updated_at  = datetime.utcnow()
+    dispute.updated_at  = datetime.now(UTC)
     _add_history(session, dispute_id, dispute.status, dispute.status,
                  changed_by=actor, notes=f"Assigned to admin {assignee_id}")
     await session.flush()
@@ -327,8 +328,8 @@ async def resolve_dispute(
     dispute.status           = "RESOLVED"
     dispute.resolution_notes = resolution_notes
     dispute.resolved_by      = actor.admin_id
-    dispute.resolved_at      = datetime.utcnow()
-    dispute.updated_at       = datetime.utcnow()
+    dispute.resolved_at      = datetime.now(UTC)
+    dispute.updated_at       = datetime.now(UTC)
 
     _add_history(session, dispute_id, old_status, "RESOLVED",
                  changed_by=actor, notes=resolution_notes)
@@ -372,11 +373,11 @@ async def reopen_dispute(
     old_status = dispute.status
     dispute.status         = "REOPENED"
     dispute.reopened_count += 1
-    dispute.reopened_at    = datetime.utcnow()
+    dispute.reopened_at    = datetime.now(UTC)
     dispute.resolution_notes = None
     dispute.resolved_by    = None
     dispute.resolved_at    = None
-    dispute.updated_at     = datetime.utcnow()
+    dispute.updated_at     = datetime.now(UTC)
 
     _add_history(session, dispute_id, old_status, "REOPENED",
                  notes=f"Dispute reopened (count: {dispute.reopened_count})")
@@ -472,7 +473,7 @@ async def admin_close_dispute(
     dispute = await _get_or_404(session, dispute_id)
     if dispute.status == "CLOSED":
         raise HTTPException(400, "Dispute is already closed.")
-    age_days = (datetime.utcnow() - dispute.created_at).days
+    age_days = (datetime.now(UTC) - dispute.created_at).days
     if age_days < ADMIN_CLOSE_MIN_DAYS:
         days_left = ADMIN_CLOSE_MIN_DAYS - age_days
         raise HTTPException(
@@ -485,8 +486,8 @@ async def admin_close_dispute(
     dispute.closed_by_raiser = False
     dispute.resolution_notes = resolution_notes
     dispute.resolved_by      = actor.admin_id
-    dispute.resolved_at      = datetime.utcnow()
-    dispute.updated_at       = datetime.utcnow()
+    dispute.resolved_at      = datetime.now(UTC)
+    dispute.updated_at       = datetime.now(UTC)
     _add_history(session, dispute_id, old_status, "CLOSED", changed_by=actor, notes=resolution_notes)
     await session.flush()
     await session.refresh(dispute)
@@ -593,7 +594,7 @@ async def user_reply_dispute(
     if dispute.status == "IN_REVIEW":
         _add_history(session, dispute_id, "IN_REVIEW", "REOPENED", notes="User replied")
         dispute.status = "REOPENED"
-    dispute.updated_at = datetime.utcnow()
+    dispute.updated_at = datetime.now(UTC)
     await session.flush()
     await session.refresh(dispute)
     return _serialize_dispute(dispute, include_messages=True)
@@ -614,7 +615,7 @@ async def user_close_dispute(
     old_status = dispute.status
     dispute.status           = "CLOSED"
     dispute.closed_by_raiser = True
-    dispute.updated_at       = datetime.utcnow()
+    dispute.updated_at       = datetime.now(UTC)
     _add_history(session, dispute_id, old_status, "CLOSED", notes="Closed by user")
     await session.flush()
     await session.refresh(dispute)
@@ -682,9 +683,8 @@ async def admin_list_disputes(
     if raised_by_app:
         q = q.where(Dispute.raised_by_app == raised_by_app)
     if sector:
-        from sqlalchemy import cast
-        from sqlalchemy.dialects.postgresql import ARRAY
-        q = q.where(Dispute.tagged_sectors.contains([sector]))
+        from sqlalchemy import text
+        q = q.where(text(f"tagged_sectors @> ARRAY['{sector}']::text[]"))
     if status:
         q = q.where(Dispute.status == status)
     else:
@@ -710,9 +710,10 @@ async def admin_dispute_summary(session: AsyncSession) -> dict:
     )
     by_sector: dict[str, int] = {}
     for sector in ("pharmacy", "delivery"):
+        from sqlalchemy import text as _text
         cnt = await session.scalar(
             select(func.count()).select_from(Dispute)
-            .where(Dispute.tagged_sectors.contains([sector]))
+            .where(_text(f"tagged_sectors @> ARRAY['{sector}']::text[]"))
         )
         by_sector[sector] = cnt or 0
     by_app: dict[str, int] = {}

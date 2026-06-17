@@ -66,6 +66,7 @@ def _register_jobs() -> None:
         retry_unassigned_delivery_orders,
         run_sla_order_transitions,
     )
+    from app.services.pharmacy_service import run_pharmacy_schedule_tick
 
     JOB_MAP.update({
         # ── CRITICAL — order state machines ───────────────────────────────────
@@ -101,6 +102,16 @@ def _register_jobs() -> None:
         "retry_unassigned_delivery_orders": {
             "fn": retry_unassigned_delivery_orders,
             "description": "Retry auto-assign for READY_FOR_DELIVERY orders >10 min without a driver; alert admins.",
+            "recommended_interval": "every 5min",
+            "priority": "REQUIRED",
+        },
+        "pharmacy_schedule_tick": {
+            "fn": run_pharmacy_schedule_tick,
+            "description": (
+                "Apply each pharmacy's weekly operating-hours schedule and holiday calendar to "
+                "is_online. Holiday always wins; pharmacies with no schedule are skipped (frozen "
+                "at last value); a manual toggle holds until the next scheduled transition."
+            ),
             "recommended_interval": "every 5min",
             "priority": "REQUIRED",
         },

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, CheckCircle2, RefreshCw } from "lucide-react";
 import { getAdminAttention } from "../lib/api.js";
+import { BackButton } from "../components/BackButton.jsx";
 
 const SEVERITY_COLOR  = { HIGH: "#dc2626", MEDIUM: "#d97706" };
 const SEVERITY_BG     = { HIGH: "#fef2f2", MEDIUM: "#fffbeb" };
@@ -12,6 +13,8 @@ const TYPE_LABEL = {
   GHOST_DRIVER:            "Ghost driver",
   STALE_DISPUTE:           "SLA breach — dispute",
   STALE_RECON_EXCEPTION:   "SLA breach — reconciliation",
+  PENDING_PRODUCT_APPROVAL: "Product awaiting review",
+  PENDING_HAIRCUT_VENDOR_APPROVAL: "Haircut vendor awaiting approval",
 };
 
 export function AttentionPage() {
@@ -33,6 +36,7 @@ export function AttentionPage() {
 
   return (
     <main className="page">
+      <BackButton />
       <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
         <button className="outline-button" style={{ fontSize: "0.82rem" }} onClick={() => navigate("/dashboard")}>
           <ArrowLeft size={14} /> Dashboard

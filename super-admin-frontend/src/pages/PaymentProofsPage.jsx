@@ -8,6 +8,7 @@ import {
 } from "../lib/api.js";
 import { canWriteConfig } from "../lib/role.js";
 import { validateFileSize } from "../lib/validation.js";
+import { BackButton } from "../components/BackButton.jsx";
 
 const PROOF_TYPE_COLORS = { INWARD: "#2563eb", OUTWARD: "#16a34a" };
 const METHOD_LABELS = {
@@ -91,6 +92,7 @@ export function PaymentProofsPage() {
 
   return (
     <main className="page">
+      <BackButton />
       {/* Upload modal */}
       {showUpload && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>

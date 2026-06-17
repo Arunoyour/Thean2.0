@@ -4,6 +4,7 @@ import { ArrowLeft, ClipboardList, Download, Home, Package, RefreshCw } from "lu
 
 import { getCustomerDetail } from "../lib/api.js";
 import { DEFAULT_PAGE_SIZE, exportRowsToExcel, getPageCount, pageLabel, paginate } from "../lib/listingUtils.js";
+import { BackButton } from "../components/BackButton.jsx";
 
 function formatDate(value) {
   if (!value) return "Not available";
@@ -85,6 +86,7 @@ export function CustomerDetailPage() {
 
   return (
     <main className="page">
+      <BackButton />
       <header className="dashboard-header">
         <div>
           <button className="text-nav-button" type="button" onClick={() => navigate("/dashboard/customers")}>

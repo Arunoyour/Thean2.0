@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { ChevronRight, MessageSquare, Plus, RefreshCw } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ChevronRight, MessageSquare, RefreshCw } from "lucide-react";
 import { listPharmacyOrderDisputes } from "../lib/api.js";
 
 const STATUS_COLOR = { OPEN:"#2563eb", IN_REVIEW:"#d97706", REOPENED:"#7c3aed", RESOLVED:"#16a34a", CLOSED:"#6b7280" };
@@ -32,9 +32,6 @@ export function DisputeListPage() {
         {["OPEN","IN_REVIEW","REOPENED","CLOSED","ALL"].map((f) => (
           <button key={f} type="button" className={`dispute-filter-tab${filter===f?" active":""}`} onClick={() => setFilter(f)}>{f.replace("_"," ")}</button>
         ))}
-      </div>
-      <div className="dispute-list-actions">
-        <Link to="/disputes/raise" className="dispute-raise-link"><Plus size={16} /> Raise New Dispute</Link>
       </div>
       {error && <div className="dispute-error">{error}</div>}
       {isLoading ? <p className="ph-loading">Loading…</p> : disputes.length === 0 ? (

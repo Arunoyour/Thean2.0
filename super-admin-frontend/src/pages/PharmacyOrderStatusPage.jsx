@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Clock, PackageCheck, RefreshCw, Truck } from "lucide-react";
 import { getPharmacyOrderStatusBuckets } from "../lib/api.js";
+import { BackButton } from "../components/BackButton.jsx";
 
 const REFRESH_INTERVAL_MS = 30_000;
 

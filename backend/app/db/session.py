@@ -88,3 +88,29 @@ async def get_pharmacy_session() -> AsyncIterator[AsyncSession]:
 async def get_delivery_session() -> AsyncIterator[AsyncSession]:
     async with DeliverySessionLocal() as session:
         yield session
+
+
+# ── Haircut DB ────────────────────────────────────────────────────────────
+haircut_engine = create_async_engine(
+    settings.haircut_database_url,
+    pool_size=settings.database_pool_size,
+    max_overflow=settings.database_max_overflow,
+    pool_pre_ping=True,
+    pool_recycle=1800,
+    connect_args={
+        "server_settings": {
+            "search_path": _schema_search_path(settings.haircut_database_schema),
+        },
+    },
+)
+
+HaircutSessionLocal = async_sessionmaker(
+    bind=haircut_engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
+
+
+async def get_haircut_session() -> AsyncIterator[AsyncSession]:
+    async with HaircutSessionLocal() as session:
+        yield session

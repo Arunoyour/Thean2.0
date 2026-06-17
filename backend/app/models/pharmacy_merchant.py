@@ -1,7 +1,9 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Numeric, String, Text, func
+from datetime import date as date_type, time as time_type
+
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Numeric, SmallInteger, String, Text, Time, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -96,6 +98,65 @@ class PharmacyProfile(Base):
     )
     is_listed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     is_online: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    manual_override_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default=func.now(),
+    )
+
+
+class PharmacyOperatingHours(Base):
+    """One row per weekday (0=Monday..6=Sunday) describing the pharmacy's auto on/off schedule."""
+    __tablename__ = "pharmacy_operating_hours"
+    __table_args__ = (
+        UniqueConstraint("account_id", "day_of_week", name="uq_pharmacy_operating_hours_account_day"),
+        Index("idx_pharmacy_operating_hours_account", "account_id"),
+    )
+
+    hours_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.gen_random_uuid(),
+    )
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("pharmacy_accounts.account_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    day_of_week: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    open_time: Mapped[time_type] = mapped_column(Time, nullable=False)
+    close_time: Mapped[time_type] = mapped_column(Time, nullable=False)
+    is_closed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default=func.now(),
+    )
+
+
+class PharmacyHoliday(Base):
+    """A specific date the pharmacy is force-closed, independent of the weekly schedule."""
+    __tablename__ = "pharmacy_holidays"
+    __table_args__ = (
+        UniqueConstraint("account_id", "holiday_date", name="uq_pharmacy_holidays_account_date"),
+        Index("idx_pharmacy_holidays_account_date", "account_id", "holiday_date"),
+    )
+
+    holiday_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.gen_random_uuid(),
+    )
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("pharmacy_accounts.account_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    holiday_date: Mapped[date_type] = mapped_column(Date, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -333,6 +394,12 @@ class CustomerPharmacyOrder(Base):
     rejected_account_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
     substitution_allowed: Mapped[bool | None] = mapped_column(Boolean)
     substitution_decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    partial_fulfillment_allowed: Mapped[bool | None] = mapped_column(Boolean)
+    partial_fulfillment_decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    split_from_order_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("customer_pharmacy_orders.order_id", ondelete="SET NULL"),
+    )
     customer_review_deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     price_breakdown: Mapped[dict | None] = mapped_column(JSONB)
     bill_items: Mapped[list | None] = mapped_column(JSONB)

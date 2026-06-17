@@ -96,6 +96,19 @@ export function updatePharmacyAvailability(isOnline) {
   });
 }
 
+export function getPharmacyScheduleStatus() {
+  const token = window.localStorage.getItem(TOKEN_KEY);
+  if (!token) {
+    return Promise.reject(new Error("Please login to continue."));
+  }
+
+  return request("/pharmacy/me/schedule-status", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export function listProducts() {
   const token = window.localStorage.getItem(TOKEN_KEY);
   if (!token) {
@@ -265,7 +278,7 @@ export function getPharmacyOrderById(orderId) {
 export function markOrderReadyForDelivery(orderId) {
   const token = window.localStorage.getItem(TOKEN_KEY);
   if (!token) return Promise.reject(new Error("Please login to continue."));
-  return apiFetch(`/pharmacy/orders/${orderId}/ready-for-delivery`, {
+  return request(`/pharmacy/orders/${orderId}/ready-for-delivery`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
   });

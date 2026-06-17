@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, Clock, Power, ShieldAlert } from "lucide-react";
 
 import { PharmacyPageShell } from "../components/PharmacyPageShell.jsx";
-import { getCurrentPharmacy, getPharmacyAttention, getPharmacyDisputeUnreadCount, updatePharmacyAvailability } from "../lib/api.js";
+import {
+  getCurrentPharmacy,
+  getPharmacyAttention,
+  getPharmacyDisputeUnreadCount,
+  getPharmacyScheduleStatus,
+  updatePharmacyAvailability,
+} from "../lib/api.js";
 
 export function HomePage() {
   const [pharmacy, setPharmacy] = useState(null);
@@ -12,21 +18,24 @@ export function HomePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [disputeUnread, setDisputeUnread] = useState(0);
   const [attentionCount, setAttentionCount] = useState(0);
+  const [scheduleStatus, setScheduleStatus] = useState(null);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadPharmacy() {
       try {
-        const [profile, unreadData, attentionData] = await Promise.all([
+        const [profile, unreadData, attentionData, scheduleData] = await Promise.all([
           getCurrentPharmacy(),
           getPharmacyDisputeUnreadCount().catch(() => ({ unread: 0 })),
           getPharmacyAttention().catch(() => ({ count: 0 })),
+          getPharmacyScheduleStatus().catch(() => null),
         ]);
         if (isMounted) {
           setPharmacy(profile);
           setDisputeUnread(unreadData?.unread || 0);
           setAttentionCount(attentionData?.count || 0);
+          setScheduleStatus(scheduleData);
         }
       } catch (requestError) {
         if (isMounted) {
@@ -89,6 +98,12 @@ export function HomePage() {
           🔔 You have {disputeUnread} dispute{disputeUnread > 1 ? "s" : ""} with a new admin reply.
         </a>
       )}
+      {scheduleStatus?.mode === "NO_SCHEDULE" && (
+        <div className="error">⏰ {scheduleStatus.message}</div>
+      )}
+      {scheduleStatus?.mode === "HOLIDAY" && (
+        <div className="error">📅 {scheduleStatus.message}</div>
+      )}
       <header className="portal-header">
         <div>
           <p className="eyebrow">Merchant workstation</p>
@@ -109,33 +124,29 @@ export function HomePage() {
         </div>
       </section>
 
-      <section className={`availability-card ${isOnline ? "availability-online" : "availability-offline"}`}>
-        <div>
-          <p className="eyebrow">Order availability</p>
-          <h2>{isOnline ? "Online" : "Offline"}</h2>
-          <p>
-            {isOnline
-              ? "Your pharmacy can receive new medicine orders from nearby customers."
-              : "Your pharmacy is hidden from recommendations and cannot receive new customer orders."}
-          </p>
-          {!isActive && !isUpdatingAvailability && (
-            <p className="field-help" style={{ color: "#b45309", marginTop: "0.35rem" }}>
-              Availability cannot be changed until super admin approval is granted.
+      {isActive && (
+        <section className={`availability-card ${isOnline ? "availability-online" : "availability-offline"}`}>
+          <div>
+            <p className="eyebrow">Order availability</p>
+            <h2>{isOnline ? "Online" : "Offline"}</h2>
+            <p>
+              {isOnline
+                ? "Your pharmacy can receive new medicine orders from nearby customers."
+                : "Your pharmacy is hidden from recommendations and cannot receive new customer orders."}
             </p>
-          )}
-          {availabilityError ? <div className="error">{availabilityError}</div> : null}
-        </div>
-        <button
-          className={isOnline ? "danger-button" : "button"}
-          disabled={!isActive || isUpdatingAvailability}
-          type="button"
-          title={!isActive ? "Requires super admin approval before you can go online" : undefined}
-          onClick={toggleAvailability}
-        >
-          <Power size={18} aria-hidden="true" />
-          {isUpdatingAvailability ? "Updating" : isOnline ? "Go Offline" : "Go Online"}
-        </button>
-      </section>
+            {availabilityError ? <div className="error">{availabilityError}</div> : null}
+          </div>
+          <button
+            className={isOnline ? "danger-button" : "button"}
+            disabled={isUpdatingAvailability}
+            type="button"
+            onClick={toggleAvailability}
+          >
+            <Power size={18} aria-hidden="true" />
+            {isUpdatingAvailability ? "Updating" : isOnline ? "Go Offline" : "Go Online"}
+          </button>
+        </section>
+      )}
 
       <section className="portal-grid">
         <article className="panel">

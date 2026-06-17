@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1 import approvals, auth, customer, delivery, disputes, health, pharmacy, reconciliation, settlement, super_admin, ws
+from app.api.v1 import approvals, auth, customer, delivery, disputes, haircut, health, pharmacy, reconciliation, settlement, super_admin, ws
 from app.api.v1.background_jobs_api import cron_router, router as background_jobs_router
 
 api_router = APIRouter(prefix="/api/v1")
@@ -17,3 +17,4 @@ api_router.include_router(disputes.router)
 api_router.include_router(ws.router)
 api_router.include_router(background_jobs_router)
 api_router.include_router(cron_router)
+api_router.include_router(haircut.router)

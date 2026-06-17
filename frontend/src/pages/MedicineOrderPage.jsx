@@ -23,6 +23,7 @@ import {
   createPharmacyOrderWithMedia,
   getCurrentUser,
   getDeliverySurgeConfig,
+  getPharmacyStatus,
   listCustomerAddresses,
   listNearbyPharmacies,
 } from "../lib/api.js";
@@ -105,6 +106,7 @@ export function MedicineOrderPage() {
   const [voiceStatus, setVoiceStatus] = useState("");
   const [submitValidationError, setSubmitValidationError] = useState("");
   const [substitutionAllowed, setSubstitutionAllowed] = useState(false);
+  const [partialFulfillmentAllowed, setPartialFulfillmentAllowed] = useState(false);
   const [inventoryProtection, setInventoryProtection] = useState(true);
   const [billingMode, setBillingMode] = useState("auto");
   const [restrictedDrugNoticeAccepted, setRestrictedDrugNoticeAccepted] = useState(false);
@@ -124,6 +126,7 @@ export function MedicineOrderPage() {
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [pendingNavTarget, setPendingNavTarget] = useState("");
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [surgeConfig, setSurgeConfig] = useState(null);
   const [offerLockUnderstood, setOfferLockUnderstood] = useState(false);
   const [draftSaved, setDraftSaved] = useState(false);
@@ -287,6 +290,7 @@ export function MedicineOrderPage() {
         setPharmacyChoiceMode("locked");
       }
       if (typeof d.substitutionAllowed === "boolean") setSubstitutionAllowed(d.substitutionAllowed);
+      if (typeof d.partialFulfillmentAllowed === "boolean") setPartialFulfillmentAllowed(d.partialFulfillmentAllowed);
       if (d.billingMode) setBillingMode(d.billingMode);
       if (typeof d.inventoryProtection === "boolean") setInventoryProtection(d.inventoryProtection);
     } catch {
@@ -555,6 +559,7 @@ export function MedicineOrderPage() {
         selectedAddressId,
         lockedPharmacy,
         substitutionAllowed,
+        partialFulfillmentAllowed,
         billingMode,
         inventoryProtection,
       }),
@@ -592,6 +597,38 @@ export function MedicineOrderPage() {
     setShowConfirmModal(true);
   }
 
+  /** Re-check the selected pharmacy is still online right before creating the order. */
+  async function handleConfirmAndSubmit() {
+    if (!selectedPharmacy) return;
+    setCheckingAvailability(true);
+    try {
+      const status = await getPharmacyStatus(selectedPharmacy.account_id);
+      if (!status.is_online) {
+        setNearbyPharmacies((prev) =>
+          prev.map((pharmacy) =>
+            pharmacy.account_id === selectedPharmacy.account_id
+              ? { ...pharmacy, is_online: false }
+              : pharmacy,
+          ),
+        );
+        if (lockedPharmacy?.account_id === selectedPharmacy.account_id) {
+          setLockedPharmacy(null);
+        }
+        setShowConfirmModal(false);
+        setSubmitValidationError(
+          `${status.store_name} just went offline and can't take this order. Please choose another pharmacy or use auto choose.`,
+        );
+        return;
+      }
+    } catch {
+      // Status check failed (e.g. pharmacy no longer listed) — let the order-creation
+      // call below surface the real error rather than blocking the customer here.
+    } finally {
+      setCheckingAvailability(false);
+    }
+    await submitOrder();
+  }
+
   async function submitOrder() {
     setShowConfirmModal(false);
     setSubmitValidationError("");
@@ -618,6 +655,7 @@ export function MedicineOrderPage() {
         has_prescription: prescriptionFiles.length > 0,
         has_voice_note: voiceAttached,
         substitution_allowed: substitutionAllowed,
+        partial_fulfillment_allowed: cart.length > 1 ? partialFulfillmentAllowed : null,
         notes: {
           address_label: selectedAddress?.label || null,
           address_latitude: selectedAddress?.latitude ?? null,
@@ -1099,6 +1137,40 @@ export function MedicineOrderPage() {
           </div>
         </article>
 
+        {cart.length > 1 ? (
+          <article className="medicine-panel">
+            <h2>Partial fulfillment</h2>
+            <p className="hint">
+              If the pharmacy only has some of your items in stock, should they fulfil what they have and
+              let us auto-create a new order (sent to another nearby pharmacy) for the rest?
+            </p>
+            <div className="substitution-order-choice">
+              <label className="substitution-order-option substitution-order-option-yes">
+                <input
+                  type="radio"
+                  checked={partialFulfillmentAllowed === true}
+                  onChange={() => setPartialFulfillmentAllowed(true)}
+                />
+                <span>
+                  <strong>Yes, allow partial fulfillment</strong>
+                  <small>Missing items become a new order automatically</small>
+                </span>
+              </label>
+              <label className="substitution-order-option substitution-order-option-no">
+                <input
+                  type="radio"
+                  checked={partialFulfillmentAllowed === false}
+                  onChange={() => setPartialFulfillmentAllowed(false)}
+                />
+                <span>
+                  <strong>No, full order only</strong>
+                  <small>Pharmacy must have every item to proceed</small>
+                </span>
+              </label>
+            </div>
+          </article>
+        ) : null}
+
         <article className="medicine-panel">
           {!isLockedOfferOrder ? (
             <>
@@ -1229,6 +1301,12 @@ export function MedicineOrderPage() {
                 <dt>Substitution</dt>
                 <dd>{substitutionAllowed ? "Allowed — pharmacy may suggest alternatives" : "Not allowed — cancel if exact medicine unavailable"}</dd>
               </div>
+              {cart.length > 1 && (
+                <div>
+                  <dt>Partial fulfillment</dt>
+                  <dd>{partialFulfillmentAllowed ? "Allowed — missing items become a new order" : "Not allowed — pharmacy must have every item"}</dd>
+                </div>
+              )}
               <div>
                 <dt>Billing mode</dt>
                 <dd>{effectiveBillingMode === "auto" ? "Auto-approval (2 min review)" : "Manual review (5 min)"}</dd>
@@ -1256,11 +1334,17 @@ export function MedicineOrderPage() {
                 className="button button-secondary"
                 type="button"
                 onClick={() => setShowConfirmModal(false)}
+                disabled={checkingAvailability}
               >
                 Cancel
               </button>
-              <button className="button" type="button" onClick={submitOrder}>
-                Confirm &amp; submit
+              <button
+                className="button"
+                type="button"
+                onClick={handleConfirmAndSubmit}
+                disabled={checkingAvailability}
+              >
+                {checkingAvailability ? "Checking pharmacy…" : "Confirm & submit"}
               </button>
             </div>
           </div>

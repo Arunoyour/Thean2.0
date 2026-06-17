@@ -2,6 +2,7 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import FileResponse
 
@@ -21,6 +22,12 @@ from app.schemas.pharmacy import (
     PharmacyProductUpdateRequest,
     PharmacyRegisterRequest,
     NearbyPharmacyResponse,
+    PharmacyStatusResponse,
+    SetOperatingHoursRequest,
+    OperatingHoursResponse,
+    HolidayCreateRequest,
+    HolidayResponse,
+    PharmacyScheduleStatusResponse,
 )
 from app.schemas.customer_order import CustomerPharmacyOrderResponse, SubmitEstimateRequest, SubmitBillRequest
 from app.services.customer_order_service import (
@@ -37,10 +44,18 @@ from app.services.customer_order_service import (
 )
 from app.services.pharmacy_service import (
     activate_pharmacy,
+    add_holiday,
+    clear_operating_hours,
     create_pharmacy_product,
+    delete_holiday,
+    get_pharmacy_status,
+    get_schedule_status,
     list_customer_visible_products,
+    list_holidays,
     list_nearby_pharmacies,
+    list_operating_hours,
     list_own_products,
+    set_operating_hours,
     register_pharmacy,
     request_pharmacy_otp,
     resubmit_pharmacy_product,
@@ -96,6 +111,108 @@ async def update_availability(
         account_profile[1],
         payload.is_online,
     )
+
+
+@router.get("/me/schedule-status", response_model=PharmacyScheduleStatusResponse)
+async def schedule_status(
+    account_profile: tuple[PharmacyAccount, PharmacyProfile] = Depends(get_current_pharmacy),
+    session: AsyncSession = Depends(get_pharmacy_session),
+):
+    return await get_schedule_status(session, account_profile[0], account_profile[1])
+
+
+@router.get("/me/operating-hours", response_model=list[OperatingHoursResponse])
+async def get_operating_hours(
+    account_profile: tuple[PharmacyAccount, PharmacyProfile] = Depends(get_current_pharmacy),
+    session: AsyncSession = Depends(get_pharmacy_session),
+):
+    return await list_operating_hours(session, account_profile[0].account_id)
+
+
+@router.put("/me/operating-hours", response_model=list[OperatingHoursResponse])
+async def put_operating_hours(
+    payload: SetOperatingHoursRequest,
+    account_profile: tuple[PharmacyAccount, PharmacyProfile] = Depends(get_current_pharmacy),
+    session: AsyncSession = Depends(get_pharmacy_session),
+):
+    return await set_operating_hours(session, account_profile[0].account_id, payload.days)
+
+
+@router.delete("/me/operating-hours", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_operating_hours(
+    account_profile: tuple[PharmacyAccount, PharmacyProfile] = Depends(get_current_pharmacy),
+    session: AsyncSession = Depends(get_pharmacy_session),
+):
+    """Delete the auto-schedule entirely. The pharmacy freezes at its current
+    online/offline state — it will never auto-toggle again until a schedule is set."""
+    await clear_operating_hours(session, account_profile[0].account_id)
+
+
+@router.get("/me/holidays", response_model=list[HolidayResponse])
+async def get_holidays(
+    account_profile: tuple[PharmacyAccount, PharmacyProfile] = Depends(get_current_pharmacy),
+    session: AsyncSession = Depends(get_pharmacy_session),
+):
+    return await list_holidays(session, account_profile[0].account_id)
+
+
+@router.post("/me/holidays", response_model=HolidayResponse, status_code=status.HTTP_201_CREATED)
+async def post_holiday(
+    payload: HolidayCreateRequest,
+    account_profile: tuple[PharmacyAccount, PharmacyProfile] = Depends(get_current_pharmacy),
+    session: AsyncSession = Depends(get_pharmacy_session),
+):
+    return await add_holiday(session, account_profile[0].account_id, payload.holiday_date, payload.reason)
+
+
+@router.delete("/me/holidays/{holiday_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_holiday(
+    holiday_id: uuid.UUID,
+    account_profile: tuple[PharmacyAccount, PharmacyProfile] = Depends(get_current_pharmacy),
+    session: AsyncSession = Depends(get_pharmacy_session),
+):
+    await delete_holiday(session, account_profile[0].account_id, holiday_id)
+
+
+@router.get("/admin/accounts/{account_id}/schedule-status", response_model=PharmacyScheduleStatusResponse)
+async def admin_schedule_status(
+    account_id: uuid.UUID,
+    _: None = Depends(require_super_admin),
+    session: AsyncSession = Depends(get_pharmacy_session),
+):
+    result = await session.execute(
+        select(PharmacyAccount, PharmacyProfile)
+        .join(PharmacyProfile, PharmacyProfile.account_id == PharmacyAccount.account_id)
+        .where(PharmacyAccount.account_id == account_id)
+    )
+    row = result.first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Pharmacy not found.")
+    account, profile = row
+    return await get_schedule_status(session, account, profile)
+
+
+@router.get("/admin/accounts")
+async def list_pharmacy_accounts(
+    _: None = Depends(require_super_admin),
+    session: AsyncSession = Depends(get_pharmacy_session),
+):
+    """Return all pharmacy accounts with id + owner name + pharmacy name for admin dropdowns."""
+    from sqlalchemy import select, outerjoin
+    result = await session.execute(
+        select(PharmacyAccount, PharmacyProfile)
+        .outerjoin(PharmacyProfile, PharmacyProfile.account_id == PharmacyAccount.account_id)
+        .order_by(PharmacyAccount.owner_name)
+    )
+    rows = result.all()
+    return [
+        {
+            "account_id": str(acc.account_id),
+            "display_name": f"{pro.store_name} ({acc.owner_name})" if pro and pro.store_name else acc.owner_name,
+            "is_active": acc.is_active,
+        }
+        for acc, pro in rows
+    ]
 
 
 @router.post("/admin/accounts/{account_id}/activate", response_model=PharmacyAccountResponse)
@@ -242,6 +359,14 @@ async def nearby_pharmacies(
 ):
     bounded_radius = min(max(radius_km, 1.0), 60.0)
     return await list_nearby_pharmacies(session, latitude, longitude, bounded_radius)
+
+
+@router.get("/public/{account_id}/status", response_model=PharmacyStatusResponse)
+async def pharmacy_status(
+    account_id: uuid.UUID,
+    session: AsyncSession = Depends(get_pharmacy_session),
+):
+    return await get_pharmacy_status(session, account_id)
 
 
 # ── Ready for Delivery ────────────────────────────────────────────────────

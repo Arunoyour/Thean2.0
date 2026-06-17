@@ -9,6 +9,7 @@ import {
   listAdmins,
 } from "../lib/api.js";
 import { canApprove, canWriteConfig } from "../lib/role.js";
+import { BackButton } from "../components/BackButton.jsx";
 
 const SEVERITY_COLORS = { HIGH: "#dc2626", MEDIUM: "#d97706", LOW: "#2563eb" };
 
@@ -98,7 +99,8 @@ export function ReconciliationExceptionDetailPage() {
     }
   }
 
-  if (isLoading) return <main className="page"><p style={{ color: "#6b7280" }}>Loading…</p></main>;
+  if (isLoading) return <main className="page">
+      <BackButton /><p style={{ color: "#6b7280" }}>Loading…</p></main>;
   if (error)     return <main className="page"><div className="error">{error}</div></main>;
   if (!exc)      return null;
 

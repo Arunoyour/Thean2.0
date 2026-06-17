@@ -19,6 +19,11 @@ import { NotFoundPage } from "./pages/NotFoundPage.jsx";
 import { PharmacyOrdersPage } from "./pages/PharmacyOrdersPage.jsx";
 import { PharmacyProductsPage } from "./pages/PharmacyProductsPage.jsx";
 import { RegisterPage } from "./pages/RegisterPage.jsx";
+import { HaircutDiscoveryPage } from "./pages/HaircutDiscoveryPage.jsx";
+import { HaircutShopDetailPage } from "./pages/HaircutShopDetailPage.jsx";
+import { HaircutBookingPage } from "./pages/HaircutBookingPage.jsx";
+import { HaircutActiveBookingPage } from "./pages/HaircutActiveBookingPage.jsx";
+import { HaircutHistoryPage } from "./pages/HaircutHistoryPage.jsx";
 import "./styles/global.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
@@ -46,6 +51,13 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route path="/home/disputes/raise" element={<RequireAuth><CustomerRaiseDisputePage /></RequireAuth>} />
           <Route path="/home/disputes/:disputeId" element={<RequireAuth><CustomerDisputeDetailPage /></RequireAuth>} />
           <Route path="/home/refunds" element={<RequireAuth><CustomerRefundStatusPage /></RequireAuth>} />
+
+          {/* ── Haircut ── */}
+          <Route path="/haircut" element={<RequireAuth><HaircutDiscoveryPage /></RequireAuth>} />
+          <Route path="/haircut/shop/:shopId" element={<RequireAuth><HaircutShopDetailPage /></RequireAuth>} />
+          <Route path="/haircut/shop/:shopId/book" element={<RequireAuth><HaircutBookingPage /></RequireAuth>} />
+          <Route path="/haircut/booking" element={<RequireAuth><HaircutActiveBookingPage /></RequireAuth>} />
+          <Route path="/haircut/history" element={<RequireAuth><HaircutHistoryPage /></RequireAuth>} />
 
           {/* 404 catch-all */}
           <Route path="*" element={<NotFoundPage />} />
