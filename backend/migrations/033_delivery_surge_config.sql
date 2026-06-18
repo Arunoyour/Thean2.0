@@ -1,5 +1,6 @@
 -- Migration 033: Delivery surge charge config
 -- Singleton row (id always = 1). Admin toggles on/off, sets multiplier and label.
+SET search_path TO "D";
 
 CREATE TABLE IF NOT EXISTS delivery_surge_config (
     id              INT PRIMARY KEY DEFAULT 1,

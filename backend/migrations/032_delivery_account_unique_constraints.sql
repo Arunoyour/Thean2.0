@@ -1,6 +1,7 @@
 -- Migration 032: DB-level unique constraints on delivery_accounts
 -- Application-level checks exist but these enforce integrity at the DB layer.
 -- NULL values are excluded from uniqueness (NULLS NOT DISTINCT requires PG15+; use partial index for PG14 compat).
+SET search_path TO "D";
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_delivery_accounts_email
     ON delivery_accounts (email)
