@@ -1,6 +1,7 @@
 -- Migration 031: Per-delivery-boy dynamic rates
 -- Adds tier classification and custom rate override to delivery accounts.
 -- Rate resolution order: custom_rate_per_km > tier rate > global DeliveryRateConfig
+SET search_path TO "D";
 
 -- Tier rates reference table
 CREATE TABLE IF NOT EXISTS delivery_tier_rates (
