@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "FastAPI backend for Thean unified super app."
 requires-python = ">=3.11"
 dependencies = [
+    "aiofiles>=23.2.1",
     "asyncpg>=0.29.0",
     "bcrypt>=4.1.2",
     "email-validator>=2.1.1",
