@@ -66,7 +66,7 @@ GEOFENCE_RADIUS_METRES = 50
 MANUAL_CHECKIN_WINDOW_MINUTES = 30
 CANCEL_BLOCK_MINUTES = 60          # bookings within this window cannot be cancelled
 SLOT_MINUTES = 30                  # display granularity for the time-picker
-NO_SHOW_GRACE_MINUTES = 30         # cron marks no-show this many minutes after appointment
+NO_SHOW_GRACE_MINUTES = 5          # cron marks no-show this many minutes after appointment END time
 DEFAULT_OPENING_TIME = time(10, 0)  # used when a vendor hasn't configured hours yet
 DEFAULT_CLOSING_TIME = time(19, 0)
 
@@ -1038,11 +1038,10 @@ async def get_token_balance(session: AsyncSession, customer_id: UUID) -> TokenBa
 async def mark_no_shows(session: AsyncSession) -> int:
     """
     Called by the cron job. Marks PENDING bookings as NO_SHOW when:
-    appointment_date + start_time + GRACE_MINUTES < now
+    end_time (start_time + total_duration_minutes) + NO_SHOW_GRACE_MINUTES < now
     and no OTP or manual check-in was used.
     Permanently forfeits the held token.
     """
-    cutoff = datetime.now() - timedelta(minutes=NO_SHOW_GRACE_MINUTES)
     result = await session.execute(
         select(HaircutBooking).where(
             HaircutBooking.status.in_(["PENDING", "CONFIRMED"]),
@@ -1050,10 +1049,13 @@ async def mark_no_shows(session: AsyncSession) -> int:
             HaircutBooking.manual_checkin_approved_at.is_(None),
         )
     )
+    now = datetime.now()
     count = 0
     for booking in result.scalars().all():
-        appt_dt = datetime.combine(booking.appointment_date, booking.start_time)
-        if appt_dt < cutoff:
+        appt_start = datetime.combine(booking.appointment_date, booking.start_time)
+        appt_end = appt_start + timedelta(minutes=booking.total_duration_minutes)
+        deadline = appt_end + timedelta(minutes=NO_SHOW_GRACE_MINUTES)
+        if now > deadline:
             booking.status = "NO_SHOW"
             booking.updated_at = datetime.now(UTC)
             if booking.token_held and not booking.token_refunded:

@@ -22,6 +22,7 @@ Recommended external cron schedule (for a cron-job.org / EasyCron setup):
   escalate_stale_reconciliation_exceptions  daily 02:00
   cleanup_expired_otps                daily  03:00
   prune_old_audit_logs                daily  04:00
+  haircut_mark_no_shows               every 5 min
 """
 from __future__ import annotations
 
@@ -67,6 +68,7 @@ def _register_jobs() -> None:
         run_sla_order_transitions,
     )
     from app.services.pharmacy_service import run_pharmacy_schedule_tick
+    from app.services.background_jobs import mark_haircut_no_shows
 
     JOB_MAP.update({
         # ── CRITICAL — order state machines ───────────────────────────────────
@@ -164,6 +166,16 @@ def _register_jobs() -> None:
             "description": "Auto-escalate disputes in OPEN status for >48 h to IN_REVIEW with a system message.",
             "recommended_interval": "every 4h",
             "priority": "GOOD_TO_HAVE",
+        },
+        # ── HAIRCUT ───────────────────────────────────────────────────────────
+        "haircut_mark_no_shows": {
+            "fn": mark_haircut_no_shows,
+            "description": (
+                "Mark PENDING haircut bookings as NO_SHOW when the appointment end time + 5 min grace "
+                "has passed with no OTP or manual check-in. Permanently forfeits the held token."
+            ),
+            "recommended_interval": "every 5min",
+            "priority": "REQUIRED",
         },
     })
 
