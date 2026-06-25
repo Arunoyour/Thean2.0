@@ -1,5 +1,24 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/v1";
 const TOKEN_KEY = "thean_pharmacy_access_token";
+
+/** Convert a FastAPI `detail` value to a readable string.
+ *  Pydantic 422 errors return detail as [{loc, msg, type}] — join them into
+ *  one sentence so users see "Phone number: value is not a valid phone number"
+ *  instead of "[object Object]". */
+function detailToMessage(detail, fallback = "Request failed. Please try again.") {
+  if (!detail) return fallback;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map(e => {
+        const field = Array.isArray(e.loc) ? e.loc.filter(s => s !== "body").join(" → ") : "";
+        const msg = e.msg || String(e);
+        return field ? `${field}: ${msg}` : msg;
+      })
+      .join(" · ");
+  }
+  return fallback;
+}
 const DEFAULT_TIMEOUT_MS = 15_000; // 15 s — prevents requests hanging forever
 
 /** Returns true when an error was caused by an AbortController signal — callers
@@ -40,16 +59,28 @@ async function request(path, options = {}) {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.detail || "Request failed. Please try again.");
+    throw new Error(detailToMessage(payload.detail));
   }
   return payload;
 }
 
-export function registerPharmacy(data) {
-  return request("/pharmacy/register", {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
+export function registerPharmacy(data, storeImageFile, drugLicenceFile, ownerIdFile) {
+  const fd = new FormData();
+  fd.append("owner_name",     data.owner_name);
+  fd.append("phone_number",   data.phone_number);
+  if (data.email)   fd.append("email",   data.email);
+  fd.append("store_name",     data.store_name);
+  fd.append("license_number", data.license_number);
+  fd.append("address_line_1", data.address_line_1);
+  if (data.city)    fd.append("city",    data.city);
+  if (data.state)   fd.append("state",   data.state);
+  if (data.pincode) fd.append("pincode", data.pincode);
+  fd.append("latitude",  String(data.latitude));
+  fd.append("longitude", String(data.longitude));
+  fd.append("store_image",   storeImageFile);
+  fd.append("drug_licence",  drugLicenceFile);
+  fd.append("owner_id_doc",  ownerIdFile);
+  return request("/pharmacy/register", { method: "POST", body: fd });
 }
 
 export function requestPharmacyOtp(phoneNumber) {
@@ -384,7 +415,7 @@ export async function raisePharmacyDispute({
     throw new Error("Session expired.");
   }
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.detail || "Request failed.");
+  if (!response.ok) throw new Error(detailToMessage(payload.detail));
   return payload;
 }
 
@@ -427,7 +458,7 @@ export async function reopenPharmacyDispute(disputeId, {
     throw new Error("Session expired.");
   }
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.detail || "Request failed.");
+  if (!response.ok) throw new Error(detailToMessage(payload.detail));
   return payload;
 }
 
@@ -461,7 +492,7 @@ async function _phUpload(path, formData) {
   const resp = await fetch(`${API_BASE_URL}${path}`, { method: "POST", headers: _phHdr(), body: formData });
   if (resp.status === 401) { window.localStorage.removeItem(TOKEN_KEY); window.location.href = "/login"; throw new Error("Session expired."); }
   const payload = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error(payload.detail || "Request failed.");
+  if (!resp.ok) throw new Error(detailToMessage(payload.detail));
   return payload;
 }
 export function getPharmacyDisputeUnreadCount() { return request("/pharmacy/order-disputes/unread-count", { headers: _phHdr() }); }
@@ -480,7 +511,7 @@ export function getPharmacyAttention() {
     headers: { Authorization: `Bearer ${token}` },
   }).then(async r => {
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.detail || "Failed.");
+    if (!r.ok) throw new Error(detailToMessage(d.detail));
     return d;
   });
 }

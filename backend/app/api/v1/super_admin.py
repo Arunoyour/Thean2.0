@@ -16,6 +16,7 @@ from app.schemas.pharmacy import (
     PharmacyAvailabilityEventResponse,
     PharmacyProductCommentRequest,
     PharmacyProductReviewResponse,
+    PharmacyVendorRejectRequest,
 )
 from app.schemas.admin_customer import AdminCustomerDetailResponse, AdminCustomerSummaryResponse
 from app.schemas.pharmacy import PharmacyScheduleStatusResponse, PharmacyStatusEventResponse, PharmacyStatusUpdateRequest
@@ -32,9 +33,12 @@ from app.schemas.super_admin import (
 from app.services.audit_service import AuditAction, audit
 from app.services.pharmacy_service import (
     activate_pharmacy,
+    approve_pharmacy_vendor,
+    reject_pharmacy_vendor,
     approve_product,
     get_schedule_status,
     list_pharmacies,
+    list_pending_pharmacy_vendors,
     list_pharmacy_availability_events,
     list_products_for_review,
     list_pharmacy_timeline,
@@ -235,6 +239,50 @@ async def activate_pharmacy_account(
         request=request,
     )
     return result
+
+
+@router.get("/pharmacies/pending", response_model=list[PharmacyAccountResponse])
+async def list_pending_pharmacy_registrations(
+    admin: SuperAdmin = Depends(require_role("SUPER", "SUPERVISOR", "CHECKER")),
+    session: AsyncSession = Depends(get_pharmacy_session),
+):
+    return await list_pending_pharmacy_vendors(session)
+
+
+@router.post("/pharmacies/{account_id}/approve", response_model=PharmacyAccountResponse)
+async def approve_pharmacy_registration(
+    account_id: uuid.UUID,
+    request: Request,
+    admin: SuperAdmin = Depends(require_role("SUPER", "SUPERVISOR", "CHECKER")),
+    session: AsyncSession = Depends(get_pharmacy_session),
+    core_session: AsyncSession = Depends(get_session),
+):
+    result = await approve_pharmacy_vendor(session, account_id)
+    await audit(
+        session=core_session, actor=admin, action_type=AuditAction.ACTIVATE_PHARMACY,
+        description=f"{admin.role} {admin.full_name} approved pharmacy registration (account_id={account_id}).",
+        target_type="pharmacy_account", target_id=account_id,
+        request=request,
+    )
+    return result
+
+
+@router.post("/pharmacies/{account_id}/reject", status_code=204)
+async def reject_pharmacy_registration(
+    account_id: uuid.UUID,
+    payload: PharmacyVendorRejectRequest,
+    request: Request,
+    admin: SuperAdmin = Depends(require_role("SUPER", "SUPERVISOR", "CHECKER")),
+    session: AsyncSession = Depends(get_pharmacy_session),
+    core_session: AsyncSession = Depends(get_session),
+):
+    await reject_pharmacy_vendor(session, account_id, payload.reason)
+    await audit(
+        session=core_session, actor=admin, action_type=AuditAction.UPDATE_PHARMACY,
+        description=f"{admin.role} {admin.full_name} rejected pharmacy registration (account_id={account_id}). Reason: {payload.reason}",
+        target_type="pharmacy_account", target_id=account_id,
+        request=request,
+    )
 
 
 @router.post("/pharmacies/{account_id}/status", response_model=PharmacyAccountResponse)

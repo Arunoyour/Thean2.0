@@ -2,6 +2,21 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000
 const TOKEN_KEY = "thean_delivery_access_token";
 const DEFAULT_TIMEOUT_MS = 15_000; // 15 s — prevents requests hanging forever
 
+function detailToMessage(detail, fallback = "Request failed. Please try again.") {
+  if (!detail) return fallback;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map(e => {
+        const field = Array.isArray(e.loc) ? e.loc.filter(s => s !== "body").join(" → ") : "";
+        const msg = e.msg || String(e);
+        return field ? `${field}: ${msg}` : msg;
+      })
+      .join(" · ");
+  }
+  return fallback;
+}
+
 /** Returns true when an error was caused by an AbortController signal — callers
  *  should silently ignore these (component unmounted before the request finished). */
 export function isAbortError(e) {
@@ -35,7 +50,7 @@ async function request(path, options = {}) {
   }
 
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.detail || "Request failed.");
+  if (!response.ok) throw new Error(detailToMessage(payload.detail));
   return payload;
 }
 
@@ -68,7 +83,7 @@ export async function registerDelivery(data) {
     if (!resp.ok) {
       let detail;
       try { detail = (await resp.json()).detail; } catch { detail = resp.statusText; }
-      const err = new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+      const err = new Error(detailToMessage(detail, resp.statusText));
       err.detail = detail;
       throw err;
     }
@@ -104,7 +119,7 @@ export function uploadDeliveryDocument(docType, file) {
     headers: { Authorization: `Bearer ${token}` },
     body: form,
   }).then(async (r) => {
-    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || "Upload failed."); }
+    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(detailToMessage(e.detail, "Upload failed.")); }
   });
 }
 
@@ -225,7 +240,7 @@ export async function raiseDeliveryDispute(formData) {
     });
     if (resp.status === 401) { window.location.href = "/login"; throw new Error("Session expired."); }
     const payload = await resp.json().catch(() => ({}));
-    if (!resp.ok) throw new Error(payload.detail || "Failed to raise dispute.");
+    if (!resp.ok) throw new Error(detailToMessage(payload.detail, "Failed to raise dispute."));
     return payload;
   } finally { clearTimeout(timerId); }
 }
@@ -244,7 +259,7 @@ export async function reopenDeliveryDispute(disputeId, formData) {
     });
     if (resp.status === 401) { window.location.href = "/login"; throw new Error("Session expired."); }
     const payload = await resp.json().catch(() => ({}));
-    if (!resp.ok) throw new Error(payload.detail || "Failed to reopen dispute.");
+    if (!resp.ok) throw new Error(detailToMessage(payload.detail, "Failed to reopen dispute."));
     return payload;
   } finally { clearTimeout(timerId); }
 }
@@ -279,7 +294,7 @@ async function _dlUpload(path, formData) {
   const resp = await fetch(`${API_BASE_URL}${path}`, { method: "POST", headers: authHeaders(), body: formData });
   if (resp.status === 401) { window.localStorage.removeItem(TOKEN_KEY); window.location.href = "/login"; throw new Error("Session expired."); }
   const payload = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error(payload.detail || "Request failed.");
+  if (!resp.ok) throw new Error(detailToMessage(payload.detail));
   return payload;
 }
 export function getDeliveryDisputeUnreadCount() { return request("/delivery/order-disputes/unread-count", { headers: authHeaders() }); }
@@ -296,7 +311,7 @@ export function getDeliveryAttention() {
   return fetch(`${API_BASE_URL}/delivery/attention`, { headers: authHeaders() })
     .then(async r => {
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.detail || "Failed.");
+      if (!r.ok) throw new Error(detailToMessage(d.detail));
       return d;
     });
 }

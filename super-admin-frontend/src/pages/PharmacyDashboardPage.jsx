@@ -404,6 +404,14 @@ export function PharmacyDashboardPage() {
           <CheckCircle2 size={16} aria-hidden="true" />
           Substitution Audit
         </button>
+        <button
+          className="outline-button"
+          type="button"
+          onClick={() => navigate("/dashboard/pharmacy/vendor-approvals")}
+        >
+          <ShieldCheck size={16} aria-hidden="true" />
+          Vendor Approvals
+        </button>
       </section>
 
       <section className="table-panel">

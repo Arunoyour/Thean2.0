@@ -2,6 +2,21 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000
 const TOKEN_KEY = "thean_super_admin_access_token";
 const DEFAULT_TIMEOUT_MS = 15_000; // 15 s — prevents requests hanging forever
 
+function detailToMessage(detail, fallback = "Request failed. Please try again.") {
+  if (!detail) return fallback;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map(e => {
+        const field = Array.isArray(e.loc) ? e.loc.filter(s => s !== "body").join(" → ") : "";
+        const msg = e.msg || String(e);
+        return field ? `${field}: ${msg}` : msg;
+      })
+      .join(" · ");
+  }
+  return fallback;
+}
+
 /**
  * Super-admin delivery token — MUST be set via VITE_SUPER_ADMIN_TOKEN in .env.local.
  * The token is intentionally not bundled as a fallback string; if the env var is
@@ -52,7 +67,7 @@ async function request(path, options = {}) {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.detail || "Request failed. Please try again.");
+    throw new Error(detailToMessage(payload.detail));
   }
   return payload;
 }
@@ -104,6 +119,21 @@ export function listPharmacies() {
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  });
+}
+
+export function adminListPendingPharmacyVendors() {
+  return request("/super-admin/pharmacies/pending");
+}
+
+export function adminApprovePharmacyVendor(accountId) {
+  return request(`/super-admin/pharmacies/${accountId}/approve`, { method: "POST" });
+}
+
+export function adminRejectPharmacyVendor(accountId, reason = "") {
+  return request(`/super-admin/pharmacies/${accountId}/reject`, {
+    method: "POST",
+    body: JSON.stringify({ reason: reason || null }),
   });
 }
 
@@ -644,7 +674,7 @@ export async function uploadPaymentProof(batchId, { proof_type, amount, payment_
       signal: controller.signal,
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.detail || "Upload failed.");
+    if (!response.ok) throw new Error(detailToMessage(payload.detail, "Upload failed."));
     return payload;
   } finally {
     clearTimeout(timerId);
@@ -717,7 +747,7 @@ export async function addDisputeReply(disputeId, { text_content, voice_file, ima
       signal: controller.signal,
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.detail || "Failed to send reply.");
+    if (!response.ok) throw new Error(detailToMessage(payload.detail, "Failed to send reply."));
     return payload;
   } finally {
     clearTimeout(timerId);
@@ -839,7 +869,7 @@ export async function addAdminDisputeReply(disputeId, { text_content, voice_file
   });
   if (resp.status === 401) { window.localStorage.removeItem(TOKEN_KEY); window.location.href = "/login"; throw new Error("Session expired."); }
   const payload = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error(payload.detail || "Failed to send reply.");
+  if (!resp.ok) throw new Error(detailToMessage(payload.detail, "Failed to send reply."));
   return payload;
 }
 

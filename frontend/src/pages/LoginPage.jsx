@@ -10,6 +10,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [phoneNumber, setPhoneNumber] = useState("");
+  const fullPhone = `+91${phoneNumber}`;
   const [otp, setOtp] = useState("");
   const [phase, setPhase] = useState("request");
   const [message, setMessage] = useState("");
@@ -30,7 +31,7 @@ export function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const response = await requestOtp(phoneNumber);
+      const response = await requestOtp(fullPhone);
       const suffix = response.development_otp ? ` Development OTP: ${response.development_otp}` : "";
       setMessage(`${response.message}${suffix}`);
       setPhase("verify");
@@ -51,7 +52,7 @@ export function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const response = await verifyOtp(phoneNumber, otp);
+      const response = await verifyOtp(fullPhone, otp);
       window.localStorage.setItem("thean_access_token", response.access_token);
       setMessage(`Welcome back, ${response.user.full_name || response.user.phone_number}.`);
       setOtp("");
@@ -78,21 +79,20 @@ export function LoginPage() {
       <form className="auth-form" onSubmit={phase === "request" ? requestLoginOtp : verifyLoginOtp}>
         <label>
           Phone number
-          <div className="input-with-indicator">
+          <div className="phone-input-wrapper">
+            <span className="phone-prefix">🇮🇳 +91</span>
             <input
               value={phoneNumber}
               onChange={(event) => setPhoneNumber(event.target.value)}
               onBlur={touch(setTouched, "phone")}
               className={inputClass(touched.phone, phoneErr)}
               inputMode="tel"
-              maxLength={15}
+              maxLength={10}
               autoComplete="tel"
+              placeholder="9876543210"
               disabled={phase === "verify"}
               required
             />
-            {touched.phone && !phoneErr && (
-              <span className="input-valid-tick" aria-label="Valid">✓</span>
-            )}
           </div>
           {phoneErr && <span className="field-error-msg">{phoneErr}</span>}
         </label>
@@ -128,7 +128,7 @@ export function LoginPage() {
               setTouched({});
               setIsSubmitting(true);
               try {
-                const response = await requestOtp(phoneNumber);
+                const response = await requestOtp(fullPhone);
                 const suffix = response.development_otp ? ` Development OTP: ${response.development_otp}` : "";
                 setMessage(`OTP resent.${suffix}`);
               } catch (retryError) {

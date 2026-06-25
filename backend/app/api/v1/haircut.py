@@ -52,6 +52,7 @@ from app.schemas.haircut import (
     VendorVerifyOtpRequest,
 )
 from app.services import haircut_service as svc
+from app.services.exif_service import extract_exif
 from app.core.config import get_settings
 from app.core.security import create_access_token, decode_access_token
 
@@ -125,6 +126,11 @@ async def vendor_register(
     ext_lic = Path(shop_licence.filename).suffix or ".pdf"
     ext_oid = Path(owner_id_doc.filename).suffix or ".jpg"
 
+    # Extract EXIF from store photo before _save_upload consumes the stream
+    shop_image_bytes = await shop_image.read()
+    exif = extract_exif(shop_image_bytes)
+    await shop_image.seek(0)
+
     img_path = await _save_upload(shop_image, base / f"shop_image{ext_img}")
     lic_path = await _save_upload(shop_licence, base / f"licence{ext_lic}")
     oid_path = await _save_upload(owner_id_doc, base / f"owner_id{ext_oid}")
@@ -135,7 +141,12 @@ async def vendor_register(
         shop_name=shop_name, shop_address=shop_address,
         pin_code=pin_code, lat=lat, lng=lng,
     )
-    return await svc.vendor_register(session, payload, img_path, lic_path, oid_path)
+    return await svc.vendor_register(
+        session, payload, img_path, lic_path, oid_path,
+        photo_taken_at=exif.taken_at,
+        photo_lat=exif.lat,
+        photo_lng=exif.lng,
+    )
 
 
 @router.post("/vendor/request-otp")

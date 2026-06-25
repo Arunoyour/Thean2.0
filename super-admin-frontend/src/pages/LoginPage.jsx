@@ -13,6 +13,7 @@ export function LoginPage() {
     return flag === "1";
   });
   const [phoneNumber, setPhoneNumber] = useState("");
+  const fullPhone = `+91${phoneNumber}`;
   const [otp, setOtp] = useState("");
   const [phase, setPhase] = useState("request");
   const [message, setMessage] = useState("");
@@ -29,7 +30,7 @@ export function LoginPage() {
     if (validatePhone(phoneNumber)) return;
     setError(""); setMessage(""); setIsSubmitting(true);
     try {
-      const response = await requestOtp(phoneNumber);
+      const response = await requestOtp(fullPhone);
       // Dev OTP hint only shown in local development builds — never in production
       const suffix = (import.meta.env.DEV && response.development_otp)
         ? ` Development OTP: ${response.development_otp}`
@@ -50,7 +51,7 @@ export function LoginPage() {
     if (validateOtp(otp)) return;
     setError(""); setMessage(""); setIsSubmitting(true);
     try {
-      await verifyOtp(phoneNumber, otp);
+      await verifyOtp(fullPhone, otp);
       navigate("/dashboard");
     } catch (requestError) {
       setError(requestError.message);
@@ -80,16 +81,20 @@ export function LoginPage() {
 
         <label>
           Mobile number
-          <input
-            value={phoneNumber}
-            onChange={(event) => setPhoneNumber(event.target.value)}
-            onBlur={touch(setTouched, "phone")}
-            className={inputClass(touched.phone, phoneErr)}
-            inputMode="tel"
-            placeholder="e.g. 9876543210"
-            disabled={phase === "verify"}
-            required
-          />
+          <div className="phone-input-wrapper">
+            <span className="phone-prefix">🇮🇳 +91</span>
+            <input
+              value={phoneNumber}
+              onChange={(event) => setPhoneNumber(event.target.value)}
+              onBlur={touch(setTouched, "phone")}
+              className={inputClass(touched.phone, phoneErr)}
+              inputMode="tel"
+              maxLength={10}
+              placeholder="9876543210"
+              disabled={phase === "verify"}
+              required
+            />
+          </div>
           {phoneErr && <span className="field-error-msg">{phoneErr}</span>}
         </label>
 

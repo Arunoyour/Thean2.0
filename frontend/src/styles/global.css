@@ -2175,21 +2175,36 @@ h1 {
 
 .form-message {
   border-radius: 8px;
-  padding: 12px 14px;
-  font-size: 14px;
-  font-weight: 700;
+  padding: 11px 14px 11px 42px;
+  font-size: 0.875rem;
+  font-weight: 600;
   line-height: 1.45;
+  position: relative;
+}
+.form-message::before {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .form-message-success {
   color: #115e36;
   background: #dff6e8;
+  border: 1px solid #bbf7d0;
+  border-left: 4px solid #16a34a;
 }
+.form-message-success::before { content: "✓"; }
 
 .form-message-error {
-  color: #8a1f11;
-  background: #fde8e4;
+  color: #7f1d1d;
+  background: #fff0f0;
+  border: 1px solid #fecaca;
+  border-left: 4px solid #dc2626;
 }
+.form-message-error::before { content: "⚠"; }
 
 .form-footnote {
   margin: 0;
@@ -3071,23 +3086,33 @@ h1 {
 input.input-error,
 textarea.input-error,
 select.input-error {
-  border-color: #ef4444 !important;
-  box-shadow: 0 0 0 2px rgba(239,68,68,.15);
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220,38,38,.18);
+  background: #fff8f8;
 }
 
 input.input-valid,
 textarea.input-valid,
 select.input-valid {
   border-color: #16a34a !important;
-  box-shadow: 0 0 0 2px rgba(22,163,74,.12);
+  box-shadow: 0 0 0 2px rgba(22,163,74,.14);
 }
 
 .field-error-msg {
-  display: block;
-  color: #dc2626;
-  font-size: 0.73rem;
-  margin-top: 3px;
-  line-height: 1.3;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  color: #b91c1c;
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-top: 4px;
+  line-height: 1.35;
+}
+.field-error-msg::before {
+  content: "✕";
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  margin-top: 1px;
 }
 
 
@@ -3395,3 +3420,40 @@ select.input-valid {
 }
 .attention-banner:hover { background: #fee2e2; }
 
+
+/* ── Phone input with India flag prefix ─────────────────────────────────── */
+.phone-input-wrapper {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid #c9d8d4;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+.phone-input-wrapper:focus-within {
+  outline: 2px solid #0d9488;
+  outline-offset: 0;
+  border-color: transparent;
+}
+.phone-prefix {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  background: #f0f4f3;
+  border-right: 1px solid #c9d8d4;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+  user-select: none;
+  flex-shrink: 0;
+}
+.phone-input-wrapper input {
+  border: none !important;
+  outline: none !important;
+  border-radius: 0 !important;
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+}

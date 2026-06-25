@@ -1,4 +1,6 @@
 import uuid
+import aiofiles
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -42,6 +44,8 @@ from app.services.customer_order_service import (
     submit_pharmacy_bill,
     submit_pharmacy_estimate,
 )
+from app.core.config import get_settings as _get_settings
+from app.services.exif_service import extract_exif
 from app.services.pharmacy_service import (
     activate_pharmacy,
     add_holiday,
@@ -67,13 +71,70 @@ from app.services.pharmacy_service import (
 
 router = APIRouter(prefix="/pharmacy", tags=["pharmacy"])
 
+_FILE_SIZE_LIMIT = 5 * 1024 * 1024  # 5 MB
+
+
+async def _save_pharmacy_upload(file: UploadFile, dest: Path) -> str:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    content = await file.read()
+    if len(content) > _FILE_SIZE_LIMIT:
+        raise HTTPException(status_code=422, detail=f"{file.filename} exceeds the 5 MB limit.")
+    async with aiofiles.open(dest, "wb") as f:
+        await f.write(content)
+    settings = _get_settings()
+    relative = dest.relative_to(settings.media_root)
+    return f"{settings.media_url}/{relative.as_posix()}"
+
 
 @router.post("/register", response_model=PharmacyAccountResponse, status_code=status.HTTP_201_CREATED)
 async def register(
-    payload: PharmacyRegisterRequest,
+    owner_name:     str          = Form(...),
+    phone_number:   str          = Form(...),
+    email:          str | None   = Form(None),
+    store_name:     str          = Form(...),
+    license_number: str          = Form(...),
+    address_line_1: str          = Form(...),
+    city:           str | None   = Form(None),
+    state:          str | None   = Form(None),
+    pincode:        str | None   = Form(None),
+    latitude:       float        = Form(...),
+    longitude:      float        = Form(...),
+    store_image:    UploadFile   = File(...),
+    drug_licence:   UploadFile   = File(...),
+    owner_id_doc:   UploadFile   = File(...),
     session: AsyncSession = Depends(get_pharmacy_session),
 ):
-    return await register_pharmacy(session, payload)
+    settings = _get_settings()
+    import uuid as _uuid
+    tmp_id = str(_uuid.uuid4())
+    base = Path(settings.media_root) / "pharmacy" / "tmp" / tmp_id
+
+    ext_img = Path(store_image.filename).suffix or ".jpg"
+    ext_lic = Path(drug_licence.filename).suffix or ".pdf"
+    ext_oid = Path(owner_id_doc.filename).suffix or ".jpg"
+
+    # Read store image bytes first so we can extract EXIF before writing
+    store_image_bytes = await store_image.read()
+    exif = extract_exif(store_image_bytes)
+    await store_image.seek(0)
+
+    store_image_url  = await _save_pharmacy_upload(store_image,  base / f"store_image{ext_img}")
+    drug_licence_url = await _save_pharmacy_upload(drug_licence, base / f"drug_licence{ext_lic}")
+    owner_id_url     = await _save_pharmacy_upload(owner_id_doc, base / f"owner_id{ext_oid}")
+
+    payload = PharmacyRegisterRequest(
+        owner_name=owner_name, phone_number=phone_number, email=email,
+        store_name=store_name, license_number=license_number,
+        address_line_1=address_line_1, city=city, state=state, pincode=pincode,
+        latitude=latitude, longitude=longitude,
+    )
+    return await register_pharmacy(
+        session, payload,
+        store_image_url, drug_licence_url, owner_id_url,
+        photo_taken_at=exif.taken_at,
+        photo_lat=exif.lat,
+        photo_lng=exif.lng,
+    )
 
 
 @router.post("/request-otp", response_model=PharmacyOtpResponse)

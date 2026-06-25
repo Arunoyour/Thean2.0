@@ -14,6 +14,7 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.30",
     "uvicorn[standard]>=0.30.0",
     "pywebpush>=2.0.0",
+    "Pillow>=10.0.0",
 ]
 
 [project.optional-dependencies]

@@ -159,6 +159,12 @@ def serialize_pharmacy(
             platform_fee=str(profile.platform_fee),
             is_listed=profile.is_listed,
             is_online=profile.is_online,
+            store_image_url=profile.store_image_url,
+            drug_licence_url=profile.drug_licence_url,
+            owner_id_url=profile.owner_id_url,
+            photo_taken_at=profile.photo_taken_at,
+            photo_lat=profile.photo_lat,
+            photo_lng=profile.photo_lng,
         ),
     )
 
@@ -181,6 +187,12 @@ async def get_account_with_profile(
 async def register_pharmacy(
     session: AsyncSession,
     payload: PharmacyRegisterRequest,
+    store_image_url: str | None = None,
+    drug_licence_url: str | None = None,
+    owner_id_url: str | None = None,
+    photo_taken_at=None,
+    photo_lat: float | None = None,
+    photo_lng: float | None = None,
 ) -> PharmacyAccountResponse:
     account = PharmacyAccount(
         owner_name=payload.owner_name.strip(),
@@ -200,6 +212,12 @@ async def register_pharmacy(
         pincode=payload.pincode.strip() if payload.pincode else None,
         latitude=payload.latitude,
         longitude=payload.longitude,
+        store_image_url=store_image_url,
+        drug_licence_url=drug_licence_url,
+        owner_id_url=owner_id_url,
+        photo_taken_at=photo_taken_at,
+        photo_lat=photo_lat,
+        photo_lng=photo_lng,
     )
     session.add(profile)
 
@@ -288,6 +306,48 @@ async def verify_pharmacy_otp(
         access_token=create_access_token(str(account.account_id), expire_minutes=43_200),  # 30 days
         pharmacy=serialize_pharmacy(account, profile),
     )
+
+
+async def list_pending_pharmacy_vendors(session: AsyncSession) -> list[PharmacyAccountResponse]:
+    result = await session.execute(
+        select(PharmacyAccount, PharmacyProfile)
+        .join(PharmacyProfile, PharmacyProfile.account_id == PharmacyAccount.account_id)
+        .where(PharmacyAccount.is_active == False, PharmacyAccount.activated_at.is_(None))
+        .order_by(PharmacyAccount.created_at.asc())
+    )
+    return [serialize_pharmacy(acc, prof) for acc, prof in result.all()]
+
+
+async def approve_pharmacy_vendor(session: AsyncSession, account_id) -> PharmacyAccountResponse:
+    account_profile = await get_account_with_profile(session, account_id)
+    if account_profile is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pharmacy not found.")
+    account, profile = account_profile
+    account.is_active = True
+    account.activated_at = datetime.now(UTC)
+    profile.is_listed = True
+    await session.commit()
+    await session.refresh(account)
+    await session.refresh(profile)
+    return serialize_pharmacy(account, profile)
+
+
+async def reject_pharmacy_vendor(session: AsyncSession, account_id, reason: str | None = None) -> None:
+    account_profile = await get_account_with_profile(session, account_id)
+    if account_profile is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pharmacy not found.")
+    account, _ = account_profile
+    if account.is_active:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot reject an already active pharmacy.")
+    account.activated_at = None
+    import uuid as _uuid
+    session.add(PharmacyStatusEvent(
+        account_id=account_id,
+        changed_by_admin_id=_uuid.UUID(int=0),
+        status="REJECTED",
+        comment=reason or "Registration rejected by super admin.",
+    ))
+    await session.commit()
 
 
 async def activate_pharmacy(session: AsyncSession, account_id) -> PharmacyAccountResponse:

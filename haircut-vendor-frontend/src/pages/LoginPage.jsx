@@ -5,6 +5,7 @@ import { vendorRequestOtp, vendorVerifyOtp, saveToken } from "../lib/api.js";
 export function LoginPage() {
   const navigate = useNavigate();
   const [phone, setPhone] = useState("");
+  const fullPhone = `+91${phone}`;
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [mockOtp, setMockOtp] = useState(null);
@@ -16,7 +17,7 @@ export function LoginPage() {
     if (!phone.trim()) { setError("Enter your phone number."); return; }
     setError(""); setLoading(true);
     try {
-      const res = await vendorRequestOtp(phone.trim());
+      const res = await vendorRequestOtp(fullPhone);
       setOtpSent(true);
       if (res.otp) setMockOtp(res.otp); // dev only
     } catch (err) {
@@ -31,7 +32,7 @@ export function LoginPage() {
     if (otp.length !== 6) { setError("Enter the 6-digit OTP."); return; }
     setError(""); setLoading(true);
     try {
-      const data = await vendorVerifyOtp(phone.trim(), otp.trim());
+      const data = await vendorVerifyOtp(fullPhone, otp.trim());
       saveToken(data.access_token);
       navigate("/home");
     } catch (err) {
@@ -61,13 +62,17 @@ export function LoginPage() {
             <h2>Vendor Login</h2>
             <label>
               Phone Number *
-              <input
-                type="tel"
-                value={phone}
-                onChange={e => setPhone(e.target.value)}
-                placeholder="e.g. 9876543210"
-                autoFocus
-              />
+              <div className="phone-input-wrapper">
+                <span className="phone-prefix">🇮🇳 +91</span>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={e => setPhone(e.target.value)}
+                  placeholder="9876543210"
+                  maxLength={10}
+                  autoFocus
+                />
+              </div>
             </label>
             <button className="hc-btn hc-btn-primary" type="submit" disabled={loading}>
               {loading ? "Sending OTP…" : "Send OTP"}
@@ -77,7 +82,7 @@ export function LoginPage() {
           <form className="hc-form" onSubmit={handleVerifyOtp} noValidate>
             <h2>Enter OTP</h2>
             <p style={{ fontSize: "0.85rem", color: "#52625f" }}>
-              OTP sent to <strong style={{ color: "#13201e" }}>{phone}</strong>
+              OTP sent to <strong style={{ color: "#13201e" }}>+91 {phone}</strong>
             </p>
             <label>
               6-digit OTP *

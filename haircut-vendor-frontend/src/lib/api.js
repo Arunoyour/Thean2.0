@@ -2,6 +2,21 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000
 const TOKEN_KEY = "thean_hc_vendor_token";
 const DEFAULT_TIMEOUT_MS = 15_000;
 
+function detailToMessage(detail, fallback = "Request failed. Please try again.") {
+  if (!detail) return fallback;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map(e => {
+        const field = Array.isArray(e.loc) ? e.loc.filter(s => s !== "body").join(" → ") : "";
+        const msg = e.msg || String(e);
+        return field ? `${field}: ${msg}` : msg;
+      })
+      .join(" · ");
+  }
+  return fallback;
+}
+
 export function isAbortError(e) {
   return e?.name === "AbortError";
 }
@@ -54,7 +69,7 @@ async function request(path, options = {}) {
   try { data = JSON.parse(text); } catch { data = text; }
 
   if (!response.ok) {
-    throw new Error(data?.detail || `Error ${response.status}`);
+    throw new Error(detailToMessage(data?.detail, `Error ${response.status}`));
   }
   return data;
 }
@@ -81,7 +96,7 @@ export async function vendorRegister(formData) {
   const text = await response.text();
   let data;
   try { data = JSON.parse(text); } catch { data = text; }
-  if (!response.ok) throw new Error(data?.detail || `Error ${response.status}`);
+  if (!response.ok) throw new Error(detailToMessage(data?.detail, `Error ${response.status}`));
   return data;
 }
 

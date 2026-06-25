@@ -23,6 +23,15 @@ const STATUS_BADGE = {
 
 const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/v1").replace(/\/api\/v1$/, "");
 
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 // Older rows store a raw filesystem path (e.g. "storage/haircut/..."); newer ones
 // store a proper "/media/..." URL. Handle both until existing data is backfilled.
 function resolveDocUrl(path) {
@@ -374,6 +383,36 @@ export function HaircutShopDetailPage() {
               <DocLink label="🏪 Shop Photo" url={shop.shop_image_url} />
               <DocLink label="📄 Shop Licence" url={shop.licence_url} />
               <DocLink label="🪪 Owner ID / Aadhaar" url={shop.owner_id_url} />
+              {/* EXIF metadata from store photo */}
+              {(() => {
+                const hasExif = shop.photo_lat != null && shop.photo_lng != null;
+                const hasRegistered = shop.lat != null && shop.lng != null;
+                if (!hasExif) return (
+                  <div style={{ marginTop: 8, padding: "6px 10px", background: "#f8f4ec", borderRadius: 8, fontSize: "0.76rem", color: "#92713a" }}>
+                    📷 No EXIF GPS data in shop photo
+                  </div>
+                );
+                let distBadge = null;
+                if (hasRegistered) {
+                  const km = haversineKm(shop.lat, shop.lng, shop.photo_lat, shop.photo_lng);
+                  const distText = km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(2)} km`;
+                  const isFar = km > 1;
+                  distBadge = (
+                    <span style={{ marginLeft: 8, padding: "2px 8px", borderRadius: 100, fontSize: "0.74rem", fontWeight: 700, background: isFar ? "#fde8e4" : "#dff6e8", color: isFar ? "#8a1f11" : "#115e36" }}>
+                      {isFar ? "⚠ " : "✓ "}{distText} from shop pin
+                    </span>
+                  );
+                }
+                const takenAt = shop.photo_taken_at
+                  ? new Date(shop.photo_taken_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+                  : null;
+                return (
+                  <div style={{ marginTop: 8, padding: "6px 10px", background: "#f0f7f4", borderRadius: 8, fontSize: "0.76rem", color: "#2d5a4e" }}>
+                    <div>📷 Photo GPS: {shop.photo_lat.toFixed(5)}, {shop.photo_lng.toFixed(5)}{distBadge}</div>
+                    {takenAt && <div style={{ marginTop: 2, color: "#52625f" }}>🕐 Taken: {takenAt}</div>}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>

@@ -25,6 +25,7 @@ export function RegisterPage() {
   const shopImageRef = useRef();
   const shopLicenceRef = useRef();
   const ownerIdRef = useRef();
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
 
   function set(field) {
     return e => setForm(f => ({ ...f, [field]: e.target.value }));
@@ -97,7 +98,7 @@ export function RegisterPage() {
     setLoading(true);
     const fd = new FormData();
     fd.append("full_name", form.full_name.trim());
-    fd.append("phone", form.phone.trim());
+    fd.append("phone", `+91${form.phone.trim()}`);
     if (form.email.trim()) fd.append("email", form.email.trim());
     fd.append("owner_address", form.owner_address.trim());
     fd.append("shop_name", form.shop_name.trim());
@@ -195,7 +196,10 @@ export function RegisterPage() {
             </label>
             <label>
               Mobile Number *
-              <input type="tel" value={form.phone} onChange={set("phone")} placeholder="e.g. 9876543210" />
+              <div className="phone-input-wrapper">
+                <span className="phone-prefix">🇮🇳 +91</span>
+                <input type="tel" value={form.phone} onChange={set("phone")} placeholder="9876543210" maxLength={10} />
+              </div>
               {errors.phone && <span className="hc-field-error">{errors.phone}</span>}
             </label>
             <label>
@@ -291,15 +295,29 @@ export function RegisterPage() {
               Max 5 MB per file. JPG / PNG / PDF accepted.
             </p>
 
-            <FileField
-              label="Shop Photo *"
-              hint="Clear exterior or interior photo of the shop"
-              accept="image/*"
-              fileRef={shopImageRef}
-              file={files.shop_image}
-              onChange={setFile("shop_image")}
-              error={errors.shop_image}
-            />
+            {/* Shop photo — intercept click to show guidelines modal */}
+            <div>
+              <div style={{ fontSize: "0.88rem", fontWeight: 600, color: "#13201e", marginBottom: 4 }}>Shop Photo *</div>
+              <div
+                onClick={() => setShowPhotoModal(true)}
+                style={{
+                  border: `2px dashed ${errors.shop_image ? "#b91c1c" : files.shop_image ? "#0f766e" : "#c9d8d4"}`,
+                  borderRadius: 8, padding: "0.75rem 1rem", textAlign: "center",
+                  background: files.shop_image ? "rgba(15,118,110,0.08)" : "transparent", cursor: "pointer",
+                }}
+              >
+                {files.shop_image ? (
+                  <span style={{ color: "#15803d", fontSize: "0.85rem" }}>✓ {files.shop_image.name}</span>
+                ) : (
+                  <span style={{ color: "#52625f", fontSize: "0.82rem" }}>
+                    📎 Tap to choose photo<br />
+                    <span style={{ fontSize: "0.75rem" }}>Must be taken at the shop with location enabled</span>
+                  </span>
+                )}
+              </div>
+              <input ref={shopImageRef} type="file" accept="image/*" style={{ display: "none" }} onChange={setFile("shop_image")} />
+              {errors.shop_image && <div style={{ color: "#b91c1c", fontSize: "0.78rem", marginTop: 4 }}>{errors.shop_image}</div>}
+            </div>
             <FileField
               label="Shop Licence *"
               hint="Business registration certificate (PDF or image)"
@@ -361,6 +379,41 @@ export function RegisterPage() {
           <Link to="/login" style={{ color: "var(--teal)" }}>Log in</Link>
         </p>
       </div>
+
+      {showPhotoModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: "24px 24px 20px", maxWidth: 420, width: "100%", boxShadow: "0 8px 40px rgba(0,0,0,0.18)" }}>
+            <h2 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#13201e", marginBottom: 8 }}>📷 Shop Photo Guidelines</h2>
+            <p style={{ fontSize: "0.85rem", color: "#52625f", marginBottom: 14 }}>
+              Your photo will be used to verify the location of your barbershop. Please follow these guidelines:
+            </p>
+            <ul style={{ paddingLeft: 18, fontSize: "0.85rem", color: "#13201e", lineHeight: 1.7, marginBottom: 18 }}>
+              <li>Stand <strong>inside or directly in front</strong> of your shop</li>
+              <li>The <strong>shop name board</strong> must be clearly visible</li>
+              <li>Your <strong>face</strong> should be visible — no masks or hats</li>
+              <li>Take the photo in <strong>good lighting</strong> (daytime preferred)</li>
+              <li>Make sure your phone's <strong>location is turned on</strong> before taking the photo</li>
+            </ul>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                type="button"
+                className="hc-btn hc-btn-primary"
+                style={{ flex: 1 }}
+                onClick={() => { setShowPhotoModal(false); shopImageRef.current?.click(); }}
+              >
+                I understand — select photo
+              </button>
+              <button
+                type="button"
+                className="hc-btn hc-btn-secondary"
+                onClick={() => setShowPhotoModal(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

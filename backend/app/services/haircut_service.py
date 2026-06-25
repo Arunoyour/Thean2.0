@@ -151,6 +151,9 @@ async def vendor_register(
     shop_image_path: str | None = None,
     licence_path: str | None = None,
     owner_id_path: str | None = None,
+    photo_taken_at=None,
+    photo_lat: float | None = None,
+    photo_lng: float | None = None,
 ) -> dict:
     existing = await session.execute(
         select(HaircutVendorAccount).where(HaircutVendorAccount.phone == payload.phone.strip())
@@ -178,6 +181,9 @@ async def vendor_register(
         lng=payload.lng,
         shop_image_url=shop_image_path,
         shop_status="pending",
+        photo_taken_at=photo_taken_at,
+        photo_lat=photo_lat,
+        photo_lng=photo_lng,
     )
     session.add(shop)
     await session.commit()
@@ -1107,6 +1113,9 @@ def _shop_to_detail(shop: BarberShop, vendor: HaircutVendorAccount | None) -> Ad
         shop_status=shop.shop_status,
         is_active=shop.is_active,
         shop_image_url=shop.shop_image_url,
+        photo_taken_at=shop.photo_taken_at,
+        photo_lat=float(shop.photo_lat) if shop.photo_lat is not None else None,
+        photo_lng=float(shop.photo_lng) if shop.photo_lng is not None else None,
         created_at=shop.created_at,
         updated_at=shop.updated_at,
         owner_name=vendor.full_name if vendor else None,

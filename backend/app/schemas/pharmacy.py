@@ -5,6 +5,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 
 class PharmacyRegisterRequest(BaseModel):
+    """Constructed from multipart form fields in the API layer."""
     owner_name: str = Field(min_length=2, max_length=120)
     phone_number: str = Field(min_length=8, max_length=15)
     email: EmailStr | None = None
@@ -42,6 +43,12 @@ class PharmacyProfileResponse(BaseModel):
     platform_fee: str
     is_listed: bool
     is_online: bool
+    store_image_url: str | None = None
+    drug_licence_url: str | None = None
+    owner_id_url: str | None = None
+    photo_taken_at: datetime | None = None
+    photo_lat: float | None = None
+    photo_lng: float | None = None
 
 
 class PharmacyAccountResponse(BaseModel):
@@ -52,6 +59,10 @@ class PharmacyAccountResponse(BaseModel):
     is_active: bool
     activation_status: str
     profile: PharmacyProfileResponse
+
+
+class PharmacyVendorRejectRequest(BaseModel):
+    reason: str | None = None
 
 
 class PharmacyOtpResponse(BaseModel):

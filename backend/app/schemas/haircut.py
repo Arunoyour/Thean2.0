@@ -98,6 +98,9 @@ class AdminShopDetail(BaseModel):
     shop_status: str
     is_active: bool
     shop_image_url: str | None
+    photo_taken_at: datetime | None = None
+    photo_lat: float | None = None
+    photo_lng: float | None = None
     created_at: datetime
     updated_at: datetime
     # joined from vendor account

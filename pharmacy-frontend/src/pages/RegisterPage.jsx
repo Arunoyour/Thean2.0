@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Building2, CheckCircle2, LocateFixed, ShieldAlert } from "lucide-react";
 
@@ -26,17 +26,12 @@ function clearDraft() {
   try { window.localStorage.removeItem(REGISTER_DRAFT_KEY); } catch { /* ignore */ }
 }
 
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error("Could not read the selected file."));
-    reader.readAsDataURL(file);
-  });
-}
 
 export function RegisterPage() {
-  const [hasDraft] = useState(() => loadDraft() !== null);
+  const [hasDraft] = useState(() => {
+    const draft = loadDraft();
+    return draft !== null && Object.values(draft).some(v => typeof v === "string" && v.trim() !== "");
+  });
   const [form, setForm] = useState(() => {
     const draft = loadDraft();
     return draft ?? {
@@ -52,7 +47,11 @@ export function RegisterPage() {
     };
   });
   const [location, setLocation] = useState(null);
-  const [licenseFile, setLicenseFile] = useState(null);
+  const [storeImageFile, setStoreImageFile] = useState(null);
+  const [drugLicenceFile, setDrugLicenceFile] = useState(null);
+  const [ownerIdFile, setOwnerIdFile] = useState(null);
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const storeImageInputRef = useRef(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -143,23 +142,27 @@ export function RegisterPage() {
     }
     setShowAccuracyOverride(false);
 
+    if (!storeImageFile) { setError("Please upload a store photo."); return; }
+    if (!drugLicenceFile) { setError("Please upload the drug licence document."); return; }
+    if (!ownerIdFile) { setError("Please upload owner ID / Aadhaar."); return; }
+
     setIsSubmitting(true);
     try {
-      let licenseDocumentDataUrl = null;
-      if (licenseFile) {
-        licenseDocumentDataUrl = await readFileAsDataUrl(licenseFile);
-      }
-
-      const response = await registerPharmacy({
-        ...form,
-        email: form.email || null,
-        city: form.city || null,
-        state: form.state || null,
-        pincode: form.pincode || null,
-        latitude: location.latitude,
-        longitude: location.longitude,
-        ...(licenseDocumentDataUrl ? { license_document_data_url: licenseDocumentDataUrl } : {}),
-      });
+      const response = await registerPharmacy(
+        {
+          ...form,
+          phone_number: `+91${form.phone_number}`,
+          email: form.email || null,
+          city: form.city || null,
+          state: form.state || null,
+          pincode: form.pincode || null,
+          latitude: location.latitude,
+          longitude: location.longitude,
+        },
+        storeImageFile,
+        drugLicenceFile,
+        ownerIdFile,
+      );
       clearDraft();
       setMessage(`${response.profile.store_name} registered. Status: pending super admin approval.`);
     } catch (requestError) {
@@ -240,16 +243,20 @@ export function RegisterPage() {
         </label>
         <label>
           Phone number
-          <input
-            name="phone_number"
-            value={form.phone_number}
-            onChange={updateField}
-            onBlur={touch(setTouched, "phone_number")}
-            className={inputClass(touched.phone_number, errors.phone_number)}
-            inputMode="tel"
-            placeholder="e.g. 9876543210"
-            required
-          />
+          <div className="phone-input-wrapper">
+            <span className="phone-prefix">🇮🇳 +91</span>
+            <input
+              name="phone_number"
+              value={form.phone_number}
+              onChange={updateField}
+              onBlur={touch(setTouched, "phone_number")}
+              className={inputClass(touched.phone_number, errors.phone_number)}
+              inputMode="tel"
+              maxLength={10}
+              placeholder="9876543210"
+              required
+            />
+          </div>
           {errors.phone_number && <span className="field-error-msg">{errors.phone_number}</span>}
         </label>
         <label>
@@ -289,15 +296,36 @@ export function RegisterPage() {
           {errors.license_number && <span className="field-error-msg">{errors.license_number}</span>}
         </label>
         <label>
-          License document <span style={{ fontWeight: 400, fontSize: "0.8em", color: "#6b7280" }}>(optional — PDF, JPG, or PNG)</span>
+          Store photo <span style={{ fontWeight: 400, fontSize: "0.8em", color: "#6b7280" }}>(JPG or PNG — required)</span>
+          <button type="button" className="outline-button" style={{ marginTop: 6, fontSize: "0.85rem" }}
+            onClick={() => setShowPhotoModal(true)}>
+            {storeImageFile ? `📷 Change photo (${storeImageFile.name})` : "📷 Select store photo"}
+          </button>
+          <input
+            ref={storeImageInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            style={{ display: "none" }}
+            onChange={(e) => setStoreImageFile(e.target.files?.[0] ?? null)}
+          />
+        </label>
+        <label>
+          Drug licence <span style={{ fontWeight: 400, fontSize: "0.8em", color: "#6b7280" }}>(PDF, JPG, or PNG — required)</span>
           <input
             type="file"
             accept=".pdf,image/jpeg,image/png,image/webp"
-            onChange={(e) => setLicenseFile(e.target.files?.[0] ?? null)}
+            onChange={(e) => setDrugLicenceFile(e.target.files?.[0] ?? null)}
           />
-          {licenseFile && (
-            <span style={{ fontSize: "0.8em", color: "#6b7280" }}>Selected: {licenseFile.name}</span>
-          )}
+          {drugLicenceFile && <span style={{ fontSize: "0.8em", color: "#6b7280" }}>Selected: {drugLicenceFile.name}</span>}
+        </label>
+        <label>
+          Owner ID / Aadhaar <span style={{ fontWeight: 400, fontSize: "0.8em", color: "#6b7280" }}>(PDF, JPG, or PNG — required)</span>
+          <input
+            type="file"
+            accept=".pdf,image/jpeg,image/png,image/webp"
+            onChange={(e) => setOwnerIdFile(e.target.files?.[0] ?? null)}
+          />
+          {ownerIdFile && <span style={{ fontSize: "0.8em", color: "#6b7280" }}>Selected: {ownerIdFile.name}</span>}
         </label>
         <label>
           Address
@@ -400,6 +428,40 @@ export function RegisterPage() {
           Already registered? <Link to="/login">Login with OTP</Link>
         </p>
       </form>
+      {showPhotoModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: "24px 24px 20px", maxWidth: 420, width: "100%", boxShadow: "0 8px 40px rgba(0,0,0,0.18)" }}>
+            <h2 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#13201e", marginBottom: 8 }}>📷 Store Photo Guidelines</h2>
+            <p style={{ fontSize: "0.85rem", color: "#52625f", marginBottom: 14 }}>
+              Your photo will be used to verify the location of your pharmacy. Please follow these guidelines:
+            </p>
+            <ul style={{ paddingLeft: 18, fontSize: "0.85rem", color: "#13201e", lineHeight: 1.7, marginBottom: 18 }}>
+              <li>Stand <strong>inside or directly in front</strong> of your pharmacy</li>
+              <li>The <strong>shop name board</strong> must be clearly visible</li>
+              <li>Your <strong>face</strong> should be visible — no masks or hats</li>
+              <li>Take the photo in <strong>good lighting</strong> (daytime preferred)</li>
+              <li>Make sure your phone's <strong>location is turned on</strong> before taking the photo</li>
+            </ul>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                type="button"
+                className="button"
+                style={{ flex: 1 }}
+                onClick={() => { setShowPhotoModal(false); storeImageInputRef.current?.click(); }}
+              >
+                I understand — select photo
+              </button>
+              <button
+                type="button"
+                className="outline-button"
+                onClick={() => setShowPhotoModal(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
