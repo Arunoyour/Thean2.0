@@ -96,6 +96,12 @@ class PharmacyProfile(Base):
         nullable=False,
         server_default="0",
     )
+    store_image_url: Mapped[str | None] = mapped_column(Text)
+    drug_licence_url: Mapped[str | None] = mapped_column(Text)
+    owner_id_url: Mapped[str | None] = mapped_column(Text)
+    photo_taken_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    photo_lat: Mapped[float | None] = mapped_column()
+    photo_lng: Mapped[float | None] = mapped_column()
     is_listed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     is_online: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     manual_override_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

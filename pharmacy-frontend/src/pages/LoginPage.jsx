@@ -14,6 +14,7 @@ export function LoginPage() {
     return flag === "1";
   });
   const [phoneNumber, setPhoneNumber] = useState("");
+  const fullPhone = `+91${phoneNumber}`;
   const [otp, setOtp] = useState("");
   const [phase, setPhase] = useState("request");
   const [message, setMessage] = useState("");
@@ -30,7 +31,7 @@ export function LoginPage() {
     if (validatePhone(phoneNumber)) return;
     setError(""); setMessage(""); setIsSubmitting(true);
     try {
-      const response = await requestPharmacyOtp(phoneNumber);
+      const response = await requestPharmacyOtp(fullPhone);
       const suffix = response.development_otp ? ` Development OTP: ${response.development_otp}` : "";
       // Clear state before entering verify phase so nothing stale persists
       setOtp("");
@@ -50,7 +51,7 @@ export function LoginPage() {
     if (validateOtp(otp)) return;
     setError(""); setMessage(""); setIsSubmitting(true);
     try {
-      await verifyPharmacyOtp(phoneNumber, otp);
+      await verifyPharmacyOtp(fullPhone, otp);
       navigate("/home");
     } catch (requestError) {
       setError(requestError.message);
@@ -75,16 +76,20 @@ export function LoginPage() {
         )}
         <label>
           Phone number
-          <input
-            value={phoneNumber}
-            onChange={(event) => setPhoneNumber(event.target.value)}
-            onBlur={touch(setTouched, "phone")}
-            className={inputClass(touched.phone, phoneErr)}
-            inputMode="tel"
-            placeholder="e.g. 9876543210"
-            disabled={phase === "verify"}
-            required
-          />
+          <div className="phone-input-wrapper">
+            <span className="phone-prefix">🇮🇳 +91</span>
+            <input
+              value={phoneNumber}
+              onChange={(event) => setPhoneNumber(event.target.value)}
+              onBlur={touch(setTouched, "phone")}
+              className={inputClass(touched.phone, phoneErr)}
+              inputMode="tel"
+              maxLength={10}
+              placeholder="9876543210"
+              disabled={phase === "verify"}
+              required
+            />
+          </div>
           {phoneErr && <span className="field-error-msg">{phoneErr}</span>}
         </label>
 

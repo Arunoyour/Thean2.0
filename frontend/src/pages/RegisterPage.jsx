@@ -36,7 +36,7 @@ export function RegisterPage() {
     try {
       const user = await registerCustomer({
         full_name: form.full_name,
-        phone_number: form.phone_number,
+        phone_number: `+91${form.phone_number}`,
         email: form.email || null,
       });
       setRegisteredPhone(user.phone_number);
@@ -115,17 +115,21 @@ export function RegisterPage() {
         </label>
         <label>
           Phone number
-          <input
-            name="phone_number"
-            value={form.phone_number}
-            onChange={updateField}
-            onBlur={touch(setTouched, "phone_number")}
-            className={inputClass(touched.phone_number, errors.phone_number)}
-            inputMode="tel"
-            maxLength={15}
-            autoComplete="tel"
-            required
-          />
+          <div className="phone-input-wrapper">
+            <span className="phone-prefix">🇮🇳 +91</span>
+            <input
+              name="phone_number"
+              value={form.phone_number}
+              onChange={updateField}
+              onBlur={touch(setTouched, "phone_number")}
+              className={inputClass(touched.phone_number, errors.phone_number)}
+              inputMode="tel"
+              maxLength={10}
+              autoComplete="tel"
+              placeholder="9876543210"
+              required
+            />
+          </div>
           {errors.phone_number && <span className="field-error-msg">{errors.phone_number}</span>}
         </label>
         <label>

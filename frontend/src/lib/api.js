@@ -2,6 +2,21 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000
 
 const DEFAULT_TIMEOUT_MS = 10_000; // 10 seconds for all requests
 
+function detailToMessage(detail, fallback = "Request failed. Please try again.") {
+  if (!detail) return fallback;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map(e => {
+        const field = Array.isArray(e.loc) ? e.loc.filter(s => s !== "body").join(" → ") : "";
+        const msg = e.msg || String(e);
+        return field ? `${field}: ${msg}` : msg;
+      })
+      .join(" · ");
+  }
+  return fallback;
+}
+
 // ── Token helpers ──────────────────────────────────────────────────────────
 
 function getToken() {
@@ -54,7 +69,7 @@ async function fetchOnce(url, options, signal) {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const err = new Error(payload.detail || "Request failed. Please try again.");
+    const err = new Error(detailToMessage(payload.detail));
     err.status = response.status;
     throw err;
   }
@@ -269,7 +284,7 @@ export async function createPharmacyOrderWithMedia(data, prescriptionFiles = [],
       signal: controller.signal,
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.detail || "Request failed. Please try again.");
+    if (!response.ok) throw new Error(detailToMessage(payload.detail));
     return payload;
   } catch (fetchError) {
     if (fetchError.name === "AbortError") {
@@ -463,7 +478,7 @@ export async function raiseCustomerDispute(formData) {
       throw new Error("Session expired.");
     }
     const payload = await resp.json().catch(() => ({}));
-    if (!resp.ok) throw new Error(payload.detail || "Failed to raise dispute.");
+    if (!resp.ok) throw new Error(detailToMessage(payload.detail, "Failed to raise dispute."));
     return payload;
   } finally {
     clearTimeout(timerId);
@@ -489,7 +504,7 @@ export async function reopenCustomerDispute(disputeId, formData) {
       throw new Error("Session expired.");
     }
     const payload = await resp.json().catch(() => ({}));
-    if (!resp.ok) throw new Error(payload.detail || "Failed to reopen dispute.");
+    if (!resp.ok) throw new Error(detailToMessage(payload.detail, "Failed to reopen dispute."));
     return payload;
   } finally {
     clearTimeout(timerId);
@@ -507,7 +522,7 @@ async function _dUpload(path, formData) {
   });
   if (resp.status === 401) { window.localStorage.removeItem("thean_access_token"); window.location.href = "/login"; throw new Error("Session expired."); }
   const payload = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error(payload.detail || "Request failed.");
+  if (!resp.ok) throw new Error(detailToMessage(payload.detail));
   return payload;
 }
 export function getOrderDisputeUnreadCount() {

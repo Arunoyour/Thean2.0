@@ -12,6 +12,7 @@ export function LoginPage() {
     return flag === "1";
   });
   const [phone, setPhone] = useState("");
+  const fullPhone = `+91${phone}`;
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState(1); // 1=phone, 2=otp
   const [isLoading, setIsLoading] = useState(false);
@@ -29,7 +30,7 @@ export function LoginPage() {
     if (validatePhone(phone)) return;
     setError(""); setOtpHint(""); setIsLoading(true);
     try {
-      const resp = await requestDeliveryOtp(phone);
+      const resp = await requestDeliveryOtp(fullPhone);
       // Dev OTP hint is only shown in local development builds
       if (import.meta.env.DEV && resp.otp) setOtpHint(`Dev OTP: ${resp.otp}`);
       setStep(2);
@@ -43,7 +44,7 @@ export function LoginPage() {
     if (validateOtp(otp)) return;
     setError(""); setIsLoading(true);
     try {
-      await verifyDeliveryOtp(phone, otp);
+      await verifyDeliveryOtp(fullPhone, otp);
       navigate("/home");
     } catch (err) { setError(err.message); } finally { setIsLoading(false); }
   }
@@ -70,16 +71,20 @@ export function LoginPage() {
             <h2>Login to your account</h2>
             <label>
               Phone Number
-              <input
-                type="tel"
-                required
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                onBlur={touch(setTouched, "phone")}
-                className={inputClass(touched.phone, phoneErr)}
-                placeholder="+91 98765 43210"
-                autoFocus
-              />
+              <div className="phone-input-wrapper">
+                <span className="phone-prefix">🇮🇳 +91</span>
+                <input
+                  type="tel"
+                  required
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  onBlur={touch(setTouched, "phone")}
+                  className={inputClass(touched.phone, phoneErr)}
+                  placeholder="9876543210"
+                  maxLength={10}
+                  autoFocus
+                />
+              </div>
               {phoneErr && <span className="field-error-msg">{phoneErr}</span>}
             </label>
             <button className="dl-btn" type="submit" disabled={isLoading}>
@@ -89,7 +94,7 @@ export function LoginPage() {
         ) : (
           <form onSubmit={verifyOtp} className="dl-form">
             <h2>Enter OTP</h2>
-            <p className="dl-hint">Sent to <strong>{phone}</strong>. <button type="button" className="dl-text-btn" onClick={() => { setStep(1); setTouched({}); setOtpHint(""); }}>Change</button></p>
+            <p className="dl-hint">Sent to <strong>+91 {phone}</strong>. <button type="button" className="dl-text-btn" onClick={() => { setStep(1); setTouched({}); setOtpHint(""); }}>Change</button></p>
             <label>
               6-digit OTP
               <input

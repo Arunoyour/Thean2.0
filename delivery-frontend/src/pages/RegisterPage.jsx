@@ -189,6 +189,7 @@ export function RegisterPage() {
     try {
       await registerDelivery({
         ...form,
+        phone_number: `+91${form.phone_number}`,
         profile_photo: photo,
         rc_book_front: rcFront,
         rc_book_back:  rcBack,
@@ -257,11 +258,15 @@ export function RegisterPage() {
             </label>
 
             <label>Phone Number *
-              <input required type="tel" value={form.phone_number}
-                onChange={(e) => setForm((f) => ({ ...f, phone_number: e.target.value }))}
-                onBlur={touch(setTouched, "phone_number")}
-                className={inputClass(touched.phone_number, fieldErrors.phone_number)}
-                placeholder="+91 98765 43210" />
+              <div className="phone-input-wrapper">
+                <span className="phone-prefix">🇮🇳 +91</span>
+                <input required type="tel" value={form.phone_number}
+                  onChange={(e) => setForm((f) => ({ ...f, phone_number: e.target.value }))}
+                  onBlur={touch(setTouched, "phone_number")}
+                  className={inputClass(touched.phone_number, fieldErrors.phone_number)}
+                  placeholder="9876543210"
+                  maxLength={10} />
+              </div>
               {fieldErrors.phone_number && <span className="field-error-msg">{fieldErrors.phone_number}</span>}
             </label>
 
