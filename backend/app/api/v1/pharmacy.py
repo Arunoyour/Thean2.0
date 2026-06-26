@@ -21,6 +21,7 @@ from app.schemas.pharmacy import (
     PharmacyProductCreateRequest,
     PharmacyProductCommentRequest,
     PharmacyProductResponse,
+    PharmacyProductReviewResponse,
     PharmacyProductUpdateRequest,
     PharmacyRegisterRequest,
     NearbyPharmacyResponse,
@@ -54,6 +55,7 @@ from app.services.pharmacy_service import (
     delete_holiday,
     get_pharmacy_status,
     get_schedule_status,
+    get_customer_product,
     list_customer_visible_products,
     list_holidays,
     list_nearby_pharmacies,
@@ -93,6 +95,7 @@ async def register(
     email:          str | None   = Form(None),
     store_name:     str          = Form(...),
     license_number: str          = Form(...),
+    gstin:          str | None   = Form(None),
     address_line_1: str          = Form(...),
     city:           str | None   = Form(None),
     state:          str | None   = Form(None),
@@ -124,7 +127,7 @@ async def register(
 
     payload = PharmacyRegisterRequest(
         owner_name=owner_name, phone_number=phone_number, email=email,
-        store_name=store_name, license_number=license_number,
+        store_name=store_name, license_number=license_number, gstin=gstin,
         address_line_1=address_line_1, city=city, state=state, pincode=pincode,
         latitude=latitude, longitude=longitude,
     )
@@ -285,7 +288,7 @@ async def activate(
     return await activate_pharmacy(session, account_id)
 
 
-@router.get("/products", response_model=list[PharmacyProductResponse])
+@router.get("/products", response_model=list[PharmacyProductReviewResponse])
 async def products(
     account_profile: tuple[PharmacyAccount, PharmacyProfile] = Depends(get_current_pharmacy),
     session: AsyncSession = Depends(get_pharmacy_session),
@@ -409,6 +412,14 @@ async def pharmacy_order_media(
 @router.get("/public/products", response_model=list[PharmacyProductResponse])
 async def public_products(session: AsyncSession = Depends(get_pharmacy_session)):
     return await list_customer_visible_products(session)
+
+
+@router.get("/public/products/{product_id}", response_model=PharmacyProductResponse)
+async def public_product_detail(
+    product_id: uuid.UUID,
+    session: AsyncSession = Depends(get_pharmacy_session),
+):
+    return await get_customer_product(session, product_id)
 
 
 @router.get("/public/nearby", response_model=list[NearbyPharmacyResponse])
@@ -755,6 +766,160 @@ async def pharmacy_close_order_dispute(
     result = await dsvc.user_close_dispute(main_session, dispute_id, account_profile[0].account_id)
     await main_session.commit()
     return result
+
+
+@router.get("/me/stats")
+async def pharmacy_stats(
+    account_profile=Depends(get_current_pharmacy),
+    session: AsyncSession = Depends(get_pharmacy_session),
+):
+    """Order counts by status + last-12-months revenue trend for the pharmacy profile page."""
+    from sqlalchemy import func as sqlfunc, extract
+    from app.models.pharmacy_merchant import CustomerPharmacyOrder
+    from datetime import datetime, timezone, timedelta
+
+    account_id = account_profile[0].account_id
+
+    # Order counts grouped by status
+    status_rows = await session.execute(
+        select(
+            CustomerPharmacyOrder.status,
+            sqlfunc.count().label("cnt"),
+        )
+        .where(CustomerPharmacyOrder.account_id == account_id)
+        .group_by(CustomerPharmacyOrder.status)
+    )
+    status_counts = {row.status: row.cnt for row in status_rows}
+
+    # Monthly revenue for last 12 months (from ledger)
+    from app.models.pharmacy_merchant import PharmacyOrderRevenueSettlementLedger
+    twelve_months_ago = datetime.now(timezone.utc).replace(day=1) - timedelta(days=365)
+    rev_rows = await session.execute(
+        select(
+            extract("year", PharmacyOrderRevenueSettlementLedger.created_at).label("yr"),
+            extract("month", PharmacyOrderRevenueSettlementLedger.created_at).label("mo"),
+            sqlfunc.sum(PharmacyOrderRevenueSettlementLedger.pharmacy_payable_amount).label("total"),
+        )
+        .where(
+            PharmacyOrderRevenueSettlementLedger.account_id == account_id,
+            PharmacyOrderRevenueSettlementLedger.created_at >= twelve_months_ago,
+        )
+        .group_by("yr", "mo")
+        .order_by("yr", "mo")
+    )
+    monthly_revenue = [
+        {"year": int(row.yr), "month": int(row.mo), "total": float(row.total)}
+        for row in rev_rows
+    ]
+
+    # Monthly order count for last 12 months
+    order_rows = await session.execute(
+        select(
+            extract("year", CustomerPharmacyOrder.created_at).label("yr"),
+            extract("month", CustomerPharmacyOrder.created_at).label("mo"),
+            sqlfunc.count().label("cnt"),
+        )
+        .where(
+            CustomerPharmacyOrder.account_id == account_id,
+            CustomerPharmacyOrder.created_at >= twelve_months_ago,
+        )
+        .group_by("yr", "mo")
+        .order_by("yr", "mo")
+    )
+    monthly_orders = [
+        {"year": int(row.yr), "month": int(row.mo), "count": int(row.cnt)}
+        for row in order_rows
+    ]
+
+    return {
+        "status_counts": status_counts,
+        "monthly_revenue": monthly_revenue,
+        "monthly_orders": monthly_orders,
+        "total_orders": sum(status_counts.values()),
+        "delivered_orders": status_counts.get("DELIVERED", 0) + status_counts.get("COMPLETED", 0),
+    }
+
+
+@router.patch("/me/profile")
+async def update_pharmacy_profile(
+    owner_name: str = Form(None),
+    email: str = Form(None),
+    store_name: str = Form(None),
+    license_number: str = Form(None),
+    gstin: str = Form(None),
+    address_line_1: str = Form(None),
+    city: str = Form(None),
+    state: str = Form(None),
+    pincode: str = Form(None),
+    latitude: str = Form(None),
+    longitude: str = Form(None),
+    store_image: UploadFile = File(None),
+    owner_photo: UploadFile = File(None),
+    drug_licence: UploadFile = File(None),
+    owner_id: UploadFile = File(None),
+    account_profile=Depends(get_current_pharmacy),
+    session: AsyncSession = Depends(get_pharmacy_session),
+):
+    """Update editable pharmacy profile and account fields."""
+    account, profile = account_profile
+    settings = _get_settings()
+
+    # Account-level fields
+    if owner_name is not None and owner_name.strip():
+        account.owner_name = owner_name.strip()
+    if email is not None:
+        account.email = email.strip() or None
+
+    # Profile text fields
+    if store_name is not None and store_name.strip():
+        profile.store_name = store_name.strip()
+    if license_number is not None and license_number.strip():
+        profile.license_number = license_number.strip().upper()
+    if gstin is not None:
+        profile.gstin = gstin.strip().upper() if gstin.strip() else None
+    if address_line_1 is not None and address_line_1.strip():
+        profile.address_line_1 = address_line_1.strip()
+    if city is not None:
+        profile.city = city.strip() or None
+    if state is not None:
+        profile.state = state.strip() or None
+    if pincode is not None:
+        profile.pincode = pincode.strip() or None
+    if latitude is not None:
+        try:
+            profile.latitude = float(latitude)
+        except ValueError:
+            pass
+    if longitude is not None:
+        try:
+            profile.longitude = float(longitude)
+        except ValueError:
+            pass
+
+    # File uploads — shared save helper
+    async def _save(upload: UploadFile, subfolder: str, prefix: str) -> str:
+        ext = Path(upload.filename).suffix.lower() or ".jpg"
+        safe_name = f"{prefix}_{account.account_id}{ext}"
+        dest = Path(settings.media_root) / "pharmacy" / str(account.account_id) / safe_name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        async with aiofiles.open(dest, "wb") as f:
+            await f.write(await upload.read())
+        return f"storage/pharmacy/{account.account_id}/{safe_name}"
+
+    if store_image and store_image.filename:
+        profile.store_image_url = await _save(store_image, "pharmacy", "store")
+    if owner_photo and owner_photo.filename:
+        profile.owner_photo_url = await _save(owner_photo, "pharmacy", "owner_photo")
+    if drug_licence and drug_licence.filename:
+        profile.drug_licence_url = await _save(drug_licence, "pharmacy", "drug_licence")
+    if owner_id and owner_id.filename:
+        profile.owner_id_url = await _save(owner_id, "pharmacy", "owner_id")
+
+    await session.commit()
+    await session.refresh(account)
+    await session.refresh(profile)
+    from app.services.pharmacy_service import serialize_pharmacy
+    return serialize_pharmacy(account, profile)
 
 
 @router.get("/attention")

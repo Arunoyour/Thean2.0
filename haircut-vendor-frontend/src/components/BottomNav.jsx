@@ -1,16 +1,20 @@
 import { NavLink } from "react-router-dom";
+import { getShopActive } from "../lib/api.js";
 
 const NAV = [
-  { to: "/home", icon: "📅", label: "Today" },
-  { to: "/services", icon: "✂️", label: "Services" },
-  { to: "/reviews", icon: "★", label: "Reviews" },
-  { to: "/settings", icon: "⚙️", label: "Settings" },
+  { to: "/home", icon: "📅", label: "Today", requiresActive: false },
+  { to: "/services", icon: "✂️", label: "Services", requiresActive: true },
+  { to: "/reviews", icon: "★", label: "Reviews", requiresActive: true },
+  { to: "/settings", icon: "⚙️", label: "Settings", requiresActive: true },
 ];
 
 export function BottomNav() {
+  const isActive = getShopActive();
+  const items = NAV.filter(n => !n.requiresActive || isActive);
+
   return (
     <nav className="hc-bottom-nav">
-      {NAV.map(n => (
+      {items.map(n => (
         <NavLink
           key={n.to}
           to={n.to}

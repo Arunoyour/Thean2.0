@@ -18,6 +18,7 @@ import { MedicineOrderPage } from "./pages/MedicineOrderPage.jsx";
 import { NotFoundPage } from "./pages/NotFoundPage.jsx";
 import { PharmacyOrdersPage } from "./pages/PharmacyOrdersPage.jsx";
 import { PharmacyProductsPage } from "./pages/PharmacyProductsPage.jsx";
+import { PharmacyProductDetailPage } from "./pages/PharmacyProductDetailPage.jsx";
 import { RegisterPage } from "./pages/RegisterPage.jsx";
 import { HaircutDiscoveryPage } from "./pages/HaircutDiscoveryPage.jsx";
 import { HaircutShopDetailPage } from "./pages/HaircutShopDetailPage.jsx";
@@ -42,6 +43,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <Route path="/home/address/new" element={<RequireAuth><AddressPage /></RequireAuth>} />
           <Route path="/home/address/:addressId/edit" element={<RequireAuth><AddressPage /></RequireAuth>} />
           <Route path="/home/pharmacy" element={<RequireAuth><PharmacyProductsPage /></RequireAuth>} />
+          <Route path="/home/pharmacy/products/:productId" element={<RequireAuth><PharmacyProductDetailPage /></RequireAuth>} />
           <Route path="/home/pharmacy/order" element={<RequireAuth><MedicineOrderPage /></RequireAuth>} />
           <Route path="/home/pharmacy/orders" element={<RequireAuth><PharmacyOrdersPage /></RequireAuth>} />
 

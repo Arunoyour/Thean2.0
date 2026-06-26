@@ -16,6 +16,8 @@ import { AttentionPage } from "./pages/AttentionPage.jsx";
 import { DisputeListPage } from "./pages/DisputeListPage.jsx";
 import { RaiseDisputePage } from "./pages/RaiseDisputePage.jsx";
 import { DisputeDetailPage } from "./pages/DisputeDetailPage.jsx";
+import { SchedulePage } from "./pages/SchedulePage.jsx";
+import { AboutPage } from "./pages/AboutPage.jsx";
 import "./styles/global.css";
 import { getVapidPublicKey, savePushSubscription } from "./lib/api.js";
 
@@ -112,6 +114,8 @@ function App() {
         <Route path="/disputes" element={<RequireAuth><DisputeListPage /></RequireAuth>} />
         <Route path="/disputes/raise" element={<RequireAuth><RaiseDisputePage /></RequireAuth>} />
         <Route path="/disputes/:disputeId" element={<RequireAuth><DisputeDetailPage /></RequireAuth>} />
+        <Route path="/schedule" element={<RequireAuth><SchedulePage /></RequireAuth>} />
+        <Route path="/about" element={<RequireAuth><AboutPage /></RequireAuth>} />
       </Routes>
     </ErrorBoundary>
   );

@@ -114,9 +114,8 @@ export function LoginPage() {
 
         {phase === "verify" && error && (
           <button
-            className="text-button"
+            className="outline-button"
             type="button"
-            style={{ fontSize: "0.875rem" }}
             disabled={isSubmitting}
             onClick={async () => {
               setError(""); setMessage(""); setOtp(""); setTouched({});
@@ -139,7 +138,7 @@ export function LoginPage() {
 
         {phase === "verify" && (
           <button
-            className="text-button"
+            className="outline-button"
             type="button"
             onClick={() => {
               setPhase("request");

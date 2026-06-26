@@ -177,6 +177,10 @@ export function listPharmacyProducts() {
   return request("/pharmacy/public/products");
 }
 
+export function getPharmacyProduct(productId) {
+  return request(`/pharmacy/public/products/${productId}`);
+}
+
 export function listCustomerAddresses() {
   const token = getToken();
   if (!token) return Promise.reject(new Error("Please login to continue."));

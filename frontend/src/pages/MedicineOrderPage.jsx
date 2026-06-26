@@ -86,6 +86,112 @@ function scoreMatch(query, item) {
   return score;
 }
 
+function BillingFlowDiagram() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="billing-flow-wrap">
+      <button
+        type="button"
+        className="billing-flow-toggle"
+        onClick={() => setOpen((v) => !v)}
+      >
+        {open ? "▲ Hide" : "▼ How does billing work?"}
+      </button>
+      {open && (
+        <svg viewBox="0 0 700 420" xmlns="http://www.w3.org/2000/svg" className="billing-flow-svg" role="img" aria-label="Medicine billing flow diagram">
+          <title>Medicine billing flow</title>
+          <rect width="700" height="420" fill="#f6f8f7" rx="16"/>
+          <text x="350" y="32" textAnchor="middle" fontSize="13" fontWeight="700" fill="#13201e">How medicine billing works</text>
+
+          {/* Auto column header */}
+          <rect x="30" y="50" width="300" height="30" rx="8" fill="#1a7a5e"/>
+          <text x="180" y="70" textAnchor="middle" fontSize="11" fontWeight="700" fill="#ffffff">⚡ Auto-Approval</text>
+
+          {/* Auto steps */}
+          <rect x="30" y="96" width="300" height="48" rx="8" fill="#ffffff" stroke="#dce6e3" strokeWidth="1"/>
+          <circle cx="60" cy="120" r="12" fill="#1a7a5e"/>
+          <text x="60" y="124" textAnchor="middle" fontSize="10" fontWeight="700" fill="#ffffff">1</text>
+          <text x="83" y="116" fontSize="11" fontWeight="600" fill="#13201e">You place the order</text>
+          <text x="83" y="131" fontSize="10" fill="#52625f">Prescription / text / voice</text>
+
+          <line x1="180" y1="144" x2="180" y2="162" stroke="#1a7a5e" strokeWidth="1.5" strokeDasharray="3,2"/>
+          <polygon points="175,160 185,160 180,167" fill="#1a7a5e"/>
+
+          <rect x="30" y="168" width="300" height="48" rx="8" fill="#ffffff" stroke="#dce6e3" strokeWidth="1"/>
+          <circle cx="60" cy="192" r="12" fill="#1a7a5e"/>
+          <text x="60" y="196" textAnchor="middle" fontSize="10" fontWeight="700" fill="#ffffff">2</text>
+          <text x="83" y="188" fontSize="11" fontWeight="600" fill="#13201e">Pharmacy sends estimate</text>
+          <text x="83" y="203" fontSize="10" fill="#52625f">Items + price confirmed</text>
+
+          <line x1="180" y1="216" x2="180" y2="234" stroke="#1a7a5e" strokeWidth="1.5" strokeDasharray="3,2"/>
+          <polygon points="175,232 185,232 180,239" fill="#1a7a5e"/>
+
+          <rect x="30" y="240" width="300" height="52" rx="8" fill="#ecfdf5" stroke="#1a7a5e" strokeWidth="1.5"/>
+          <circle cx="60" cy="266" r="12" fill="#1a7a5e"/>
+          <text x="60" y="270" textAnchor="middle" fontSize="10" fontWeight="700" fill="#ffffff">3</text>
+          <text x="83" y="259" fontSize="11" fontWeight="600" fill="#13201e">2-min review window</text>
+          <text x="83" y="274" fontSize="10" fill="#1a7a5e" fontWeight="600">Auto-approved if no action</text>
+          <text x="83" y="287" fontSize="10" fill="#52625f">You can cancel within 2 min</text>
+
+          <line x1="180" y1="292" x2="180" y2="310" stroke="#1a7a5e" strokeWidth="1.5" strokeDasharray="3,2"/>
+          <polygon points="175,308 185,308 180,315" fill="#1a7a5e"/>
+
+          <rect x="30" y="316" width="300" height="48" rx="8" fill="#ffffff" stroke="#dce6e3" strokeWidth="1"/>
+          <circle cx="60" cy="340" r="12" fill="#1a7a5e"/>
+          <text x="60" y="344" textAnchor="middle" fontSize="10" fontWeight="700" fill="#ffffff">4</text>
+          <text x="83" y="336" fontSize="11" fontWeight="600" fill="#13201e">Pharmacy packs &amp; delivers</text>
+          <text x="83" y="351" fontSize="10" fill="#52625f">Payment collected at door</text>
+
+          {/* Manual column header */}
+          <rect x="370" y="50" width="300" height="30" rx="8" fill="#4f46e5"/>
+          <text x="520" y="70" textAnchor="middle" fontSize="11" fontWeight="700" fill="#ffffff">🔍 Manual Review</text>
+
+          {/* Manual steps */}
+          <rect x="370" y="96" width="300" height="48" rx="8" fill="#ffffff" stroke="#dce6e3" strokeWidth="1"/>
+          <circle cx="400" cy="120" r="12" fill="#4f46e5"/>
+          <text x="400" y="124" textAnchor="middle" fontSize="10" fontWeight="700" fill="#ffffff">1</text>
+          <text x="423" y="116" fontSize="11" fontWeight="600" fill="#13201e">You place the order</text>
+          <text x="423" y="131" fontSize="10" fill="#52625f">Prescription / text / voice</text>
+
+          <line x1="520" y1="144" x2="520" y2="162" stroke="#4f46e5" strokeWidth="1.5" strokeDasharray="3,2"/>
+          <polygon points="515,160 525,160 520,167" fill="#4f46e5"/>
+
+          <rect x="370" y="168" width="300" height="48" rx="8" fill="#ffffff" stroke="#dce6e3" strokeWidth="1"/>
+          <circle cx="400" cy="192" r="12" fill="#4f46e5"/>
+          <text x="400" y="196" textAnchor="middle" fontSize="10" fontWeight="700" fill="#ffffff">2</text>
+          <text x="423" y="188" fontSize="11" fontWeight="600" fill="#13201e">Pharmacy sends estimate</text>
+          <text x="423" y="203" fontSize="10" fill="#52625f">Items + price confirmed</text>
+
+          <line x1="520" y1="216" x2="520" y2="234" stroke="#4f46e5" strokeWidth="1.5" strokeDasharray="3,2"/>
+          <polygon points="515,232 525,232 520,239" fill="#4f46e5"/>
+
+          <rect x="370" y="240" width="300" height="52" rx="8" fill="#eef2ff" stroke="#4f46e5" strokeWidth="1.5"/>
+          <circle cx="400" cy="266" r="12" fill="#4f46e5"/>
+          <text x="400" y="270" textAnchor="middle" fontSize="10" fontWeight="700" fill="#ffffff">3</text>
+          <text x="423" y="259" fontSize="11" fontWeight="600" fill="#13201e">You approve in 5 min</text>
+          <text x="423" y="274" fontSize="10" fill="#4f46e5" fontWeight="600">Tap Approve to confirm</text>
+          <text x="423" y="287" fontSize="10" fill="#52625f">Order cancels if no response</text>
+
+          <line x1="520" y1="292" x2="520" y2="310" stroke="#4f46e5" strokeWidth="1.5" strokeDasharray="3,2"/>
+          <polygon points="515,308 525,308 520,315" fill="#4f46e5"/>
+
+          <rect x="370" y="316" width="300" height="48" rx="8" fill="#ffffff" stroke="#dce6e3" strokeWidth="1"/>
+          <circle cx="400" cy="340" r="12" fill="#4f46e5"/>
+          <text x="400" y="344" textAnchor="middle" fontSize="10" fontWeight="700" fill="#ffffff">4</text>
+          <text x="423" y="336" fontSize="11" fontWeight="600" fill="#13201e">Pharmacy packs &amp; delivers</text>
+          <text x="423" y="351" fontSize="10" fill="#52625f">Payment collected at door</text>
+
+          {/* Divider */}
+          <line x1="350" y1="50" x2="350" y2="380" stroke="#dce6e3" strokeWidth="1" strokeDasharray="4,3"/>
+
+          {/* Footer */}
+          <text x="350" y="402" textAnchor="middle" fontSize="10" fill="#9ca3af">Only step 3 differs — Auto approves for you, Manual needs your tap.</text>
+        </svg>
+      )}
+    </div>
+  );
+}
+
 export function MedicineOrderPage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
@@ -105,6 +211,7 @@ export function MedicineOrderPage() {
   const [voiceBlob, setVoiceBlob] = useState(null);
   const [voiceStatus, setVoiceStatus] = useState("");
   const [submitValidationError, setSubmitValidationError] = useState("");
+  const [isProductDraft, setIsProductDraft] = useState(false);
   const [substitutionAllowed, setSubstitutionAllowed] = useState(false);
   const [partialFulfillmentAllowed, setPartialFulfillmentAllowed] = useState(false);
   const [inventoryProtection, setInventoryProtection] = useState(true);
@@ -246,6 +353,8 @@ export function MedicineOrderPage() {
         setSelectedPharmacyId(parsedDraft.locked_pharmacy.account_id);
       }
       if (draftItems.length) {
+        const allFromProduct = draftItems.every((item) => item.source === "product");
+        if (allFromProduct) setIsProductDraft(true);
         setCart((current) => [
           ...current,
           ...draftItems.map((item) => ({
@@ -1108,7 +1217,7 @@ export function MedicineOrderPage() {
           </article>
         ) : null}
 
-        <article className="medicine-panel">
+        {!isProductDraft && <article className="medicine-panel">
           <h2>Medicine substitution</h2>
           <p className="hint">If a medicine in your order is out of stock, can the pharmacy suggest an alternative?</p>
           <div className="substitution-order-choice">
@@ -1135,7 +1244,7 @@ export function MedicineOrderPage() {
               </span>
             </label>
           </div>
-        </article>
+        </article>}
 
         {cart.length > 1 ? (
           <article className="medicine-panel">
@@ -1175,6 +1284,7 @@ export function MedicineOrderPage() {
           {!isLockedOfferOrder ? (
             <>
               <h2>Billing mode</h2>
+              <BillingFlowDiagram />
               <label className="radio-row">
                 <input checked={billingMode === "auto"} onChange={() => setBillingMode("auto")} type="radio" />
                 Auto-Approval with 2-minute review window
@@ -1297,10 +1407,12 @@ export function MedicineOrderPage() {
                   <dd>{surgeConfig.multiplier}× on delivery fee</dd>
                 </div>
               )}
-              <div>
-                <dt>Substitution</dt>
-                <dd>{substitutionAllowed ? "Allowed — pharmacy may suggest alternatives" : "Not allowed — cancel if exact medicine unavailable"}</dd>
-              </div>
+              {!isProductDraft && (
+                <div>
+                  <dt>Substitution</dt>
+                  <dd>{substitutionAllowed ? "Allowed — pharmacy may suggest alternatives" : "Not allowed — cancel if exact medicine unavailable"}</dd>
+                </div>
+              )}
               {cart.length > 1 && (
                 <div>
                   <dt>Partial fulfillment</dt>

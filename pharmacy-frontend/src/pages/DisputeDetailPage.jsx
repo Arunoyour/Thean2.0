@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Mic, MicOff, Paperclip, Send, X } from "lucide-react";
 import { closePharmacyOrderDispute, getPharmacyOrderDispute, replyPharmacyOrderDispute } from "../lib/api.js";
 import { MAX_FILE_SIZE_BYTES, validateFileSize } from "../lib/validation.js";
+import { PharmacyPageShell } from "../components/PharmacyPageShell.jsx";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/v1";
 const STATUS_COLOR = { OPEN:"#3b82f6", IN_REVIEW:"#f59e0b", REOPENED:"#8b5cf6", RESOLVED:"#10b981", CLOSED:"#6b7280" };
@@ -92,12 +93,13 @@ export function DisputeDetailPage() {
     finally { setIsClosing(false); }
   }
 
-  if (isLoading) return <div className="ph-page"><p className="ph-loading">Loading…</p></div>;
-  if (!dispute) return <div className="ph-page"><p>Not found.</p></div>;
+  if (isLoading) return <PharmacyPageShell><div className="ph-page"><p className="ph-loading">Loading…</p></div></PharmacyPageShell>;
+  if (!dispute) return <PharmacyPageShell><div className="ph-page"><p>Not found.</p></div></PharmacyPageShell>;
 
   const isClosed = dispute.status === "CLOSED";
 
   return (
+    <PharmacyPageShell>
     <div className="ph-page dispute-detail-page">
       <header className="ph-inner-header">
         <button type="button" className="ph-back-btn" onClick={() => navigate(-1)}><ArrowLeft size={20} /></button>
@@ -150,5 +152,6 @@ export function DisputeDetailPage() {
         </div>
       )}
     </div>
+    </PharmacyPageShell>
   );
 }

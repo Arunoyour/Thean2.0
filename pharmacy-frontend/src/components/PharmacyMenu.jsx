@@ -1,19 +1,23 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { ClipboardList, CreditCard, Home, LogOut, Menu, MessageSquare, PackageCheck, PackagePlus, X } from "lucide-react";
+import { CalendarClock, ClipboardList, CreditCard, Home, Info, LogOut, Menu, MessageSquare, PackageCheck, PackagePlus, X } from "lucide-react";
 
-import { logoutPharmacy } from "../lib/api.js";
+import { getPharmacyActive, logoutPharmacy } from "../lib/api.js";
 
-const menuItems = [
-  { label: "Home", path: "/home", icon: Home },
-  { label: "Order Management", path: "/orders", icon: PackageCheck },
-  { label: "Add Product", path: "/products/add", icon: PackagePlus },
-  { label: "Listed Products", path: "/products", icon: ClipboardList },
-  { label: "Settlement History", path: "/settlement", icon: CreditCard },
-  { label: "My Disputes", path: "/disputes", icon: MessageSquare },
+const ALL_MENU_ITEMS = [
+  { label: "Home", path: "/home", icon: Home, requiresActive: false },
+  { label: "Schedule", path: "/schedule", icon: CalendarClock, requiresActive: true },
+  { label: "Order Management", path: "/orders", icon: PackageCheck, requiresActive: true },
+  { label: "Add Product", path: "/products/add", icon: PackagePlus, requiresActive: true },
+  { label: "Listed Products", path: "/products", icon: ClipboardList, requiresActive: true },
+  { label: "Settlement History", path: "/settlement", icon: CreditCard, requiresActive: true },
+  { label: "My Disputes", path: "/disputes", icon: MessageSquare, requiresActive: true },
+  { label: "About / Profile", path: "/about", icon: Info, requiresActive: false },
 ];
 
 export function PharmacyMenu({ isOpen, onClose, onOpen }) {
   const navigate = useNavigate();
+  const isActive = getPharmacyActive();
+  const menuItems = ALL_MENU_ITEMS.filter(item => !item.requiresActive || isActive);
 
   function logout() {
     logoutPharmacy();

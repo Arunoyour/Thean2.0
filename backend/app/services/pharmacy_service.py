@@ -144,10 +144,13 @@ def serialize_pharmacy(
         email=account.email,
         is_active=account.is_active,
         activation_status=activation_status,
+        created_at=account.created_at,
+        activated_at=account.activated_at,
         profile=PharmacyProfileResponse(
             profile_id=profile.profile_id,
             store_name=profile.store_name,
             license_number=profile.license_number,
+            gstin=profile.gstin,
             address_line_1=profile.address_line_1,
             city=profile.city,
             state=profile.state,
@@ -160,11 +163,13 @@ def serialize_pharmacy(
             is_listed=profile.is_listed,
             is_online=profile.is_online,
             store_image_url=profile.store_image_url,
+            owner_photo_url=profile.owner_photo_url,
             drug_licence_url=profile.drug_licence_url,
             owner_id_url=profile.owner_id_url,
             photo_taken_at=profile.photo_taken_at,
             photo_lat=profile.photo_lat,
             photo_lng=profile.photo_lng,
+            created_at=profile.created_at,
         ),
     )
 
@@ -206,6 +211,7 @@ async def register_pharmacy(
         account_id=account.account_id,
         store_name=payload.store_name.strip(),
         license_number=payload.license_number.strip().upper(),
+        gstin=payload.gstin.strip().upper() if payload.gstin else None,
         address_line_1=payload.address_line_1.strip(),
         city=payload.city.strip() if payload.city else None,
         state=payload.state.strip() if payload.state else None,
@@ -326,6 +332,7 @@ async def approve_pharmacy_vendor(session: AsyncSession, account_id) -> Pharmacy
     account.is_active = True
     account.activated_at = datetime.now(UTC)
     profile.is_listed = True
+    profile.is_online = False
     await session.commit()
     await session.refresh(account)
     await session.refresh(profile)
@@ -811,6 +818,17 @@ def serialize_product(
         brand=product.brand,
         category=product.category,
         unit_label=product.unit_label,
+        about=product.about,
+        ingredients=product.ingredients,
+        health_benefits=product.health_benefits,
+        other_info=product.other_info,
+        disclaimer=product.disclaimer,
+        pack_of=product.pack_of,
+        net_weight=product.net_weight,
+        calorie_count=product.calorie_count,
+        dietary_preference=product.dietary_preference,
+        country_of_origin=product.country_of_origin,
+        shelf_life=product.shelf_life,
         price=decimal_string(price),
         offer_price=decimal_string(offer_price) if offer_price is not None else None,
         customer_price=decimal_string(customer_price),
@@ -904,6 +922,17 @@ async def create_pharmacy_product(
         brand=payload.brand.strip() if payload.brand else None,
         category=payload.category.strip() if payload.category else None,
         unit_label=payload.unit_label.strip() if payload.unit_label else None,
+        about=payload.about,
+        ingredients=payload.ingredients,
+        health_benefits=payload.health_benefits,
+        other_info=payload.other_info,
+        disclaimer=payload.disclaimer,
+        pack_of=payload.pack_of,
+        net_weight=payload.net_weight,
+        calorie_count=payload.calorie_count,
+        dietary_preference=payload.dietary_preference,
+        country_of_origin=payload.country_of_origin,
+        shelf_life=payload.shelf_life,
         price=payload.price,
         offer_price=payload.offer_price,
         image_urls=image_urls,
@@ -939,13 +968,20 @@ async def list_own_products(
     session: AsyncSession,
     account: PharmacyAccount,
     profile: PharmacyProfile,
-) -> list[PharmacyProductResponse]:
+) -> list[PharmacyProductReviewResponse]:
     result = await session.execute(
         select(PharmacyProduct)
         .where(PharmacyProduct.account_id == account.account_id)
         .order_by(PharmacyProduct.created_at.desc())
     )
-    return [serialize_product(product, profile.store_name) for product in result.scalars().all()]
+    return [
+        PharmacyProductReviewResponse(
+            **serialize_product(product, profile.store_name).model_dump(),
+            **earning_breakdown(product, profile),
+            comments=[],
+        )
+        for product in result.scalars().all()
+    ]
 
 
 async def update_pharmacy_product(
@@ -974,6 +1010,17 @@ async def update_pharmacy_product(
     product.brand = payload.brand.strip() if payload.brand else None
     product.category = payload.category.strip() if payload.category else None
     product.unit_label = payload.unit_label.strip() if payload.unit_label else None
+    product.about = payload.about
+    product.ingredients = payload.ingredients
+    product.health_benefits = payload.health_benefits
+    product.other_info = payload.other_info
+    product.disclaimer = payload.disclaimer
+    product.pack_of = payload.pack_of
+    product.net_weight = payload.net_weight
+    product.calorie_count = payload.calorie_count
+    product.dietary_preference = payload.dietary_preference
+    product.country_of_origin = payload.country_of_origin
+    product.shelf_life = payload.shelf_life
     product.price = payload.price
     product.offer_price = payload.offer_price
     product.stock_quantity = payload.stock_quantity
@@ -1139,6 +1186,23 @@ async def request_product_revision(
     await session.refresh(product)
     await manager.send_pharmacy(product.account_id, {"type": "notification", **serialize_notification(notification)})
     return await serialize_product_review(session, product, profile)
+
+
+async def get_customer_product(session: AsyncSession, product_id: UUID) -> PharmacyProductResponse:
+    result = await session.execute(
+        select(PharmacyProduct, PharmacyProfile)
+        .join(PharmacyProfile, PharmacyProfile.account_id == PharmacyProduct.account_id)
+        .join(PharmacyAccount, PharmacyAccount.account_id == PharmacyProduct.account_id)
+        .where(PharmacyProduct.product_id == product_id)
+        .where(PharmacyAccount.is_active.is_(True))
+        .where(PharmacyProfile.is_listed.is_(True))
+        .where(PharmacyProduct.approval_status == "APPROVED")
+    )
+    row = result.first()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found.")
+    product, profile = row
+    return serialize_product(product, profile.store_name)
 
 
 async def list_customer_visible_products(session: AsyncSession) -> list[PharmacyProductResponse]:

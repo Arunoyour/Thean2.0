@@ -160,7 +160,6 @@ export function ProductReviewPage() {
 
   return (
     <main className="page">
-      <BackButton />
       <header className="dashboard-header">
         <div>
           <button className="text-nav-button" type="button" onClick={() => navigate("/dashboard/pharmacy")}>
@@ -261,32 +260,68 @@ export function ProductReviewPage() {
                   {selectedProduct.approval_status.replaceAll("_", " ")}
                 </span>
               </div>
+              {/* ── Pricing & earnings ── */}
               <div className="review-detail-grid">
-                <div>
-                  <p>Customer price</p>
-                  <strong>₹{selectedProduct.customer_price}</strong>
-                </div>
-                <div>
-                  <p>Commission %</p>
-                  <strong>{selectedProduct.product_commission_percent}%</strong>
-                </div>
-                <div>
-                  <p>Commission earning</p>
-                  <strong>₹{selectedProduct.platform_commission_amount}</strong>
-                </div>
-                <div>
-                  <p>Platform fee</p>
-                  <strong>₹{selectedProduct.platform_fee_amount}</strong>
-                </div>
-                <div>
-                  <p>Total platform earning</p>
-                  <strong>₹{selectedProduct.platform_earning_amount}</strong>
-                </div>
-                <div>
-                  <p>Pharmacy payable</p>
-                  <strong>₹{selectedProduct.pharmacy_payable_amount}</strong>
-                </div>
+                <div><p>Customer price</p><strong>₹{selectedProduct.customer_price}</strong></div>
+                <div><p>MRP</p><strong>₹{selectedProduct.price}</strong></div>
+                {selectedProduct.offer_price && (
+                  <div><p>Offer price</p><strong>₹{selectedProduct.offer_price}</strong></div>
+                )}
+                <div><p>Commission %</p><strong>{selectedProduct.product_commission_percent}%</strong></div>
+                <div><p>Commission earning</p><strong>₹{selectedProduct.platform_commission_amount}</strong></div>
+                <div><p>Platform fee</p><strong>₹{selectedProduct.platform_fee_amount}</strong></div>
+                <div><p>Total platform earning</p><strong>₹{selectedProduct.platform_earning_amount}</strong></div>
+                <div><p>Pharmacy payable</p><strong>₹{selectedProduct.pharmacy_payable_amount}</strong></div>
               </div>
+
+              {/* ── Product details ── */}
+              <div className="review-section-title">Product details</div>
+              <div className="review-detail-grid">
+                {selectedProduct.brand        && <div><p>Brand</p><strong>{selectedProduct.brand}</strong></div>}
+                {selectedProduct.category     && <div><p>Category</p><strong>{selectedProduct.category}</strong></div>}
+                {selectedProduct.unit_label   && <div><p>Unit label</p><strong>{selectedProduct.unit_label}</strong></div>}
+                {selectedProduct.net_weight   && <div><p>Weight / Volume</p><strong>{selectedProduct.net_weight}</strong></div>}
+                {selectedProduct.pack_of      && <div><p>Pack of</p><strong>{selectedProduct.pack_of}</strong></div>}
+                {selectedProduct.calorie_count && <div><p>Calorie count</p><strong>{selectedProduct.calorie_count}</strong></div>}
+                {selectedProduct.dietary_preference && selectedProduct.dietary_preference !== "NA" && (
+                  <div><p>Dietary preference</p><strong>{selectedProduct.dietary_preference}</strong></div>
+                )}
+                {selectedProduct.country_of_origin && <div><p>Country of origin</p><strong>{selectedProduct.country_of_origin}</strong></div>}
+                {selectedProduct.shelf_life   && <div><p>Shelf life</p><strong>{selectedProduct.shelf_life}</strong></div>}
+                <div><p>Stock</p><strong>{selectedProduct.stock_quantity}</strong></div>
+              </div>
+
+              {/* ── Long-form content ── */}
+              {selectedProduct.about && (
+                <div className="review-text-block">
+                  <p className="review-text-label">About</p>
+                  <p>{selectedProduct.about}</p>
+                </div>
+              )}
+              {selectedProduct.ingredients && (
+                <div className="review-text-block">
+                  <p className="review-text-label">Ingredients</p>
+                  <p>{selectedProduct.ingredients}</p>
+                </div>
+              )}
+              {selectedProduct.health_benefits && (
+                <div className="review-text-block">
+                  <p className="review-text-label">Health benefits</p>
+                  <p>{selectedProduct.health_benefits}</p>
+                </div>
+              )}
+              {selectedProduct.other_info && (
+                <div className="review-text-block">
+                  <p className="review-text-label">Other info</p>
+                  <p>{selectedProduct.other_info}</p>
+                </div>
+              )}
+              {selectedProduct.disclaimer && (
+                <div className="review-text-block review-text-disclaimer">
+                  <p className="review-text-label">Disclaimer</p>
+                  <p>{selectedProduct.disclaimer}</p>
+                </div>
+              )}
 
               <label>
                 Comment to merchant

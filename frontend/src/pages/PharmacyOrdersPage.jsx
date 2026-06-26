@@ -24,6 +24,7 @@ import {
   approvePriceEstimate,
   fetchCustomerMedia,
   getDeliveryTracking,
+  listCustomerDisputes,
   listCustomerPharmacyOrders,
   rejectPriceEstimate,
   reorderCustomerPharmacyOrder,
@@ -399,6 +400,7 @@ function OrderAttachmentPreview({ order }) {
 
 export function PharmacyOrdersPage() {
   const [orders, setOrders] = useState([]);
+  const [disputedOrderIds, setDisputedOrderIds] = useState(new Set());
   const [expandedOrderId, setExpandedOrderId] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -438,6 +440,12 @@ export function PharmacyOrdersPage() {
 
   useEffect(() => {
     loadOrders();
+    listCustomerDisputes()
+      .then((disputes) => {
+        const ids = new Set(disputes.map((d) => d.source_order_id).filter(Boolean));
+        setDisputedOrderIds(ids);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -659,9 +667,13 @@ export function PharmacyOrdersPage() {
             minute: "2-digit",
           });
           const canReorder = order.status === "COMPLETED";
-          const sampleMrp = Number(order.final_amount || order.estimated_amount || 0);
-          const sampleDiscount = Math.round(sampleMrp * 0.08);
-          const samplePayable = Math.max(sampleMrp - sampleDiscount, 0);
+          const isCancelled = order.status === "CANCELLED";
+          const displayAmount = order.final_amount || order.estimated_amount || null;
+          const amountLabel = order.final_amount
+            ? "Final amount"
+            : order.estimated_amount
+            ? "Pharmacy estimate"
+            : null;
           return (
             <article className="order-card" key={order.order_id}>
               <div className="order-card-header">
@@ -676,8 +688,16 @@ export function PharmacyOrdersPage() {
                   </p>
                 </div>
                 <div className="order-amount">
-                  <span>Sample payable</span>
-                  <strong>₹{samplePayable.toFixed(2)}</strong>
+                  {displayAmount ? (
+                    <>
+                      <span>{amountLabel}</span>
+                      <strong>₹{Number(displayAmount).toFixed(2)}</strong>
+                    </>
+                  ) : (
+                    <span className="order-amount-pending">
+                      {isCancelled ? "Cancelled" : "Awaiting estimate"}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -704,9 +724,23 @@ export function PharmacyOrdersPage() {
               </div>
 
               <div className="order-pricing-box">
-                <span>Estimated MRP: ₹{sampleMrp.toFixed(2)}</span>
-                <span>Sample savings: ₹{sampleDiscount.toFixed(2)}</span>
-                <strong>Sample payable now: ₹{samplePayable.toFixed(2)}</strong>
+                {order.price_breakdown ? (
+                  <>
+                    <span>Medicines: ₹{Number(order.price_breakdown.medicine_cost).toFixed(2)}</span>
+                    <span>Delivery: ₹{Number(order.price_breakdown.delivery_charge).toFixed(2)}</span>
+                    <span>Platform fee: ₹{Number(order.price_breakdown.platform_fee).toFixed(2)}</span>
+                    {Number(order.price_breakdown.gst_amount) > 0 && (
+                      <span>GST ({Number(order.price_breakdown.gst_percent).toFixed(1)}%): ₹{Number(order.price_breakdown.gst_amount).toFixed(2)}</span>
+                    )}
+                    <strong>Total: ₹{Number(order.final_amount || order.estimated_amount).toFixed(2)}</strong>
+                  </>
+                ) : displayAmount ? (
+                  <span>{amountLabel}: <strong>₹{Number(displayAmount).toFixed(2)}</strong></span>
+                ) : isCancelled ? (
+                  <span className="order-pricing-note">Order cancelled before pricing was confirmed.</span>
+                ) : (
+                  <span className="order-pricing-note">Pricing will appear once the pharmacy reviews your order.</span>
+                )}
               </div>
 
               <div className="order-action-row">
@@ -770,16 +804,6 @@ export function PharmacyOrdersPage() {
                 ) : null}
               </div>
 
-              {/* ── Raise Dispute ── */}
-              <div className="order-dispute-row">
-                <a
-                  href={`/home/disputes/raise?order_id=${order.order_id}&sectors=pharmacy,delivery`}
-                  className="order-dispute-link"
-                >
-                  ⚠️ Raise a dispute on this order
-                </a>
-                <a href="/home/disputes" className="order-dispute-view-link">My disputes</a>
-              </div>
 
               {/* ── Delivery rating banner (COMPLETED) ── */}
               {order.status === "COMPLETED" && order.delivery_order_id ? (() => {
@@ -1212,6 +1236,23 @@ export function PharmacyOrdersPage() {
                   {order.customer_action_comment ? (
                     <p className="hint">Customer comment: {order.customer_action_comment}</p>
                   ) : null}
+
+                  {/* ── Dispute actions ── */}
+                  <div className="order-dispute-row">
+                    {(order.status === "COMPLETED" || order.status === "DELIVERED") && (
+                      <a
+                        href={`/home/disputes/raise?order_id=${order.order_id}&sectors=pharmacy,delivery`}
+                        className="order-dispute-link"
+                      >
+                        ⚠️ Raise a dispute
+                      </a>
+                    )}
+                    {disputedOrderIds.has(order.order_id) && (
+                      <a href="/home/disputes" className="order-dispute-view-link">
+                        My disputes →
+                      </a>
+                    )}
+                  </div>
                 </div>
               ) : null}
             </article>

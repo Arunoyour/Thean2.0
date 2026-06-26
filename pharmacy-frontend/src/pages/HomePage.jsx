@@ -7,6 +7,7 @@ import {
   getPharmacyAttention,
   getPharmacyDisputeUnreadCount,
   getPharmacyScheduleStatus,
+  setPharmacyActive,
   updatePharmacyAvailability,
 } from "../lib/api.js";
 
@@ -32,6 +33,7 @@ export function HomePage() {
           getPharmacyScheduleStatus().catch(() => null),
         ]);
         if (isMounted) {
+          setPharmacyActive(profile.is_active);
           setPharmacy(profile);
           setDisputeUnread(unreadData?.unread || 0);
           setAttentionCount(attentionData?.count || 0);
@@ -71,6 +73,15 @@ export function HomePage() {
   const isActive = pharmacy.is_active;
   const isOnline = Boolean(pharmacy.profile.is_online);
 
+  const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/v1").replace(/\/api\/v1$/, "");
+  function resolveMediaUrl(path) {
+    if (!path) return null;
+    if (path.startsWith("http")) return path;
+    if (path.startsWith("/media")) return `${API_ORIGIN}${path}`;
+    return `${API_ORIGIN}/media/${path.replace(/^storage\/?/, "")}`;
+  }
+  const storeImageUrl = resolveMediaUrl(pharmacy.profile.store_image_url);
+
   async function toggleAvailability() {
     setIsUpdatingAvailability(true);
     setAvailabilityError("");
@@ -98,14 +109,17 @@ export function HomePage() {
           🔔 You have {disputeUnread} dispute{disputeUnread > 1 ? "s" : ""} with a new admin reply.
         </a>
       )}
-      {scheduleStatus?.mode === "NO_SCHEDULE" && (
+      {isActive && scheduleStatus?.mode === "NO_SCHEDULE" && (
         <div className="error">⏰ {scheduleStatus.message}</div>
       )}
-      {scheduleStatus?.mode === "HOLIDAY" && (
+      {isActive && scheduleStatus?.mode === "HOLIDAY" && (
         <div className="error">📅 {scheduleStatus.message}</div>
       )}
-      <header className="portal-header">
-        <div>
+      <header
+        className={`portal-header${storeImageUrl ? " portal-header-image" : ""}`}
+        style={storeImageUrl ? { backgroundImage: `url(${storeImageUrl})` } : undefined}
+      >
+        <div className="portal-header-content">
           <p className="eyebrow">Merchant workstation</p>
           <h1>{pharmacy.profile.store_name}</h1>
           <p>{pharmacy.profile.address_line_1}</p>
@@ -155,7 +169,7 @@ export function HomePage() {
             <li>License number: {pharmacy.profile.license_number}</li>
             <li>Owner phone: {pharmacy.phone_number}</li>
             <li>Listing status: {pharmacy.profile.is_listed ? "Listed" : "Not listed"}</li>
-            <li>Order availability: {pharmacy.profile.is_online ? "Online" : "Offline"}</li>
+            {isActive && <li>Order availability: {pharmacy.profile.is_online ? "Online" : "Offline"}</li>}
           </ul>
           {profileUpdatedAt && (
             <p style={{ fontSize: "0.8em", color: "#9ca3af", marginTop: "0.5rem" }}>

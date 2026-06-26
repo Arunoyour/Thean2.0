@@ -1,5 +1,9 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/v1";
 const TOKEN_KEY = "thean_pharmacy_access_token";
+const ACTIVE_KEY = "thean_pharmacy_is_active";
+
+export function setPharmacyActive(active) { window.localStorage.setItem(ACTIVE_KEY, active ? "1" : "0"); }
+export function getPharmacyActive() { return window.localStorage.getItem(ACTIVE_KEY) === "1"; }
 
 /** Convert a FastAPI `detail` value to a readable string.
  *  Pydantic 422 errors return detail as [{loc, msg, type}] — join them into
@@ -33,13 +37,16 @@ async function request(path, options = {}) {
 
   let response;
   try {
+    // Don't set Content-Type for FormData — browser sets it automatically with the correct multipart boundary
+    const isFormData = options.body instanceof FormData;
+    const headers = isFormData
+      ? { ...(options.headers || {}) }
+      : { "Content-Type": "application/json", ...(options.headers || {}) };
+
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...options,
       signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
+      headers,
     });
   } catch (fetchError) {
     if (fetchError.name === "AbortError") {
@@ -504,6 +511,16 @@ export function getPharmacyOrderDispute(disputeId) { return request(`/pharmacy/o
 export function raisePharmacyOrderDispute(formData) { return _phUpload("/pharmacy/order-disputes", formData); }
 export function replyPharmacyOrderDispute(disputeId, formData) { return _phUpload(`/pharmacy/order-disputes/${disputeId}/reply`, formData); }
 export function closePharmacyOrderDispute(disputeId) { return request(`/pharmacy/order-disputes/${disputeId}/close`, { method: "POST", headers: _phHdr() }); }
+
+export function getPharmacyStats() { return request("/pharmacy/me/stats", { headers: _phHdr() }); }
+export function updatePharmacyProfile(formData) { return request("/pharmacy/me/profile", { method: "PATCH", headers: { Authorization: _phHdr().Authorization }, body: formData }); }
+
+export function getOperatingHours() { return request("/pharmacy/me/operating-hours", { headers: _phHdr() }); }
+export function setOperatingHours(days) { return request("/pharmacy/me/operating-hours", { method: "PUT", headers: _phHdr(), body: JSON.stringify({ days }) }); }
+export function clearOperatingHours() { return request("/pharmacy/me/operating-hours", { method: "DELETE", headers: _phHdr() }); }
+export function getHolidays() { return request("/pharmacy/me/holidays", { headers: _phHdr() }); }
+export function addHoliday(holiday_date, reason) { return request("/pharmacy/me/holidays", { method: "POST", headers: _phHdr(), body: JSON.stringify({ holiday_date, reason }) }); }
+export function removeHoliday(holidayId) { return request(`/pharmacy/me/holidays/${holidayId}`, { method: "DELETE", headers: _phHdr() }); }
 
 export function getPharmacyAttention() {
   const token = window.localStorage.getItem("thean_pharmacy_access_token");

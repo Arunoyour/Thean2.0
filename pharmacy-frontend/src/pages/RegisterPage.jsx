@@ -40,6 +40,7 @@ export function RegisterPage() {
       email: "",
       store_name: "",
       license_number: "",
+      gstin: "",
       address_line_1: "",
       city: "",
       state: "",
@@ -224,7 +225,7 @@ export function RegisterPage() {
           <div style={{ fontSize: "0.8rem", color: "#6b7280", padding: "0.4rem 0.75rem", background: "#f9fafb", borderRadius: 4, border: "1px solid #e5e7eb" }}>
             ✏ Draft restored — your previous entries have been re-loaded.{" "}
             <button type="button" style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: "inherit", padding: 0 }}
-              onClick={() => { clearDraft(); setForm({ owner_name: "", phone_number: "", email: "", store_name: "", license_number: "", address_line_1: "", city: "", state: "", pincode: "" }); }}>
+              onClick={() => { clearDraft(); setForm({ owner_name: "", phone_number: "", email: "", store_name: "", license_number: "", gstin: "", address_line_1: "", city: "", state: "", pincode: "" }); }}>
               Clear draft
             </button>
           </div>
@@ -294,6 +295,18 @@ export function RegisterPage() {
             required
           />
           {errors.license_number && <span className="field-error-msg">{errors.license_number}</span>}
+        </label>
+        <label>
+          GST number <span style={{ fontWeight: 400, fontSize: "0.8em", color: "#6b7280" }}>(optional)</span>
+          <input
+            name="gstin"
+            value={form.gstin}
+            onChange={updateField}
+            className="input"
+            placeholder="e.g. 29ABCDE1234F1Z5"
+            maxLength={15}
+            style={{ textTransform: "uppercase" }}
+          />
         </label>
         <label>
           Store photo <span style={{ fontWeight: 400, fontSize: "0.8em", color: "#6b7280" }}>(JPG or PNG — required)</span>

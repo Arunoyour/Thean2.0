@@ -448,6 +448,11 @@ export function ListedProductsPage() {
                       <strong>₹{product.price}</strong>
                     )}
                     <span>{product.stock_quantity > 0 ? `${product.stock_quantity} in stock` : "Out of stock"}</span>
+                    <div className="product-earnings-row">
+                      <span title="Commission amount">Commission ₹{product.platform_commission_amount ?? "—"}</span>
+                      <span title="Platform fee">Fee ₹{product.platform_fee_amount ?? "—"}</span>
+                      <span title="Total platform earning" className="product-earning-total">Platform ₹{product.platform_earning_amount ?? "—"}</span>
+                    </div>
                     <div className="product-row-actions">
                       <button className="outline-button button-small" type="button" onClick={() => startEdit(product)}>
                         <Edit3 size={16} aria-hidden="true" />
