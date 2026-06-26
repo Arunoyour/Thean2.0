@@ -181,6 +181,7 @@ async def vendor_register(
         lng=payload.lng,
         shop_image_url=shop_image_path,
         shop_status="pending",
+        is_active=False,
         photo_taken_at=photo_taken_at,
         photo_lat=photo_lat,
         photo_lng=photo_lng,
@@ -249,6 +250,8 @@ async def setup_shop(session: AsyncSession, vendor_id: UUID, payload: ShopSetupR
         address_line=payload.address_line,
         lat=payload.lat,
         lng=payload.lng,
+        shop_status="pending",
+        is_active=False,
     )
     session.add(shop)
     await session.commit()

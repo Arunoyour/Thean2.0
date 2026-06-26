@@ -5,6 +5,7 @@ import {
   getAdminAttention,
   listCustomers,
   listPharmacies,
+  listPharmacyProductsForReview,
   listDeliveryAccounts,
   listDeliveryOrders,
   getDisputeSummary,
@@ -12,17 +13,33 @@ import {
   adminListHaircutVendors,
 } from "../lib/api.js";
 
+function fmtAge(minutes) {
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 4) return `${weeks}w ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  const years = Math.floor(days / 365);
+  return `${years}y ago`;
+}
+
 function KpiCard({ label, value, sub, accent = "#0f766e", onClick }) {
+  const alert = value > 0 && accent === "#b45309";
   return (
     <div
       onClick={onClick}
+      className={alert ? "kpi-alert-pulse" : ""}
       style={{
-        background: "#ffffff", border: "1px solid #dce6e3", borderRadius: 14,
+        background: "#ffffff", border: `1px solid ${alert ? "#fca5a5" : "#dce6e3"}`, borderRadius: 14,
         padding: "18px 20px", cursor: onClick ? "pointer" : "default",
         transition: "border-color 0.15s",
       }}
       onMouseEnter={e => onClick && (e.currentTarget.style.borderColor = accent)}
-      onMouseLeave={e => onClick && (e.currentTarget.style.borderColor = "#dce6e3")}
+      onMouseLeave={e => onClick && (e.currentTarget.style.borderColor = alert ? "#fca5a5" : "#dce6e3")}
     >
       <div style={{ fontSize: "0.72rem", color: "#52625f", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 8 }}>
         {label}
@@ -52,9 +69,10 @@ export function DashboardPage() {
     if (silent) setRefreshing(true); else setLoading(true);
     setError("");
     try {
-      const [customers, pharmacies, deliveryAccounts, deliveryOrders, attention, disputes, haircutShops, haircutVendors] = await Promise.all([
+      const [customers, pharmacies, products, deliveryAccounts, deliveryOrders, attention, disputes, haircutShops, haircutVendors] = await Promise.all([
         listCustomers().catch(() => []),
         listPharmacies().catch(() => []),
+        listPharmacyProductsForReview().catch(() => []),
         listDeliveryAccounts().catch(() => ({ accounts: [] })),
         listDeliveryOrders().catch(() => []),
         getAdminAttention().catch(() => ({ count: 0, items: [] })),
@@ -64,7 +82,7 @@ export function DashboardPage() {
       ]);
       const drivers = Array.isArray(deliveryAccounts) ? deliveryAccounts : (deliveryAccounts.accounts ?? []);
       const orders = Array.isArray(deliveryOrders) ? deliveryOrders : [];
-      setData({ customers, pharmacies, drivers, orders, attention, disputes, haircutShops, haircutVendors });
+      setData({ customers, pharmacies, products, drivers, orders, attention, disputes, haircutShops, haircutVendors });
     } catch (e) {
       setError(e.message);
     } finally {
@@ -88,6 +106,7 @@ export function DashboardPage() {
   }
 
   const pendingPharmacies = data?.pharmacies.filter(p => p.activation_status === "PENDING_SUPER_ADMIN_APPROVAL").length ?? 0;
+  const pendingProducts = data?.products?.filter(p => p.approval_status === "PENDING_APPROVAL").length ?? 0;
   const activeDrivers = data?.drivers.filter(d => d.is_online).length ?? 0;
   const liveOrders = data?.orders.filter(o => !["DELIVERED", "FAILED", "CANCELLED"].includes(o.status)).length ?? 0;
   const openDisputes = data?.disputes?.open ?? 0;
@@ -149,6 +168,9 @@ export function DashboardPage() {
         <KpiCard label="Pending Approval" value={pendingPharmacies} accent="#b45309"
           sub="Awaiting activation"
           onClick={() => navigate("/dashboard/pharmacy")} />
+        <KpiCard label="Product Approvals" value={pendingProducts} accent="#b45309"
+          sub="Pending review"
+          onClick={() => navigate("/dashboard/pharmacy/products")} />
       </div>
 
       {/* Delivery */}
@@ -208,7 +230,7 @@ export function DashboardPage() {
                   <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#13201e" }}>{item.title}</div>
                   <div style={{ fontSize: "0.78rem", color: "#52625f", marginTop: 2 }}>{item.detail}</div>
                 </div>
-                <span style={{ color: "#94a3a0", fontSize: "0.78rem" }}>{item.age_minutes}m ago →</span>
+                <span style={{ color: "#94a3a0", fontSize: "0.78rem" }}>{fmtAge(item.age_minutes)} →</span>
               </div>
             ))}
             {data.attention.items.length > 5 && (

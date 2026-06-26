@@ -2681,3 +2681,48 @@ select.input-valid {
   min-width: 0;
   background: transparent;
 }
+
+/* ── KPI alert pulse ─────────────────────────────────────────────────────── */
+@keyframes kpi-alert-pulse {
+  0%   { background-color: #fee2e2; }
+  50%  { background-color: #fef9c3; }
+  100% { background-color: #fee2e2; }
+}
+.kpi-alert-pulse {
+  animation: kpi-alert-pulse 2s ease-in-out infinite;
+}
+
+/* ── Product review extended fields ─────────────────────────────────────── */
+.review-section-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #52625f;
+  margin: 1.25rem 0 0.5rem;
+}
+.review-text-block {
+  background: #f6f8f7;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 0.75rem;
+}
+.review-text-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #52625f;
+  margin: 0 0 4px;
+}
+.review-text-block p:last-child {
+  font-size: 0.88rem;
+  color: #374151;
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+.review-text-disclaimer {
+  background: #fefce8;
+  border: 1px solid #fde68a;
+}

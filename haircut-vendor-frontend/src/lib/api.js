@@ -1,6 +1,10 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/v1";
 const TOKEN_KEY = "thean_hc_vendor_token";
+const ACTIVE_KEY = "thean_hc_is_active";
 const DEFAULT_TIMEOUT_MS = 15_000;
+
+export function setShopActive(active) { localStorage.setItem(ACTIVE_KEY, active ? "1" : "0"); }
+export function getShopActive() { return localStorage.getItem(ACTIVE_KEY) === "1"; }
 
 function detailToMessage(detail, fallback = "Request failed. Please try again.") {
   if (!detail) return fallback;

@@ -217,8 +217,12 @@ def maybe_apply_time_based_transition(order: CustomerPharmacyOrder) -> bool:
         return True
 
     if billing_mode != "manual" and now >= created_at + timedelta(seconds=AUTO_APPROVAL_SECONDS):
-        assign_order_to_current_pharmacy(order, now)
-        order.customer_action_comment = "Auto-approved after the 2-minute customer cancellation window expired."
+        if order.account_id is None:
+            order.status = CANCELLED
+            order.customer_action_comment = "No pharmacy was available to assign this order after the 2-minute window expired."
+        else:
+            assign_order_to_current_pharmacy(order, now)
+            order.customer_action_comment = "Auto-approved after the 2-minute customer cancellation window expired."
         return True
 
     return False

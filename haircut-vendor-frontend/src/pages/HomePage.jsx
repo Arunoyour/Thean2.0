@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getMyShop, getShopHours, getTodayAppointments, otpCheckin, approveManualCheckin } from "../lib/api.js";
+import { getMyShop, getShopHours, getTodayAppointments, otpCheckin, approveManualCheckin, setShopActive } from "../lib/api.js";
 
 function statusClass(status) {
   return `hc-booking-status hc-status-${status.toLowerCase()}`;
@@ -114,7 +114,7 @@ export function HomePage() {
 
   useEffect(() => { load(); }, []);
   useEffect(() => {
-    getMyShop().then((shop) => setShopName(shop.shop_name)).catch(() => {});
+    getMyShop().then((shop) => { setShopName(shop.shop_name); setShopActive(shop.is_active); }).catch(() => {});
     getShopHours().then((rows) => setHoursConfigured(rows.some(r => r.is_open))).catch(() => {});
   }, []);
 

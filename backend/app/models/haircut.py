@@ -46,7 +46,7 @@ class BarberShop(Base):
     photo_taken_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     photo_lat: Mapped[float | None] = mapped_column(Numeric(10, 7))
     photo_lng: Mapped[float | None] = mapped_column(Numeric(10, 7))
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     shop_status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="pending")  # pending | active | suspended
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))

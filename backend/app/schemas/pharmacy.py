@@ -11,6 +11,7 @@ class PharmacyRegisterRequest(BaseModel):
     email: EmailStr | None = None
     store_name: str = Field(min_length=2, max_length=150)
     license_number: str = Field(min_length=3, max_length=80)
+    gstin: str | None = Field(default=None, max_length=15, pattern=r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$")
     address_line_1: str = Field(min_length=5)
     city: str | None = Field(default=None, max_length=80)
     state: str | None = Field(default=None, max_length=80)
@@ -32,6 +33,7 @@ class PharmacyProfileResponse(BaseModel):
     profile_id: UUID
     store_name: str
     license_number: str
+    gstin: str | None = None
     address_line_1: str
     city: str | None
     state: str | None
@@ -44,11 +46,14 @@ class PharmacyProfileResponse(BaseModel):
     is_listed: bool
     is_online: bool
     store_image_url: str | None = None
+    owner_photo_url: str | None = None
     drug_licence_url: str | None = None
     owner_id_url: str | None = None
     photo_taken_at: datetime | None = None
     photo_lat: float | None = None
     photo_lng: float | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class PharmacyAccountResponse(BaseModel):
@@ -58,6 +63,8 @@ class PharmacyAccountResponse(BaseModel):
     email: str | None
     is_active: bool
     activation_status: str
+    created_at: datetime | None = None
+    activated_at: datetime | None = None
     profile: PharmacyProfileResponse
 
 
@@ -122,11 +129,30 @@ class PharmacyAvailabilityUpdateRequest(BaseModel):
     is_online: bool
 
 
+_DEFAULT_DISCLAIMER = (
+    "All images are for representational purposes only. It is advised that you read the batch "
+    "and manufacturing details, directions for use, allergen information, health and nutritional "
+    "claims (wherever applicable), and other details mentioned on the label before consuming the "
+    "product. For combo items, individual prices can be viewed on the page."
+)
+
+
 class PharmacyProductCreateRequest(BaseModel):
     product_name: str = Field(min_length=2, max_length=150)
     brand: str | None = Field(default=None, max_length=100)
     category: str | None = Field(default=None, max_length=80)
     unit_label: str | None = Field(default=None, max_length=60)
+    about: str | None = None
+    ingredients: str | None = None
+    health_benefits: str | None = None
+    other_info: str | None = None
+    disclaimer: str | None = Field(default=_DEFAULT_DISCLAIMER)
+    pack_of: int | None = Field(default=None, ge=1)
+    net_weight: str | None = Field(default=None, max_length=60)
+    calorie_count: str | None = Field(default=None, max_length=60)
+    dietary_preference: str | None = Field(default=None, max_length=20)
+    country_of_origin: str | None = Field(default="India", max_length=100)
+    shelf_life: str | None = Field(default=None, max_length=100)
     price: float = Field(gt=0)
     offer_price: float | None = Field(default=None, gt=0)
     image_data_urls: list[str] = Field(min_length=2, max_length=6)
@@ -139,6 +165,17 @@ class PharmacyProductUpdateRequest(BaseModel):
     brand: str | None = Field(default=None, max_length=100)
     category: str | None = Field(default=None, max_length=80)
     unit_label: str | None = Field(default=None, max_length=60)
+    about: str | None = None
+    ingredients: str | None = None
+    health_benefits: str | None = None
+    other_info: str | None = None
+    disclaimer: str | None = Field(default=_DEFAULT_DISCLAIMER)
+    pack_of: int | None = Field(default=None, ge=1)
+    net_weight: str | None = Field(default=None, max_length=60)
+    calorie_count: str | None = Field(default=None, max_length=60)
+    dietary_preference: str | None = Field(default=None, max_length=20)
+    country_of_origin: str | None = Field(default="India", max_length=100)
+    shelf_life: str | None = Field(default=None, max_length=100)
     price: float = Field(gt=0)
     offer_price: float | None = Field(default=None, gt=0)
     stock_quantity: int = Field(ge=0)
@@ -153,6 +190,17 @@ class PharmacyProductResponse(BaseModel):
     brand: str | None
     category: str | None
     unit_label: str | None
+    about: str | None = None
+    ingredients: str | None = None
+    health_benefits: str | None = None
+    other_info: str | None = None
+    disclaimer: str | None = None
+    pack_of: int | None = None
+    net_weight: str | None = None
+    calorie_count: str | None = None
+    dietary_preference: str | None = None
+    country_of_origin: str | None = None
+    shelf_life: str | None = None
     price: str
     offer_price: str | None
     customer_price: str

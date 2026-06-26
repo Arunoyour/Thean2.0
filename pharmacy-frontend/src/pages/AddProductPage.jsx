@@ -1,11 +1,28 @@
-import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, ImagePlus, PackagePlus, RefreshCw, ShieldAlert } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, ChevronLeft, ChevronRight, ImagePlus, PackagePlus, RefreshCw, ShieldAlert } from "lucide-react";
 
 import { PharmacyPageShell } from "../components/PharmacyPageShell.jsx";
-import { addProduct, getCurrentPharmacy } from "../lib/api.js";
+import { addProduct, getCurrentPharmacy, listProducts } from "../lib/api.js";
 import { validatePositiveNumber, validateNonNegativeNumber, validateOfferPrice, validateRequired, validateFileSize, inputClass, touch } from "../lib/validation.js";
 
 const reqProductName = validateRequired("Product name");
+
+// ── Fuzzy match ──────────────────────────────────────────────────────────────
+function normalize(str) {
+  return str.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+}
+function meaningfulWords(str) {
+  return normalize(str).split(" ").filter((w) => w.length > 2);
+}
+function fuzzyMatch(typed, existing) {
+  if (!typed || typed.length < 3) return [];
+  const typedWords = meaningfulWords(typed);
+  if (!typedWords.length) return [];
+  return existing.filter((p) => {
+    const existingWords = meaningfulWords(p.product_name);
+    return typedWords.some((w) => existingWords.some((e) => e.includes(w) || w.includes(e)));
+  });
+}
 
 const sampleProducts = ["Boost", "NAN", "Horlicks", "Pediasure"];
 
@@ -78,13 +95,31 @@ function PhotoPreviewSlideshow({ previewUrls }) {
   );
 }
 
+const DEFAULT_DISCLAIMER = "All images are for representational purposes only. It is advised that you read the batch and manufacturing details, directions for use, allergen information, health and nutritional claims (wherever applicable), and other details mentioned on the label before consuming the product. For combo items, individual prices can be viewed on the page.";
+
 export function AddProductPage() {
   const [pharmacy, setPharmacy] = useState(null);
+  const [ownProducts, setOwnProducts] = useState([]);
+  const [inlineSuggestions, setInlineSuggestions] = useState([]);
+  const [submitWarning, setSubmitWarning] = useState(null); // null | array of matches
+  const debounceRef = useRef(null);
+
   const [productForm, setProductForm] = useState({
     product_name: "",
     brand: "",
     category: "Nutrition",
     unit_label: "",
+    about: "",
+    ingredients: "",
+    health_benefits: "",
+    other_info: "",
+    disclaimer: DEFAULT_DISCLAIMER,
+    pack_of: "",
+    net_weight: "",
+    calorie_count: "",
+    dietary_preference: "Veg",
+    country_of_origin: "India",
+    shelf_life: "",
     price: "",
     offer_price: "",
     stock_quantity: "",
@@ -122,13 +157,23 @@ export function AddProductPage() {
     }
 
     loadPharmacy();
+    // Load own products once for fuzzy duplicate detection
+    listProducts().then(setOwnProducts).catch(() => {});
     return () => {
       isMounted = false;
     };
   }, [loadKey]);
 
   function updateProductField(event) {
-    setProductForm((current) => ({ ...current, [event.target.name]: event.target.value }));
+    const { name, value } = event.target;
+    setProductForm((current) => ({ ...current, [name]: value }));
+    if (name === "product_name") {
+      clearTimeout(debounceRef.current);
+      setSubmitWarning(null);
+      debounceRef.current = setTimeout(() => {
+        setInlineSuggestions(fuzzyMatch(value, ownProducts).slice(0, 3));
+      }, 300);
+    }
   }
 
   function applySampleProduct(productName) {
@@ -161,15 +206,8 @@ export function AddProductPage() {
     stock_quantity: touched.stock_quantity ? stockValidator(productForm.stock_quantity) : null,
   };
 
-  async function submitProduct(event) {
-    event.preventDefault();
-    setTouched({ product_name: true, price: true, offer_price: true, stock_quantity: true });
-    if (
-      reqProductName(productForm.product_name) ||
-      priceValidator(productForm.price) ||
-      offerValidator(productForm.offer_price) ||
-      stockValidator(productForm.stock_quantity)
-    ) return;
+  async function doSubmit() {
+    setSubmitWarning(null);
     setError("");
     setProductMessage("");
     setIsAddingProduct(true);
@@ -185,6 +223,17 @@ export function AddProductPage() {
         brand: productForm.brand || null,
         category: productForm.category || null,
         unit_label: productForm.unit_label || null,
+        about: productForm.about || null,
+        ingredients: productForm.ingredients || null,
+        health_benefits: productForm.health_benefits || null,
+        other_info: productForm.other_info || null,
+        disclaimer: productForm.disclaimer || DEFAULT_DISCLAIMER,
+        pack_of: productForm.pack_of ? Number(productForm.pack_of) : null,
+        net_weight: productForm.net_weight || null,
+        calorie_count: productForm.calorie_count || null,
+        dietary_preference: productForm.dietary_preference || null,
+        country_of_origin: productForm.country_of_origin || "India",
+        shelf_life: productForm.shelf_life || null,
         price: Number(productForm.price),
         offer_price: productForm.offer_price ? Number(productForm.offer_price) : null,
         image_data_urls: imageDataUrls,
@@ -197,6 +246,17 @@ export function AddProductPage() {
         brand: "",
         category: "Nutrition",
         unit_label: "",
+        about: "",
+        ingredients: "",
+        health_benefits: "",
+        other_info: "",
+        disclaimer: DEFAULT_DISCLAIMER,
+        pack_of: "",
+        net_weight: "",
+        calorie_count: "",
+        dietary_preference: "Veg",
+        country_of_origin: "India",
+        shelf_life: "",
         price: "",
         offer_price: "",
         stock_quantity: "",
@@ -204,11 +264,30 @@ export function AddProductPage() {
       setPhotoFiles([]);
       setPhotoPreviews([]);
       setTouched({});
+      setInlineSuggestions([]);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
       setIsAddingProduct(false);
     }
+  }
+
+  function submitProduct(event) {
+    event.preventDefault();
+    setTouched({ product_name: true, price: true, offer_price: true, stock_quantity: true });
+    if (
+      reqProductName(productForm.product_name) ||
+      priceValidator(productForm.price) ||
+      offerValidator(productForm.offer_price) ||
+      stockValidator(productForm.stock_quantity)
+    ) return;
+    // Duplicate check before submitting
+    const matches = fuzzyMatch(productForm.product_name, ownProducts).slice(0, 3);
+    if (matches.length > 0 && submitWarning === null) {
+      setSubmitWarning(matches);
+      return;
+    }
+    doSubmit();
   }
 
   if (isLoading) {
@@ -299,6 +378,23 @@ export function AddProductPage() {
               required
             />
             {fieldErrors.product_name && <span className="field-error-msg">{fieldErrors.product_name}</span>}
+            {inlineSuggestions.length > 0 && (
+              <div className="duplicate-inline-hint">
+                <AlertTriangle size={13} />
+                <span>You already have similar product{inlineSuggestions.length > 1 ? "s" : ""}:</span>
+                <ul className="duplicate-inline-list">
+                  {inlineSuggestions.map((p) => (
+                    <li key={p.product_id}>
+                      <strong>{p.product_name}</strong>
+                      {" — "}
+                      {p.offer_price
+                        ? <><span className="dup-offer">₹{p.offer_price}</span> <del>₹{p.price}</del></>
+                        : <>₹{p.price}</>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </label>
           <label>
             Brand
@@ -310,15 +406,126 @@ export function AddProductPage() {
               <input name="category" value={productForm.category} onChange={updateProductField} />
             </label>
             <label>
-              Unit
+              Unit label
               <input
                 name="unit_label"
                 value={productForm.unit_label}
                 onChange={updateProductField}
-                placeholder="500g, 400g tin"
+                placeholder="500g tin, 1L bottle"
               />
             </label>
           </div>
+
+          <label>
+            About the product
+            <textarea
+              name="about"
+              value={productForm.about}
+              onChange={updateProductField}
+              rows={3}
+              placeholder="Short description of the product"
+            />
+          </label>
+          <label>
+            Ingredients
+            <textarea
+              name="ingredients"
+              value={productForm.ingredients}
+              onChange={updateProductField}
+              rows={3}
+              placeholder="List all ingredients"
+            />
+          </label>
+          <label>
+            Health benefits
+            <textarea
+              name="health_benefits"
+              value={productForm.health_benefits}
+              onChange={updateProductField}
+              rows={2}
+              placeholder="Key health benefits"
+            />
+          </label>
+          <label>
+            Other product info
+            <textarea
+              name="other_info"
+              value={productForm.other_info}
+              onChange={updateProductField}
+              rows={2}
+              placeholder="Usage instructions, storage notes, etc."
+            />
+          </label>
+          <label>
+            Disclaimer
+            <textarea
+              name="disclaimer"
+              value={productForm.disclaimer}
+              onChange={updateProductField}
+              rows={3}
+            />
+          </label>
+
+          <div className="inline-fields">
+            <label>
+              Pack of
+              <input
+                name="pack_of"
+                value={productForm.pack_of}
+                onChange={updateProductField}
+                type="number"
+                min="1"
+                placeholder="e.g. 6"
+              />
+            </label>
+            <label>
+              Weight / Volume
+              <input
+                name="net_weight"
+                value={productForm.net_weight}
+                onChange={updateProductField}
+                placeholder="e.g. 500g, 1L"
+              />
+            </label>
+            <label>
+              Calorie count
+              <input
+                name="calorie_count"
+                value={productForm.calorie_count}
+                onChange={updateProductField}
+                placeholder="e.g. 200 kcal per 100g"
+              />
+            </label>
+          </div>
+
+          <div className="inline-fields">
+            <label>
+              Dietary preference
+              <select name="dietary_preference" value={productForm.dietary_preference} onChange={updateProductField}>
+                <option value="Veg">Veg</option>
+                <option value="Non-veg">Non-veg</option>
+                <option value="NA">N/A</option>
+              </select>
+            </label>
+            <label>
+              Country of origin
+              <input
+                name="country_of_origin"
+                value={productForm.country_of_origin}
+                onChange={updateProductField}
+              />
+            </label>
+            <label>
+              Shelf life
+              <input
+                name="shelf_life"
+                value={productForm.shelf_life}
+                onChange={updateProductField}
+                placeholder="e.g. 12 months"
+              />
+            </label>
+          </div>
+
           <div className="inline-fields">
             <label>
               Price
@@ -373,10 +580,42 @@ export function AddProductPage() {
 
           {productMessage && <div className="success">{productMessage}</div>}
 
-          <button className="button" type="submit" disabled={isAddingProduct}>
-            <PackagePlus size={18} aria-hidden="true" />
-            {isAddingProduct ? "Adding" : "Add product"}
-          </button>
+          {submitWarning && (
+            <div className="duplicate-submit-warning">
+              <div className="duplicate-warning-header">
+                <AlertTriangle size={16} />
+                <strong>Possible duplicate — already listed by you</strong>
+              </div>
+              <ul className="duplicate-warning-list">
+                {submitWarning.map((p) => (
+                  <li key={p.product_id}>
+                    <span className="dup-name">{p.product_name}</span>
+                    <span className="dup-price">
+                      {p.offer_price
+                        ? <><span className="dup-offer">₹{p.offer_price}</span> <del>₹{p.price}</del></>
+                        : <>₹{p.price}</>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="duplicate-warning-note">This could be a different variant — confirm if you want to list it anyway.</p>
+              <div className="duplicate-warning-actions">
+                <button className="button" type="button" onClick={doSubmit} disabled={isAddingProduct}>
+                  <PackagePlus size={16} /> {isAddingProduct ? "Adding…" : "Submit anyway"}
+                </button>
+                <button className="outline-button" type="button" onClick={() => setSubmitWarning(null)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!submitWarning && (
+            <button className="button" type="submit" disabled={isAddingProduct}>
+              <PackagePlus size={18} aria-hidden="true" />
+              {isAddingProduct ? "Adding…" : "Add product"}
+            </button>
+          )}
         </form>
       )}
     </PharmacyPageShell>

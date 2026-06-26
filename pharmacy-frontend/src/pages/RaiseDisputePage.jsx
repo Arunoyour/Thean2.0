@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Mic, MicOff, Paperclip, Send, X } from "lucide-react";
 import { getPharmacyOrderById, raisePharmacyDispute, raisePharmacyOrderDispute } from "../lib/api.js";
 import { MAX_FILE_SIZE_BYTES, validateFileSize } from "../lib/validation.js";
+import { PharmacyPageShell } from "../components/PharmacyPageShell.jsx";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
@@ -120,6 +121,7 @@ export function RaiseDisputePage() {
   }
 
   return (
+    <PharmacyPageShell>
     <div className="ph-page">
       <header className="ph-inner-header">
         <button type="button" className="ph-back-btn" onClick={() => navigate(-1)}><ArrowLeft size={20} /></button>
@@ -209,5 +211,6 @@ export function RaiseDisputePage() {
         <button type="submit" className="dispute-submit-btn" disabled={isSubmitting}><Send size={16} /> {isSubmitting ? "Submitting…" : "Submit Dispute"}</button>
       </form>
     </div>
+    </PharmacyPageShell>
   );
 }

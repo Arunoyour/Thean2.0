@@ -75,6 +75,7 @@ class PharmacyProfile(Base):
     )
     store_name: Mapped[str] = mapped_column(String(150), nullable=False)
     license_number: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    gstin: Mapped[str | None] = mapped_column(String(15))
     latitude: Mapped[float | None] = mapped_column()
     longitude: Mapped[float | None] = mapped_column()
     address_line_1: Mapped[str] = mapped_column(Text, nullable=False)
@@ -97,13 +98,14 @@ class PharmacyProfile(Base):
         server_default="0",
     )
     store_image_url: Mapped[str | None] = mapped_column(Text)
+    owner_photo_url: Mapped[str | None] = mapped_column(Text)
     drug_licence_url: Mapped[str | None] = mapped_column(Text)
     owner_id_url: Mapped[str | None] = mapped_column(Text)
     photo_taken_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     photo_lat: Mapped[float | None] = mapped_column()
     photo_lng: Mapped[float | None] = mapped_column()
     is_listed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
-    is_online: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    is_online: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     manual_override_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -275,6 +277,25 @@ class PharmacyProduct(Base):
     brand: Mapped[str | None] = mapped_column(String(100))
     category: Mapped[str | None] = mapped_column(String(80))
     unit_label: Mapped[str | None] = mapped_column(String(60))
+    about: Mapped[str | None] = mapped_column(Text)
+    ingredients: Mapped[str | None] = mapped_column(Text)
+    health_benefits: Mapped[str | None] = mapped_column(Text)
+    other_info: Mapped[str | None] = mapped_column(Text)
+    disclaimer: Mapped[str | None] = mapped_column(
+        Text,
+        server_default=(
+            "All images are for representational purposes only. It is advised that you read the batch "
+            "and manufacturing details, directions for use, allergen information, health and nutritional "
+            "claims (wherever applicable), and other details mentioned on the label before consuming the "
+            "product. For combo items, individual prices can be viewed on the page."
+        ),
+    )
+    pack_of: Mapped[int | None] = mapped_column()
+    net_weight: Mapped[str | None] = mapped_column(String(60))
+    calorie_count: Mapped[str | None] = mapped_column(String(60))
+    dietary_preference: Mapped[str | None] = mapped_column(String(20))
+    country_of_origin: Mapped[str | None] = mapped_column(String(100), server_default="India")
+    shelf_life: Mapped[str | None] = mapped_column(String(100))
     price: Mapped[float] = mapped_column(nullable=False)
     offer_price: Mapped[float | None] = mapped_column(Numeric(10, 2))
     image_urls: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")

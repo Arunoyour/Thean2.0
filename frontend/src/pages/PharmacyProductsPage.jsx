@@ -215,7 +215,9 @@ export function PharmacyProductsPage() {
                 }`}
                 key={product.product_id}
               >
-                <ProductImageSlideshow images={product.image_urls} productName={product.product_name} />
+                <Link to={`/home/pharmacy/products/${product.product_id}`} className="customer-product-image-link">
+                  <ProductImageSlideshow images={product.image_urls} productName={product.product_name} />
+                </Link>
                 <div>
                   <p className="product-pharmacy-name">{product.pharmacy_name}</p>
                   {nearbyPharmacyMap.get(product.account_id) ? (
@@ -229,7 +231,11 @@ export function PharmacyProductsPage() {
                       {Math.round(Number(product.discount_percent))}% off
                     </span>
                   ) : null}
-                  <h2>{product.product_name}</h2>
+                  <h2>
+                    <Link to={`/home/pharmacy/products/${product.product_id}`} className="product-name-link">
+                      {product.product_name}
+                    </Link>
+                  </h2>
                   <p>
                     {[product.brand, product.unit_label].filter(Boolean).join(" - ") ||
                       product.category ||
