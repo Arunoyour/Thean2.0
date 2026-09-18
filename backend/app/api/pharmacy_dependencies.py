@@ -36,6 +36,17 @@ async def get_current_pharmacy(
 
 def require_super_admin(x_super_admin_token: str | None = Header(default=None)) -> None:
     settings = get_settings()
-    if x_super_admin_token != settings.super_admin_token:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin access required.")
+    if x_super_admin_token == settings.super_admin_token:
+        return
+    try:
+        payload = decode_access_token(x_super_admin_token or "")
+        if not payload.get("sub") or payload.get("role") not in {
+            "SUPER", "SUPERVISOR", "CHECKER", "AUDITOR", "TEAM_LEAD"
+        }:
+            raise ValueError("Not a super-admin token.")
+    except (KeyError, ValueError, JWTError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super admin access required.",
+        ) from exc
 
