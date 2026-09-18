@@ -119,8 +119,19 @@ async def get_current_delivery_account(
 
 async def _check_admin(token: str | None) -> None:
     settings = get_settings()
-    if token != settings.super_admin_token:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required.")
+    if token == settings.super_admin_token:
+        return
+    try:
+        payload = jwt.decode(token or "", settings.app_secret_key, algorithms=["HS256"])
+        if not payload.get("sub") or payload.get("role") not in {
+            "SUPER", "SUPERVISOR", "CHECKER", "AUDITOR", "TEAM_LEAD"
+        }:
+            raise ValueError("Not a super-admin token.")
+    except (ValueError, JWTError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required.",
+        ) from exc
 
 
 # ── Registration & Auth ───────────────────────────────────────────────────

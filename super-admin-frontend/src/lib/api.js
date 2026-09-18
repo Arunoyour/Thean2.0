@@ -17,19 +17,6 @@ function detailToMessage(detail, fallback = "Request failed. Please try again.")
   return fallback;
 }
 
-/**
- * Super-admin delivery token — MUST be set via VITE_SUPER_ADMIN_TOKEN in .env.local.
- * The token is intentionally not bundled as a fallback string; if the env var is
- * missing the delivery admin API calls will return 401 from the server.
- */
-const SUPER_ADMIN_TOKEN = import.meta.env.VITE_SUPER_ADMIN_TOKEN || "";
-if (!SUPER_ADMIN_TOKEN && import.meta.env.DEV) {
-  console.warn(
-    "[super-admin] VITE_SUPER_ADMIN_TOKEN is not set. " +
-    "Delivery admin API calls will fail. Add it to .env.local.",
-  );
-}
-
 /** Returns true when an error was caused by an AbortController signal — callers
  *  should silently ignore these (component unmounted before the request finished). */
 export function isAbortError(e) {
@@ -360,7 +347,7 @@ function deliveryAdminHeaders() {
 
   return {
     Authorization: `Bearer ${token}`,
-    "x-super-admin-token": SUPER_ADMIN_TOKEN,
+    "x-super-admin-token": token,
   };
 }
 
@@ -370,12 +357,12 @@ function deliveryRequest(path, options = {}) {
 
 export function listDeliveryAccounts() {
   return deliveryRequest("/delivery/admin/accounts?x_super_admin_token=" + encodeURIComponent(
-    SUPER_ADMIN_TOKEN
+    getToken()
   ));
 }
 
 export function setDeliveryAccountStatus(accountId, newStatus) {
-  const tok = SUPER_ADMIN_TOKEN;
+  const tok = getToken();
   return deliveryRequest(
     `/delivery/admin/accounts/${accountId}/status?new_status=${encodeURIComponent(newStatus)}&x_super_admin_token=${encodeURIComponent(tok)}`,
     { method: "POST" }
@@ -383,12 +370,12 @@ export function setDeliveryAccountStatus(accountId, newStatus) {
 }
 
 export function listDeliveryOrders() {
-  const tok = SUPER_ADMIN_TOKEN;
+  const tok = getToken();
   return deliveryRequest(`/delivery/admin/orders?x_super_admin_token=${encodeURIComponent(tok)}`);
 }
 
 export function clearDeliveryCod(accountId, payload) {
-  const tok = SUPER_ADMIN_TOKEN;
+  const tok = getToken();
   return deliveryRequest(
     `/delivery/admin/cod-clear/${accountId}?x_super_admin_token=${encodeURIComponent(tok)}`,
     { method: "POST", body: JSON.stringify(payload) }
@@ -400,12 +387,12 @@ export function getDeliveryRate() {
 }
 
 export function getDeliveryRateHistory() {
-  const tok = SUPER_ADMIN_TOKEN;
+  const tok = getToken();
   return deliveryRequest(`/delivery/config/rate/history?x_super_admin_token=${encodeURIComponent(tok)}`);
 }
 
 export function setDeliveryRate(payload) {
-  const tok = SUPER_ADMIN_TOKEN;
+  const tok = getToken();
   return deliveryRequest(
     `/delivery/admin/config/rate?x_super_admin_token=${encodeURIComponent(tok)}`,
     { method: "POST", body: JSON.stringify(payload) }
@@ -413,12 +400,12 @@ export function setDeliveryRate(payload) {
 }
 
 export function getTierRates() {
-  const tok = SUPER_ADMIN_TOKEN;
+  const tok = getToken();
   return deliveryRequest(`/delivery/admin/config/tier-rates?x_super_admin_token=${encodeURIComponent(tok)}`);
 }
 
 export function setTierRate(tier, payload) {
-  const tok = SUPER_ADMIN_TOKEN;
+  const tok = getToken();
   return deliveryRequest(
     `/delivery/admin/config/tier-rates/${tier}?x_super_admin_token=${encodeURIComponent(tok)}`,
     { method: "PUT", body: JSON.stringify(payload) }
@@ -426,7 +413,7 @@ export function setTierRate(tier, payload) {
 }
 
 export function setDeliveryBoyTier(accountId, tier) {
-  const tok = SUPER_ADMIN_TOKEN;
+  const tok = getToken();
   return deliveryRequest(
     `/delivery/admin/delivery-boys/${accountId}/tier?x_super_admin_token=${encodeURIComponent(tok)}`,
     { method: "PUT", body: JSON.stringify({ tier }) }
@@ -434,7 +421,7 @@ export function setDeliveryBoyTier(accountId, tier) {
 }
 
 export function setDeliveryBoyCustomRate(accountId, customRatePerKm) {
-  const tok = SUPER_ADMIN_TOKEN;
+  const tok = getToken();
   return deliveryRequest(
     `/delivery/admin/delivery-boys/${accountId}/custom-rate?x_super_admin_token=${encodeURIComponent(tok)}`,
     { method: "PUT", body: JSON.stringify({ custom_rate_per_km: customRatePerKm }) }
@@ -468,7 +455,7 @@ export function setSectorFee(sector, payload) {
 // ── Auto-assign ────────────────────────────────────────────────────────────
 
 // Alias kept for readability in the auto-assign functions below
-const _ST = () => SUPER_ADMIN_TOKEN;
+const _ST = () => getToken();
 
 export function listUnassignedOrders() {
   return deliveryRequest(`/delivery/admin/unassigned-orders?x_super_admin_token=${encodeURIComponent(_ST())}`);
@@ -637,7 +624,7 @@ export function executeSettlementBatch(batchId) {
 }
 
 export function listPharmacyVendors() {
-  return request("/pharmacy/admin/accounts", { headers: { "x-super-admin-token": SUPER_ADMIN_TOKEN } });
+  return request("/pharmacy/admin/accounts", { headers: { "x-super-admin-token": getToken() } });
 }
 
 export function getStakeholderLedger(stakeholderType, stakeholderId, { dateFrom, dateTo, limit = 100, offset = 0 } = {}) {
@@ -883,7 +870,7 @@ export function getSurgeConfig() {
 }
 
 export function setSurgeConfig(payload) {
-  const tok = SUPER_ADMIN_TOKEN;
+  const tok = getToken();
   return deliveryRequest(
     `/delivery/admin/config/surge?x_super_admin_token=${encodeURIComponent(tok)}`,
     { method: "PUT", body: JSON.stringify(payload) }
@@ -896,7 +883,6 @@ function haircutAdminHeaders() {
   const token = getToken();
   return {
     Authorization: `Bearer ${token}`,
-    "x-super-admin-token": SUPER_ADMIN_TOKEN,
   };
 }
 
