@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     app_env: str = "development"
     app_secret_key: str = Field(min_length=32)
     super_admin_token: str = Field(min_length=32)
+    internal_jobs_enabled: bool = True
+    cron_secret: str = ""
     database_url: str
     pharmacy_database_url: str
     delivery_database_url: str = ""   # defaults to pharmacy DB if not set
@@ -35,6 +37,13 @@ class Settings(BaseSettings):
     def parse_cors_origins(cls, value: str | list[str]) -> list[str]:
         if isinstance(value, str):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
+
+    @field_validator("cron_secret")
+    @classmethod
+    def validate_cron_secret(cls, value: str) -> str:
+        if value and len(value) < 32:
+            raise ValueError("CRON_SECRET must contain at least 32 characters")
         return value
 
 

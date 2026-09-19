@@ -55,17 +55,24 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def start_workers() -> None:
-        # ── Existing workers (unchanged) ────────────────────────────────────
-        app.state.pharmacy_order_sla_worker = asyncio.create_task(
-            pharmacy_order_sla_worker(), name="sla:pharmacy_orders"
-        )
-        from app.services.delivery_service import ensure_cod_reminder_running
-        ensure_cod_reminder_running()
+        app.state.pharmacy_order_sla_worker = None
+        app.state.background_job_tasks = []
 
-        # ── New background job scheduler ─────────────────────────────────────
-        from app.services.scheduler import start_all_jobs
-        app.state.background_job_tasks = start_all_jobs()
-        log.info("Background scheduler started: %d jobs registered.", len(app.state.background_job_tasks))
+        if settings.internal_jobs_enabled:
+            app.state.pharmacy_order_sla_worker = asyncio.create_task(
+                pharmacy_order_sla_worker(), name="sla:pharmacy_orders"
+            )
+            from app.services.delivery_service import ensure_cod_reminder_running
+            ensure_cod_reminder_running()
+
+            from app.services.scheduler import start_all_jobs
+            app.state.background_job_tasks = start_all_jobs()
+            log.info(
+                "Internal background scheduler started: %d jobs registered.",
+                len(app.state.background_job_tasks),
+            )
+        else:
+            log.info("Internal background jobs disabled; expecting the external scheduler.")
 
     @app.on_event("shutdown")
     async def stop_workers() -> None:
