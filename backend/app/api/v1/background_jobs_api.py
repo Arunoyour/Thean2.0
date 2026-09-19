@@ -4,12 +4,12 @@ Background Jobs API
 Two routers:
 
   /admin/jobs  — requires SUPER / SUPERVISOR auth (internal manual triggers)
-  /cron/jobs   — no auth (called by external cron service on schedule)
+  /cron/jobs   — shared-secret auth (called by the private scheduler)
 
 Both routers share the same JOB_MAP so any job can be triggered either way.
 
-Recommended external cron schedule (for a cron-job.org / EasyCron setup):
-  sla_order_transitions               every 10 s
+Recommended private scheduler schedule:
+  sla_order_transitions               every 5 s
   expire_delivery_accept_deadlines    every 30 s
   remind_pharmacy_pending_pickup      every 2 min
   mark_stale_drivers_offline          every 3 min
@@ -26,20 +26,36 @@ Recommended external cron schedule (for a cron-job.org / EasyCron setup):
 """
 from __future__ import annotations
 
+import secrets
 import traceback
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.api.dependencies import require_role
+from app.core.config import get_settings
 from app.models.super_admin import SuperAdmin
+
+
+def require_cron_secret(
+    x_cron_secret: str | None = Header(default=None, alias="X-Cron-Secret"),
+) -> None:
+    configured_secret = get_settings().cron_secret
+    if not configured_secret:
+        raise HTTPException(status_code=503, detail="External cron triggers are disabled.")
+    if not x_cron_secret or not secrets.compare_digest(x_cron_secret, configured_secret):
+        raise HTTPException(status_code=403, detail="Invalid cron credentials.")
 
 # ── Admin router (auth-protected) ────────────────────────────────────────────
 router = APIRouter(prefix="/admin/jobs", tags=["background-jobs"])
 
-# ── Cron router (no auth — rely on URL secrecy) ───────────────────────────────
-cron_router = APIRouter(prefix="/cron/jobs", tags=["cron"])
+# ── Cron router (private network + shared-secret authentication) ──────────────
+cron_router = APIRouter(
+    prefix="/cron/jobs",
+    tags=["cron"],
+    dependencies=[Depends(require_cron_secret)],
+)
 
 # In-memory registry: job_name → {last_run_at, last_result, last_error}
 _job_registry: dict[str, dict[str, Any]] = {}
@@ -246,13 +262,13 @@ async def trigger_job(
     return await _execute_job(job_name)
 
 
-# ── Cron endpoints (no auth — called by external cron service) ────────────────
+# ── Cron endpoints (called by the private external scheduler) ────────────────
 
 @cron_router.get("")
 async def list_cron_jobs():
     """
     List all jobs with their recommended external cron interval.
-    Useful for setting up cron-job.org / EasyCron entries.
+    Used to inspect the private scheduler contract.
     """
     _register_jobs()
     return [
@@ -271,8 +287,7 @@ async def list_cron_jobs():
 @cron_router.post("/{job_name}/run")
 async def cron_trigger_job(job_name: str):
     """
-    Trigger a specific background job. No auth required — protect via URL secrecy.
+    Trigger a specific background job from the private scheduler.
     Returns 200 with job result on success, 500 with error detail on failure.
-    Designed to be called by cron-job.org, EasyCron, Render crons, etc.
     """
     return await _execute_job(job_name)

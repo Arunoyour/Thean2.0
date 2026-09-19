@@ -573,14 +573,14 @@ async def check_cod_balance_reminders() -> dict:
         for acc in accounts:
             bal = float(acc.cod_balance)
             if bal >= COD_BLOCK_THRESHOLD:
-                await manager.send_delivery_boy(str(acc.account_id), {
+                await manager.send_delivery(acc.account_id, {
                     "type": "cod_blocked_reminder",
                     "cod_balance": bal,
                     "message": f"Your COD balance is ₹{bal:.0f}. Account is blocked — clear cash immediately.",
                 })
                 blocked += 1
             else:
-                await manager.send_delivery_boy(str(acc.account_id), {
+                await manager.send_delivery(acc.account_id, {
                     "type": "cod_warning_reminder",
                     "cod_balance": bal,
                     "message": f"Your COD balance is ₹{bal:.0f}. Please clear cash before it reaches ₹{int(COD_BLOCK_THRESHOLD)}.",
