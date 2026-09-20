@@ -237,13 +237,13 @@ async def _persist_execution(
                         last_failure_at, last_result, last_error, last_trigger_source,
                         last_duration_ms, total_runs, total_failures, consecutive_failures
                     ) VALUES (
-                        :job_name, :status, :finished_at,
-                        CASE WHEN :status = 'SUCCESS' THEN :finished_at END,
-                        CASE WHEN :status = 'FAILED' THEN :finished_at END,
-                        CAST(:result AS jsonb), :error, :trigger_source,
+                        :job_name, CAST(:status AS varchar), :finished_at,
+                        CASE WHEN CAST(:status AS varchar) = 'SUCCESS' THEN :finished_at END,
+                        CASE WHEN CAST(:status AS varchar) = 'FAILED' THEN :finished_at END,
+                        CAST(:result AS jsonb), :error, CAST(:trigger_source AS varchar),
                         :duration_ms, 1,
-                        CASE WHEN :status = 'FAILED' THEN 1 ELSE 0 END,
-                        CASE WHEN :status = 'FAILED' THEN 1 ELSE 0 END
+                        CASE WHEN CAST(:status AS varchar) = 'FAILED' THEN 1 ELSE 0 END,
+                        CASE WHEN CAST(:status AS varchar) = 'FAILED' THEN 1 ELSE 0 END
                     )
                     ON CONFLICT (job_name) DO UPDATE SET
                         last_status = EXCLUDED.last_status,
