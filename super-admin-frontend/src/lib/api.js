@@ -820,6 +820,32 @@ export function getAuditLogs({ dateFrom, dateTo, role, actionType, success, limi
   return request(`/super-admin/audit-logs?${params}`, { headers: { Authorization: `Bearer ${token}` } });
 }
 
+// ── Background job monitoring ────────────────────────────────────────────────
+
+export function listBackgroundJobs() {
+  const token = getToken();
+  return request("/admin/jobs", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function listBackgroundJobHistory({ jobName, limit = 50 } = {}) {
+  const token = getToken();
+  const params = new URLSearchParams({ limit });
+  if (jobName) params.set("job_name", jobName);
+  return request(`/admin/jobs/history?${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function runBackgroundJob(jobName) {
+  const token = getToken();
+  return request(`/admin/jobs/${encodeURIComponent(jobName)}/run`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 // ── Order Disputes (admin board) ──────────────────────────────────────────────
 export function getDisputeSummary() {
   const token = getToken();

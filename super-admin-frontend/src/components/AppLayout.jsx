@@ -4,10 +4,10 @@ import {
   AlertTriangle, Bike, BookOpen, ChevronDown, ChevronRight,
   ClipboardList, CreditCard, GitMerge, LayoutDashboard, LogOut,
   MessageSquare, Percent, Pill, Scissors, ScrollText, ShieldCheck,
-  Users, Zap,
+  Users, Zap, Activity,
 } from "lucide-react";
 import { getCurrentAdmin, getAdminAttention, logoutAdmin } from "../lib/api.js";
-import { canManageAdmins, canSeeAuditLog, canApprove } from "../lib/role.js";
+import { canManageAdmins, canMonitorJobs, canSeeAuditLog, canApprove } from "../lib/role.js";
 
 const NAV = [
   {
@@ -70,6 +70,7 @@ const NAV = [
       { to: "/dashboard/fee-config", label: "Fee & Tax Config", icon: Percent },
       { to: "/dashboard/approvals",  label: "Approval Queue",   icon: ClipboardList, roleCheck: canApprove },
       { to: "/dashboard/audit-log",  label: "Audit Log",        icon: ScrollText,    roleCheck: canSeeAuditLog },
+      { to: "/dashboard/background-jobs", label: "Background Jobs", icon: Activity, roleCheck: canMonitorJobs },
       { to: "/dashboard/admins",     label: "Manage Admins",    icon: ShieldCheck,   roleCheck: canManageAdmins },
     ],
   },

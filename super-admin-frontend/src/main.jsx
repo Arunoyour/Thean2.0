@@ -8,6 +8,7 @@ import { AdminManagementPage } from "./pages/AdminManagementPage.jsx";
 import { AttentionPage } from "./pages/AttentionPage.jsx";
 import { ApprovalsPage } from "./pages/ApprovalsPage.jsx";
 import { AuditLogPage } from "./pages/AuditLogPage.jsx";
+import { BackgroundJobsPage } from "./pages/BackgroundJobsPage.jsx";
 import { PaymentProofsPage } from "./pages/PaymentProofsPage.jsx";
 import { DisputeDetailPage } from "./pages/DisputeDetailPage.jsx";
 import { StakeholderLedgerPage } from "./pages/StakeholderLedgerPage.jsx";
@@ -37,7 +38,7 @@ import { SubstitutionAuditPage } from "./pages/SubstitutionAuditPage.jsx";
 import { HaircutShopsPage } from "./pages/HaircutShopsPage.jsx";
 import { HaircutShopDetailPage } from "./pages/HaircutShopDetailPage.jsx";
 import { PharmacyVendorApprovalsPage } from "./pages/PharmacyVendorApprovalsPage.jsx";
-import { canManageAdmins, canSeeAuditLog } from "./lib/role.js";
+import { canManageAdmins, canMonitorJobs, canSeeAuditLog } from "./lib/role.js";
 import "./styles/global.css";
 
 function RequireRole({ check, children }) {
@@ -117,6 +118,7 @@ function App() {
         <Route path="/dashboard/admins" element={<RequireAuth><RequireRole check={canManageAdmins}><AdminManagementPage /></RequireRole></RequireAuth>} />
         <Route path="/dashboard/approvals" element={<RequireAuth><ApprovalsPage /></RequireAuth>} />
         <Route path="/dashboard/audit-log" element={<RequireAuth><RequireRole check={canSeeAuditLog}><AuditLogPage /></RequireRole></RequireAuth>} />
+        <Route path="/dashboard/background-jobs" element={<RequireAuth><RequireRole check={canMonitorJobs}><BackgroundJobsPage /></RequireRole></RequireAuth>} />
       </Routes>
     </ErrorBoundary>
   );

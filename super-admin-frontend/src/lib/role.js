@@ -42,5 +42,6 @@ export const canManageAdmins = () => hasRole(ROLES.SUPER);
 export const canApprove      = () => hasRole(ROLES.SUPER, ROLES.SUPERVISOR, ROLES.CHECKER);
 export const canWriteConfig  = () => hasRole(ROLES.SUPER, ROLES.SUPERVISOR);
 export const canSeeAuditLog  = () => hasRole(ROLES.SUPER, ROLES.SUPERVISOR);
+export const canMonitorJobs  = () => hasRole(ROLES.SUPER, ROLES.SUPERVISOR, ROLES.AUDITOR);
 export const isAuditOnly     = () => hasRole(ROLES.AUDITOR);
 export const isTeamLead      = () => hasRole(ROLES.TEAM_LEAD);
