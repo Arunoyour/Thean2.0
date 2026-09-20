@@ -237,9 +237,11 @@ async def _persist_execution(
                         last_failure_at, last_result, last_error, last_trigger_source,
                         last_duration_ms, total_runs, total_failures, consecutive_failures
                     ) VALUES (
-                        :job_name, CAST(:status AS varchar), :finished_at,
-                        CASE WHEN CAST(:status AS varchar) = 'SUCCESS' THEN :finished_at END,
-                        CASE WHEN CAST(:status AS varchar) = 'FAILED' THEN :finished_at END,
+                        :job_name, CAST(:status AS varchar), CAST(:finished_at AS timestamptz),
+                        CASE WHEN CAST(:status AS varchar) = 'SUCCESS'
+                            THEN CAST(:finished_at AS timestamptz) END,
+                        CASE WHEN CAST(:status AS varchar) = 'FAILED'
+                            THEN CAST(:finished_at AS timestamptz) END,
                         CAST(:result AS jsonb), :error, CAST(:trigger_source AS varchar),
                         :duration_ms, 1,
                         CASE WHEN CAST(:status AS varchar) = 'FAILED' THEN 1 ELSE 0 END,
